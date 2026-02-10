@@ -29,6 +29,16 @@ const APP_ROLES = ["superadmin", "admin", "pmc_user", "pmc_reviewer", "aldar_tea
 const MODULES = ["consultants", "employees", "projects", "framework_agreements", "service_orders", "purchase_orders", "invoices", "positions", "deployments", "period_control"] as const;
 const PERMISSIONS = ["no_access", "read", "modify"] as const;
 
+// All dropdown categories available in the system
+const LOOKUP_CATEGORIES = [
+  { value: "employee_status", label: "Employee Status" },
+  { value: "po_type", label: "PO Type" },
+  { value: "project_type", label: "Project Type" },
+  { value: "project_classification", label: "Project Classification" },
+  { value: "portfolio", label: "Portfolio" },
+  { value: "entity", label: "Entity" },
+] as const;
+
 export default function AdminPage() {
   const [tab, setTab] = useState("users");
 
@@ -498,7 +508,7 @@ function LookupsTab() {
     queryFn: async () => { const { data, error } = await supabase.from("lookup_values").select("*").order("category").order("sort_order"); if (error) throw error; return data as LookupValue[]; },
   });
 
-  const categories = [...new Set(allLookups.map((l) => l.category))];
+  const categories = LOOKUP_CATEGORIES;
   const filtered = selectedCategory ? allLookups.filter((l) => l.category === selectedCategory) : allLookups;
 
   const upsertMutation = useMutation({
@@ -526,7 +536,7 @@ function LookupsTab() {
         <div className="px-4 py-3 border-b flex items-center gap-3">
           <Select value={selectedCategory || "all"} onValueChange={(v) => setSelectedCategory(v === "all" ? "" : v)}>
             <SelectTrigger className="h-8 text-sm w-48"><SelectValue placeholder="All categories" /></SelectTrigger>
-            <SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((c) => <SelectItem key={c} value={c}>{c.replace(/_/g, " ")}</SelectItem>)}</SelectContent>
+            <SelectContent><SelectItem value="all">All categories</SelectItem>{categories.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}</SelectContent>
           </Select>
           <span className="text-xs text-muted-foreground flex-1">{filtered.length} values</span>
           <Button size="sm" variant="outline" onClick={openCreate}><Plus size={14} className="mr-1" />Add Value</Button>
@@ -563,16 +573,12 @@ function LookupsTab() {
           <DialogHeader><DialogTitle>{editing ? "Edit Lookup Value" : "Add Lookup Value"}</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); if (!form.category.trim() || !form.value.trim() || !form.label.trim()) { toast.error("All fields are required"); return; } upsertMutation.mutate(editing ? { ...form, id: editing.id } : form); }} className="space-y-4">
             <div className="space-y-1.5"><Label>Category *</Label>
-              <Select value={form.category || "__new__"} onValueChange={(v) => setForm({ ...form, category: v === "__new__" ? "" : v })}>
+              <Select value={form.category || ""} onValueChange={(v) => setForm({ ...form, category: v })}>
                 <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
-                  {categories.map((c) => <SelectItem key={c} value={c}>{c.replace(/_/g, " ")}</SelectItem>)}
-                  <SelectItem value="__new__">+ New category...</SelectItem>
+                  {categories.map((c) => <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>)}
                 </SelectContent>
               </Select>
-              {(form.category === "" || !categories.includes(form.category)) && (
-                <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Type new category name" className="mt-1.5" />
-              )}
             </div>
             <div className="space-y-1.5"><Label>Value *</Label><Input value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="e.g. mobilized" /></div>
             <div className="space-y-1.5"><Label>Label *</Label><Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="e.g. Mobilized" /></div>
