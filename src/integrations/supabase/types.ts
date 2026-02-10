@@ -865,6 +865,7 @@ export type Database = {
           po_start_date: string | null
           po_value: number | null
           portfolio: string | null
+          project_id: string | null
           revision_number: number | null
           so_id: string | null
           status: Database["public"]["Enums"]["record_status"]
@@ -884,6 +885,7 @@ export type Database = {
           po_start_date?: string | null
           po_value?: number | null
           portfolio?: string | null
+          project_id?: string | null
           revision_number?: number | null
           so_id?: string | null
           status?: Database["public"]["Enums"]["record_status"]
@@ -903,6 +905,7 @@ export type Database = {
           po_start_date?: string | null
           po_value?: number | null
           portfolio?: string | null
+          project_id?: string | null
           revision_number?: number | null
           so_id?: string | null
           status?: Database["public"]["Enums"]["record_status"]
@@ -916,6 +919,13 @@ export type Database = {
             columns: ["consultant_id"]
             isOneToOne: false
             referencedRelation: "consultants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchase_orders_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {

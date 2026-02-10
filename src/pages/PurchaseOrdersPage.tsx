@@ -16,9 +16,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type PO = Tables<"purchase_orders"> & { consultants?: { name: string } | null; service_orders?: { so_number: string } | null };
-interface POForm { po_number: string; consultant_id: string; so_id: string | null; po_reference: string | null; po_start_date: string | null; po_end_date: string | null; po_value: number | null; portfolio: string | null; type: string | null; status: "active" | "inactive"; comments: string | null; revision_number: number | null; }
-const emptyForm: POForm = { po_number: "", consultant_id: "", so_id: null, po_reference: null, po_start_date: null, po_end_date: null, po_value: null, portfolio: null, type: null, status: "active", comments: null, revision_number: 0 };
+type PO = Tables<"purchase_orders"> & { consultants?: { name: string } | null; service_orders?: { so_number: string } | null; projects?: { project_name: string; project_number: string | null } | null };
+interface POForm { po_number: string; consultant_id: string; so_id: string | null; po_reference: string | null; po_start_date: string | null; po_end_date: string | null; po_value: number | null; portfolio: string | null; type: string | null; status: "active" | "inactive"; comments: string | null; revision_number: number | null; project_id: string | null; }
+const emptyForm: POForm = { po_number: "", consultant_id: "", so_id: null, po_reference: null, po_start_date: null, po_end_date: null, po_value: null, portfolio: null, type: null, status: "active", comments: null, revision_number: 0, project_id: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -26,6 +26,8 @@ const cols = [
   { header: "PO Number", key: "po_number", width: 18 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Service Order", key: "so_number", width: 18 },
+  { header: "Project Number", key: "project_number", width: 18 },
+  { header: "Project Name", key: "project_name", width: 25 },
   { header: "PO Reference", key: "po_reference", width: 18 },
   { header: "Start Date", key: "po_start_date", width: 14 },
   { header: "End Date", key: "po_end_date", width: 14 },
@@ -43,14 +45,15 @@ export default function PurchaseOrdersPage() {
   const [form, setForm] = useState<POForm>(emptyForm);
   const queryClient = useQueryClient();
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["purchase_orders"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("*, consultants(name), service_orders(so_number)").order("po_number"); if (error) throw error; return data as PO[]; } });
+  const { data: items = [], isLoading } = useQuery({ queryKey: ["purchase_orders"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("*, consultants(name), service_orders(so_number), projects(project_name, project_number)").order("po_number"); if (error) throw error; return data as PO[]; } });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
   const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number"); if (error) throw error; return data as { id: string; so_number: string; consultant_id: string }[]; } });
+  const { data: allProjects = [] } = useQuery({ queryKey: ["projects-list"], queryFn: async () => { const { data, error } = await supabase.from("projects").select("id, project_name, project_number").eq("status", "active").order("project_name"); if (error) throw error; return data as { id: string; project_name: string; project_number: string | null }[]; } });
   const filteredSOs = form.consultant_id ? allServiceOrders.filter(s => s.consultant_id === form.consultant_id) : [];
 
   const upsertMutation = useMutation({
     mutationFn: async (values: POForm & { id?: string }) => {
-      const payload: any = { po_number: values.po_number, consultant_id: values.consultant_id, so_id: values.so_id || null, po_reference: values.po_reference || null, po_start_date: values.po_start_date || null, po_end_date: values.po_end_date || null, po_value: values.po_value, portfolio: values.portfolio || null, type: values.type || null, status: values.status, comments: values.comments || null, revision_number: values.revision_number };
+      const payload: any = { po_number: values.po_number, consultant_id: values.consultant_id, so_id: values.so_id || null, po_reference: values.po_reference || null, po_start_date: values.po_start_date || null, po_end_date: values.po_end_date || null, po_value: values.po_value, portfolio: values.portfolio || null, type: values.type || null, status: values.status, comments: values.comments || null, revision_number: values.revision_number, project_id: values.project_id || null };
       if (values.id) { const { error } = await supabase.from("purchase_orders").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("purchase_orders").insert(payload as TablesInsert<"purchase_orders">); if (error) throw error; }
     },
@@ -60,7 +63,7 @@ export default function PurchaseOrdersPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("purchase_orders").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["purchase_orders"] }); toast.success("Deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (item: PO) => { setEditing(item); setForm({ po_number: item.po_number, consultant_id: item.consultant_id, so_id: item.so_id, po_reference: item.po_reference, po_start_date: item.po_start_date, po_end_date: item.po_end_date, po_value: item.po_value, portfolio: item.portfolio, type: item.type, status: item.status, comments: item.comments, revision_number: item.revision_number }); setDialogOpen(true); };
+  const openEdit = (item: PO) => { setEditing(item); setForm({ po_number: item.po_number, consultant_id: item.consultant_id, so_id: item.so_id, po_reference: item.po_reference, po_start_date: item.po_start_date, po_end_date: item.po_end_date, po_value: item.po_value, portfolio: item.portfolio, type: item.type, status: item.status, comments: item.comments, revision_number: item.revision_number, project_id: (item as any).project_id }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
   const handleConsultantChange = (v: string) => { setForm({ ...form, consultant_id: v, so_id: null }); };
 
@@ -76,7 +79,7 @@ export default function PurchaseOrdersPage() {
 
   const filtered = items.filter((i) => i.po_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
 
-  const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("po-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
   const handleImport = async (file: File) => {
     try {
@@ -124,6 +127,8 @@ export default function PurchaseOrdersPage() {
                 <th className="data-table-header text-left px-4 py-2.5">PO Number</th>
                 <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
                 <th className="data-table-header text-left px-4 py-2.5">SO</th>
+                <th className="data-table-header text-left px-4 py-2.5">Project No.</th>
+                <th className="data-table-header text-left px-4 py-2.5">Project Name</th>
                 <th className="data-table-header text-center px-4 py-2.5">Start</th>
                 <th className="data-table-header text-center px-4 py-2.5">End</th>
                 <th className="data-table-header text-right px-4 py-2.5">Value (AED)</th>
@@ -136,6 +141,8 @@ export default function PurchaseOrdersPage() {
                   <td className="px-4 py-2.5 font-mono font-medium">{item.po_number}</td>
                   <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.service_orders?.so_number || "—"}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{item.projects?.project_number || "—"}</td>
+                  <td className="px-4 py-2.5 text-xs">{item.projects?.project_name || "—"}</td>
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.po_start_date)}</td>
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.po_end_date)}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{fmt(item.po_value)}</td>
@@ -167,6 +174,7 @@ export default function PurchaseOrdersPage() {
               <div className="space-y-1.5"><Label>Portfolio</Label><Input value={form.portfolio || ""} onChange={(e) => setForm({ ...form, portfolio: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>Type</Label><Input value={form.type || ""} onChange={(e) => setForm({ ...form, type: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
+              <div className="col-span-2 space-y-1.5"><Label>Project</Label><Select value={form.project_id || "none"} onValueChange={(v) => setForm({ ...form, project_id: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{allProjects.map((p) => <SelectItem key={p.id} value={p.id}>{p.project_number ? `${p.project_number} - ${p.project_name}` : p.project_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="col-span-2 space-y-1.5"><Label>Comments</Label><Textarea value={form.comments || ""} onChange={(e) => setForm({ ...form, comments: e.target.value || null })} rows={2} /></div>
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button type="submit" disabled={upsertMutation.isPending}>{upsertMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}{editing ? "Update" : "Create"}</Button></DialogFooter>
