@@ -28,6 +28,22 @@ type Consultant = { id: string; name: string };
 interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }
 const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", experience_years: null, start_date: null, end_date: null, status: "active" };
 
+/** Convert Excel serial number or date string to YYYY-MM-DD */
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) {
+    // Excel serial date: days since 1899-12-30
+    const d = new Date(Math.round((n - 25569) * 86400 * 1000));
+    return d.toISOString().slice(0, 10);
+  }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  if (!isNaN(parsed.getTime())) return parsed.toISOString().slice(0, 10);
+  return null;
+}
+
 const excelCols = [
   { header: "Employee ID", key: "employee_id", width: 18 },
   { header: "Employee Name", key: "employee_name", width: 25 },
@@ -114,7 +130,7 @@ export default function EmployeesPage() {
         employee_id: empId != null ? String(empId).trim() || null : null,
         employee_name: String(name).trim(), consultant_id: consultant.id,
         experience_years: exp ? parseInt(String(exp)) : null,
-        start_date: startDate ? String(startDate).trim() || null : null, end_date: endDate ? String(endDate).trim() || null : null,
+        start_date: parseImportDate(startDate), end_date: parseImportDate(endDate),
         status: status ? String(status).trim().toLowerCase() : "active",
       } as any);
       if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
