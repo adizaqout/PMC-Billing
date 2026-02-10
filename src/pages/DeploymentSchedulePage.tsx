@@ -529,6 +529,44 @@ export default function DeploymentSchedulePage() {
     return periodMonth || constraints.min || "";
   }, [scheduleType, periodMonth, frameworkStartMonth]);
 
+  // Generate month options for the dropdown based on constraints
+  const monthOptions = useMemo(() => {
+    const constraints = getMonthConstraints(scheduleType);
+    const options: string[] = [];
+    const now = new Date();
+    // Start from min or 2 years ago
+    let startYear = now.getFullYear() - 2;
+    let startMon = 1;
+    if (constraints.min) {
+      const [y, m] = constraints.min.split("-").map(Number);
+      startYear = y;
+      startMon = m;
+    }
+    // End at max or 2 years ahead
+    let endYear = now.getFullYear() + 2;
+    let endMon = 12;
+    if (constraints.max) {
+      const [y, m] = constraints.max.split("-").map(Number);
+      endYear = y;
+      endMon = m;
+    }
+    for (let y = startYear; y <= endYear; y++) {
+      const ms = y === startYear ? startMon : 1;
+      const me = y === endYear ? endMon : 12;
+      for (let m = ms; m <= me; m++) {
+        options.push(`${y}-${String(m).padStart(2, "0")}`);
+      }
+    }
+    return options;
+  }, [scheduleType, periodMonth, frameworkStartMonth]);
+
+  const formatMonthLabel = (m: string) => {
+    if (!m) return "";
+    const [y, mo] = m.split("-").map(Number);
+    const monthNames = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${monthNames[mo - 1]} ${y}`;
+  };
+
   const addRow = () => {
     setRows(prev => [...prev, {
       _key: newRowKey(),
@@ -878,17 +916,19 @@ export default function DeploymentSchedulePage() {
                         {/* Month */}
                         <td className="px-3 py-1.5">
                           {isEditable ? (
-                            <Input
-                              type="month"
-                              value={row.month || defaultMonth || ""}
-                              onChange={(e) => updateRow(idx, "month", e.target.value)}
-                              min={monthConstraints.min || undefined}
-                              max={monthConstraints.max || undefined}
-                              className="h-8 text-xs w-[140px]"
-                            />
+                            <Select value={row.month || defaultMonth || ""} onValueChange={(v) => updateRow(idx, "month", v)}>
+                              <SelectTrigger className="h-8 text-xs w-[140px]">
+                                <SelectValue placeholder="Select month">{formatMonthLabel(row.month || defaultMonth || "")}</SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {monthOptions.map(m => (
+                                  <SelectItem key={m} value={m}>{formatMonthLabel(m)}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           ) : (
                             <div className="h-8 px-2 text-xs border rounded-md bg-muted flex items-center font-mono text-muted-foreground">
-                              {row.month || defaultMonth}
+                              {formatMonthLabel(row.month || defaultMonth)}
                             </div>
                           )}
                         </td>
