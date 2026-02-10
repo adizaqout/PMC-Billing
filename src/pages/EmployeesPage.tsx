@@ -7,6 +7,7 @@ import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
+import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Employee = Tables<"employees"> & { consultants?: { name: string } | null; positions?: { position_name: string } | null };
+type Employee = Tables<"employees"> & { consultants?: { name: string } | null; positions?: { position_name: string; position_id?: string } | null };
 type Consultant = { id: string; name: string };
 
 interface EmployeeForm { employee_name: string; consultant_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }
@@ -39,8 +40,11 @@ export default function EmployeesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
   const { data: statuses = [] } = useLookupValues("employee_status");
+
+  const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ["employees"],
@@ -73,7 +77,19 @@ export default function EmployeesPage() {
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
-  const filtered = employees.filter((e) => e.employee_name.toLowerCase().includes(search.toLowerCase()) || (e.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const filtered = employees.filter((e) => {
+    const s = search.toLowerCase();
+    if (s && !e.employee_name.toLowerCase().includes(s) && !(e.consultants?.name || "").toLowerCase().includes(s)) return false;
+    for (const [key, val] of Object.entries(colFilters)) {
+      if (!val) continue;
+      const v = val.toLowerCase();
+      if (key === "name" && !e.employee_name.toLowerCase().includes(v)) return false;
+      if (key === "consultant" && !(e.consultants?.name || "").toLowerCase().includes(v)) return false;
+      if (key === "position" && !(e.positions?.position_name || "").toLowerCase().includes(v)) return false;
+      if (key === "status" && !e.status.toLowerCase().includes(v)) return false;
+    }
+    return true;
+  });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -121,13 +137,13 @@ export default function EmployeesPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No employees found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">Name</th>
-                <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
-                <th className="data-table-header text-left px-4 py-2.5">Position</th>
+                <th className="data-table-header text-left px-4 py-2.5">Name<ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Position<ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></th>
                 <th className="data-table-header text-center px-4 py-2.5">Exp (Yrs)</th>
                 <th className="data-table-header text-center px-4 py-2.5">Start Date</th>
                 <th className="data-table-header text-center px-4 py-2.5">End Date</th>
-                <th className="data-table-header text-center px-4 py-2.5">Status</th>
+                <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((emp) => (

@@ -6,6 +6,7 @@ import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
+import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,10 @@ export default function ConsultantsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Consultant | null>(null);
   const [form, setForm] = useState<Partial<ConsultantInsert>>(emptyForm);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
+
+  const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: consultants = [], isLoading } = useQuery({
     queryKey: ["consultants"],
@@ -96,7 +100,21 @@ export default function ConsultantsPage() {
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
-  const filtered = consultants.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = consultants.filter((c) => {
+    const s = search.toLowerCase();
+    if (s && !c.name.toLowerCase().includes(s)) return false;
+    for (const [key, val] of Object.entries(colFilters)) {
+      if (!val) continue;
+      const v = val.toLowerCase();
+      if (key === "name" && !c.name.toLowerCase().includes(v)) return false;
+      if (key === "cr" && !(c.commercial_registration_no || "").toLowerCase().includes(v)) return false;
+      if (key === "tax" && !(c.tax_registration_no || "").toLowerCase().includes(v)) return false;
+      if (key === "email" && !(c.contact_email || "").toLowerCase().includes(v)) return false;
+      if (key === "phone" && !(c.contact_phone || "").toLowerCase().includes(v)) return false;
+      if (key === "status" && !c.status.toLowerCase().includes(v)) return false;
+    }
+    return true;
+  });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
@@ -155,12 +173,12 @@ export default function ConsultantsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="data-table-header text-left px-4 py-2.5">Name</th>
-                    <th className="data-table-header text-left px-4 py-2.5">CR No.</th>
-                    <th className="data-table-header text-left px-4 py-2.5">Tax No.</th>
-                    <th className="data-table-header text-left px-4 py-2.5">Email</th>
-                    <th className="data-table-header text-left px-4 py-2.5">Phone</th>
-                    <th className="data-table-header text-center px-4 py-2.5">Status</th>
+                    <th className="data-table-header text-left px-4 py-2.5">Name<ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></th>
+                    <th className="data-table-header text-left px-4 py-2.5">CR No.<ColumnFilter value={colFilters.cr || ""} onChange={(v) => setColFilter("cr", v)} label="CR No." /></th>
+                    <th className="data-table-header text-left px-4 py-2.5">Tax No.<ColumnFilter value={colFilters.tax || ""} onChange={(v) => setColFilter("tax", v)} label="Tax No." /></th>
+                    <th className="data-table-header text-left px-4 py-2.5">Email<ColumnFilter value={colFilters.email || ""} onChange={(v) => setColFilter("email", v)} label="Email" /></th>
+                    <th className="data-table-header text-left px-4 py-2.5">Phone<ColumnFilter value={colFilters.phone || ""} onChange={(v) => setColFilter("phone", v)} label="Phone" /></th>
+                    <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
                     <th className="data-table-header w-10"></th>
                   </tr>
                 </thead>
