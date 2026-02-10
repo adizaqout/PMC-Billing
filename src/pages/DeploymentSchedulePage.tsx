@@ -694,7 +694,9 @@ export default function DeploymentSchedulePage() {
     rows.forEach((row, idx) => {
       if (!row.employee_id && !isBaseline) return;
       const sum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
-      if (sum > 0 && sum !== 100) {
+      // For baseline rows without an employee, skip the 100% allocation check
+      // since each row is an independent position-project mapping
+      if (sum > 0 && sum !== 100 && !(isBaseline && !row.employee_id)) {
         const emp = employees.find(e => e.id === row.employee_id);
         errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): allocation sums to ${sum}%, must be 100%`);
       }
