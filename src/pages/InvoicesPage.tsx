@@ -119,6 +119,22 @@ export default function InvoicesPage() {
     return m;
   }, [projects]);
 
+  // Sum of po_value for each PO+Rev combo
+  const poRevTotalMap = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const po of allPOs) {
+      const key = `${po.po_number}|${po.revision_number ?? 0}`;
+      m[key] = (m[key] || 0) + (po.po_value || 0);
+    }
+    return m;
+  }, [allPOs]);
+
+  const getPoRevTotal = (inv: Invoice) => {
+    if (!inv.purchase_orders) return null;
+    const key = `${inv.purchase_orders.po_number}|${inv.purchase_orders.revision_number ?? 0}`;
+    return poRevTotalMap[key] ?? null;
+  };
+
   // Distinct PO+Rev combos for selected consultant
   const poRevOptions = useMemo(() => {
     const consultantPOs = form.consultant_id ? allPOs.filter(p => p.consultant_id === form.consultant_id) : [];
@@ -247,7 +263,7 @@ export default function InvoicesPage() {
       po_number: i.purchase_orders?.po_number || "",
       po_revision: i.purchase_orders?.revision_number ?? "",
       po_line: i.purchase_orders?.po_reference || "",
-      po_value: i.purchase_orders?.po_value ?? "",
+      po_value: getPoRevTotal(i) ?? "",
       billed_to_date: getBilledToDate(i) ?? "",
     })));
     toast.success("Exported");
@@ -326,7 +342,7 @@ export default function InvoicesPage() {
                   {visibleColumns.has("po") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.purchase_orders?.po_number || "—"}</td>}
                   {visibleColumns.has("rev") && <td className="px-4 py-2.5 text-center font-mono text-xs">{item.purchase_orders?.revision_number ?? "—"}</td>}
                   {visibleColumns.has("line") && <td className="px-4 py-2.5 font-mono text-xs">{item.purchase_orders?.po_reference || "—"}</td>}
-                  {visibleColumns.has("po_value") && <td className="px-4 py-2.5 text-right font-mono text-xs text-muted-foreground">{fmt(item.purchase_orders?.po_value ?? null)}</td>}
+                  {visibleColumns.has("po_value") && <td className="px-4 py-2.5 text-right font-mono text-xs text-muted-foreground">{fmt(getPoRevTotal(item))}</td>}
                   {visibleColumns.has("billed") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.billed_amount_no_vat)}</td>}
                   {visibleColumns.has("billed_to_date") && <td className="px-4 py-2.5 text-right font-mono text-xs font-semibold">{fmt(getBilledToDate(item))}</td>}
                   {visibleColumns.has("paid") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.paid_amount)}</td>}
@@ -365,7 +381,7 @@ export default function InvoicesPage() {
               </div>
               {form._po_key && selectedPO && (
                 <>
-                  <div className="space-y-1.5"><Label>PO Value (AED)</Label><Input value={fmt(selectedPO.po_value)} disabled className="bg-muted" /></div>
+                  <div className="space-y-1.5"><Label>PO Value (AED)</Label><Input value={fmt(form._po_key ? (poRevTotalMap[form._po_key] ?? null) : null)} disabled className="bg-muted" /></div>
                   {billedToDate != null && (
                     <div className="space-y-1.5"><Label>Billed To Date (AED)</Label><Input value={fmt(billedToDate)} disabled className="bg-muted font-semibold" /></div>
                   )}
