@@ -35,19 +35,19 @@ const App = () => (
             <Route path="/login" element={<LoginPage />} />
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/consultants" element={<ProtectedRoute><ConsultantsPage /></ProtectedRoute>} />
-            <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
-            <Route path="/employees" element={<ProtectedRoute><EmployeesPage /></ProtectedRoute>} />
-            <Route path="/framework-agreements" element={<ProtectedRoute><FrameworkAgreementsPage /></ProtectedRoute>} />
-            <Route path="/service-orders" element={<ProtectedRoute><ServiceOrdersPage /></ProtectedRoute>} />
-            <Route path="/purchase-orders" element={<ProtectedRoute><PurchaseOrdersPage /></ProtectedRoute>} />
-            <Route path="/invoices" element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
-            <Route path="/positions" element={<ProtectedRoute><PositionsPage /></ProtectedRoute>} />
-            <Route path="/deployments" element={<ProtectedRoute><DeploymentSchedulePage /></ProtectedRoute>} />
-            <Route path="/period-control" element={<ProtectedRoute><PeriodControlPage /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute><PlaceholderPage title="Reports" subtitle="Baseline vs Actual vs Forecast and more" /></ProtectedRoute>} />
-            <Route path="/ai-assistant" element={<ProtectedRoute><PlaceholderPage title="AI Assistant" subtitle="Ask questions about your data" /></ProtectedRoute>} />
+            <Route path="/consultants" element={<ProtectedRoute module="consultants"><ConsultantsPage /></ProtectedRoute>} />
+            <Route path="/projects" element={<ProtectedRoute module="projects"><ProjectsPage /></ProtectedRoute>} />
+            <Route path="/employees" element={<ProtectedRoute module="employees"><EmployeesPage /></ProtectedRoute>} />
+            <Route path="/framework-agreements" element={<ProtectedRoute module="framework_agreements"><FrameworkAgreementsPage /></ProtectedRoute>} />
+            <Route path="/service-orders" element={<ProtectedRoute module="service_orders"><ServiceOrdersPage /></ProtectedRoute>} />
+            <Route path="/purchase-orders" element={<ProtectedRoute module="purchase_orders"><PurchaseOrdersPage /></ProtectedRoute>} />
+            <Route path="/invoices" element={<ProtectedRoute module="invoices"><InvoicesPage /></ProtectedRoute>} />
+            <Route path="/positions" element={<ProtectedRoute module="positions"><PositionsPage /></ProtectedRoute>} />
+            <Route path="/deployments" element={<ProtectedRoute module="deployments"><DeploymentSchedulePage /></ProtectedRoute>} />
+            <Route path="/period-control" element={<ProtectedRoute module="period_control"><PeriodControlPage /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute module="reports"><PlaceholderPage title="Reports" subtitle="Baseline vs Actual vs Forecast and more" /></ProtectedRoute>} />
+            <Route path="/ai-assistant" element={<ProtectedRoute module="ai_assistant"><PlaceholderPage title="AI Assistant" subtitle="Ask questions about your data" /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
