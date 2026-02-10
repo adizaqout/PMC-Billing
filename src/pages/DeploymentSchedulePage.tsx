@@ -338,16 +338,19 @@ export default function DeploymentSchedulePage() {
   });
 
   // Convert DB lines to UI rows (group by employee_id — each employee has multiple lines for different projects)
+  // For null employee_id (baseline), each line becomes its own row
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
     if (lines.length === 0) return [];
     const grouped: Record<string, DeploymentLine[]> = {};
+    let nullCounter = 0;
     lines.forEach(l => {
-      const key = l.employee_id;
+      const key = l.employee_id || `__null_${++nullCounter}`;
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(l);
     });
-    return Object.entries(grouped).map(([empId, grpLines]) => {
+    return Object.entries(grouped).map(([empKey, grpLines]) => {
       const first = grpLines[0];
+      const empId = first.employee_id || "";
       const allocations: Record<string, number> = {};
       grpLines.forEach(l => {
         const projId = l.worked_project_id || l.billed_project_id;
