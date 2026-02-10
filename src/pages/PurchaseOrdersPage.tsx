@@ -15,10 +15,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useLookupValues } from "@/hooks/useLookupValues";
 
 type PO = Tables<"purchase_orders"> & { consultants?: { name: string } | null; service_orders?: { so_number: string } | null; projects?: { project_name: string; project_number: string | null } | null };
-interface POForm { po_number: string; consultant_id: string; so_id: string | null; po_reference: string | null; po_start_date: string | null; po_end_date: string | null; po_value: number | null; portfolio: string | null; type: string | null; status: "active" | "inactive"; comments: string | null; revision_number: number | null; project_id: string | null; }
-const emptyForm: POForm = { po_number: "", consultant_id: "", so_id: null, po_reference: null, po_start_date: null, po_end_date: null, po_value: null, portfolio: null, type: null, status: "active", comments: null, revision_number: 0, project_id: null };
+interface POForm { po_number: string; consultant_id: string; so_id: string | null; po_reference: string | null; po_start_date: string | null; po_end_date: string | null; po_value: number | null; amount: number | null; portfolio: string | null; type: string | null; status: "active" | "inactive"; comments: string | null; revision_number: number | null; project_id: string | null; }
+const emptyForm: POForm = { po_number: "", consultant_id: "", so_id: null, po_reference: null, po_start_date: null, po_end_date: null, po_value: null, amount: null, portfolio: null, type: null, status: "active", comments: null, revision_number: 0, project_id: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -33,6 +34,7 @@ const cols = [
   { header: "Start Date", key: "po_start_date", width: 14 },
   { header: "End Date", key: "po_end_date", width: 14 },
   { header: "Value (AED)", key: "po_value", width: 15 },
+  { header: "Amount (AED)", key: "amount", width: 15 },
   { header: "Portfolio", key: "portfolio", width: 15 },
   { header: "Type", key: "type", width: 12 },
   { header: "Status", key: "status", width: 10 },
@@ -50,10 +52,11 @@ export default function PurchaseOrdersPage() {
   const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number"); if (error) throw error; return data as { id: string; so_number: string; consultant_id: string }[]; } });
   const { data: allProjects = [] } = useQuery({ queryKey: ["projects-list"], queryFn: async () => { const { data, error } = await supabase.from("projects").select("id, project_name, project_number").eq("status", "active").order("project_name"); if (error) throw error; return data as { id: string; project_name: string; project_number: string | null }[]; } });
   const filteredSOs = form.consultant_id ? allServiceOrders.filter(s => s.consultant_id === form.consultant_id) : [];
+  const { data: poTypes = [] } = useLookupValues("po_type");
 
   const upsertMutation = useMutation({
     mutationFn: async (values: POForm & { id?: string }) => {
-      const payload: any = { po_number: values.po_number, consultant_id: values.consultant_id, so_id: values.so_id || null, po_reference: values.po_reference || null, po_start_date: values.po_start_date || null, po_end_date: values.po_end_date || null, po_value: values.po_value, portfolio: values.portfolio || null, type: values.type || null, status: values.status, comments: values.comments || null, revision_number: values.revision_number, project_id: values.project_id || null };
+      const payload: any = { po_number: values.po_number, consultant_id: values.consultant_id, so_id: values.so_id || null, po_reference: values.po_reference || null, po_start_date: values.po_start_date || null, po_end_date: values.po_end_date || null, po_value: values.po_value, amount: values.amount, portfolio: values.portfolio || null, type: values.type || null, status: values.status, comments: values.comments || null, revision_number: values.revision_number, project_id: values.project_id || null };
       if (values.id) { const { error } = await supabase.from("purchase_orders").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("purchase_orders").insert(payload as TablesInsert<"purchase_orders">); if (error) throw error; }
     },
@@ -63,7 +66,7 @@ export default function PurchaseOrdersPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("purchase_orders").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["purchase_orders"] }); toast.success("Deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (item: PO) => { setEditing(item); setForm({ po_number: item.po_number, consultant_id: item.consultant_id, so_id: item.so_id, po_reference: item.po_reference, po_start_date: item.po_start_date, po_end_date: item.po_end_date, po_value: item.po_value, portfolio: item.portfolio, type: item.type, status: item.status, comments: item.comments, revision_number: item.revision_number, project_id: (item as any).project_id }); setDialogOpen(true); };
+  const openEdit = (item: PO) => { setEditing(item); setForm({ po_number: item.po_number, consultant_id: item.consultant_id, so_id: item.so_id, po_reference: item.po_reference, po_start_date: item.po_start_date, po_end_date: item.po_end_date, po_value: item.po_value, amount: (item as any).amount, portfolio: item.portfolio, type: item.type, status: item.status, comments: item.comments, revision_number: item.revision_number, project_id: (item as any).project_id }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
   const handleConsultantChange = (v: string) => { setForm({ ...form, consultant_id: v, so_id: null }); };
 
@@ -147,6 +150,8 @@ export default function PurchaseOrdersPage() {
                 <th className="data-table-header text-center px-4 py-2.5">Start</th>
                 <th className="data-table-header text-center px-4 py-2.5">End</th>
                 <th className="data-table-header text-right px-4 py-2.5">Value (AED)</th>
+                <th className="data-table-header text-right px-4 py-2.5">Amount (AED)</th>
+                <th className="data-table-header text-center px-4 py-2.5">Type</th>
                 <th className="data-table-header text-center px-4 py-2.5">Status</th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
@@ -162,6 +167,8 @@ export default function PurchaseOrdersPage() {
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.po_start_date)}</td>
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.po_end_date)}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{fmt(item.po_value)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">{fmt((item as any).amount)}</td>
+                  <td className="px-4 py-2.5 text-center text-xs">{item.type || "—"}</td>
                   <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>
                   <td className="px-4 py-2.5 text-center">
                     <DropdownMenu><DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
@@ -186,8 +193,9 @@ export default function PurchaseOrdersPage() {
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.po_start_date || ""} onChange={(e) => setForm({ ...form, po_start_date: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.po_end_date || ""} onChange={(e) => setForm({ ...form, po_end_date: e.target.value || null })} min={form.po_start_date || undefined} /></div>
               <div className="space-y-1.5"><Label>Value (AED)</Label><Input type="number" value={form.po_value ?? ""} onChange={(e) => setForm({ ...form, po_value: e.target.value ? parseFloat(e.target.value) : null })} /></div>
+              <div className="space-y-1.5"><Label>Amount (AED)</Label><Input type="number" value={form.amount ?? ""} onChange={(e) => setForm({ ...form, amount: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Portfolio</Label><Input value={form.portfolio || ""} onChange={(e) => setForm({ ...form, portfolio: e.target.value || null })} /></div>
-              <div className="space-y-1.5"><Label>Type</Label><Input value={form.type || ""} onChange={(e) => setForm({ ...form, type: e.target.value || null })} /></div>
+              <div className="space-y-1.5"><Label>Type</Label><Select value={form.type || "none"} onValueChange={(v) => setForm({ ...form, type: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{poTypes.map((t) => <SelectItem key={t.id} value={t.value}>{t.label}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
               <div className="col-span-2 space-y-1.5"><Label>Project</Label><Select value={form.project_id || "none"} onValueChange={(v) => setForm({ ...form, project_id: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{allProjects.map((p) => <SelectItem key={p.id} value={p.id}>{p.project_number ? `${p.project_number} - ${p.project_name}` : p.project_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="col-span-2 space-y-1.5"><Label>Comments</Label><Textarea value={form.comments || ""} onChange={(e) => setForm({ ...form, comments: e.target.value || null })} rows={2} /></div>

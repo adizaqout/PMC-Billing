@@ -854,6 +854,7 @@ export type Database = {
       }
       purchase_orders: {
         Row: {
+          amount: number | null
           comments: string | null
           consultant_id: string
           created_at: string
@@ -874,6 +875,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          amount?: number | null
           comments?: string | null
           consultant_id: string
           created_at?: string
@@ -894,6 +896,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          amount?: number | null
           comments?: string | null
           consultant_id?: string
           created_at?: string
