@@ -517,11 +517,16 @@ export default function DeploymentSchedulePage() {
 
   // Default month for new rows based on schedule type
   const defaultMonth = useMemo(() => {
+    const constraints = getMonthConstraints(scheduleType);
     if (scheduleType === "forecast" && periodMonth) {
       const [y, m] = periodMonth.split("-").map(Number);
       return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
     }
-    return frameworkStartMonth || periodMonth;
+    if (scheduleType === "baseline") {
+      return constraints.min || periodMonth || "";
+    }
+    // actual / workload — default to period month
+    return periodMonth || constraints.min || "";
   }, [scheduleType, periodMonth, frameworkStartMonth]);
 
   const addRow = () => {
@@ -875,10 +880,10 @@ export default function DeploymentSchedulePage() {
                           {isEditable ? (
                             <Input
                               type="month"
-                              value={row.month || defaultMonth}
+                              value={row.month || defaultMonth || ""}
                               onChange={(e) => updateRow(idx, "month", e.target.value)}
-                              min={monthConstraints.min}
-                              max={monthConstraints.max}
+                              min={monthConstraints.min || undefined}
+                              max={monthConstraints.max || undefined}
                               className="h-8 text-xs w-[140px]"
                             />
                           ) : (
