@@ -24,17 +24,17 @@ const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB"
 
 const cols = [
   { header: "PO Number", key: "po_number", width: 18 },
+  { header: "Revision No.", key: "revision_number", width: 10 },
+  { header: "PO Line Item", key: "po_reference", width: 18 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Service Order", key: "so_number", width: 18 },
   { header: "Project Number", key: "project_number", width: 18 },
   { header: "Project Name", key: "project_name", width: 25 },
-  { header: "PO Reference", key: "po_reference", width: 18 },
   { header: "Start Date", key: "po_start_date", width: 14 },
   { header: "End Date", key: "po_end_date", width: 14 },
   { header: "Value (AED)", key: "po_value", width: 15 },
   { header: "Portfolio", key: "portfolio", width: 15 },
   { header: "Type", key: "type", width: 12 },
-  { header: "Revision", key: "revision_number", width: 10 },
   { header: "Status", key: "status", width: 10 },
 ];
 
@@ -71,9 +71,22 @@ export default function PurchaseOrdersPage() {
     e.preventDefault();
     if (!form.po_number.trim()) { toast.error("PO number is required"); return; }
     if (!form.consultant_id) { toast.error("Consultant is required"); return; }
+    if (!form.so_id) { toast.error("Service Order is required"); return; }
     if (form.po_start_date && form.po_end_date && form.po_end_date < form.po_start_date) { toast.error("End date must be after start date"); return; }
-    const dup = items.find(i => i.po_number.toLowerCase() === form.po_number.toLowerCase().trim() && i.consultant_id === form.consultant_id && i.id !== editing?.id);
-    if (dup) { toast.error("This PO number already exists for this consultant"); return; }
+    // Uniqueness: PO Number + Revision No. + PO Line Item
+    const dup = items.find(i =>
+      i.po_number.toLowerCase() === form.po_number.toLowerCase().trim() &&
+      (i.revision_number ?? 0) === (form.revision_number ?? 0) &&
+      (i.po_reference || "").toLowerCase() === (form.po_reference || "").toLowerCase().trim() &&
+      i.id !== editing?.id
+    );
+    if (dup) { toast.error("A PO with this Number + Revision + Line Item already exists"); return; }
+    // Validate only one project per same PO number
+    if (form.project_id) {
+      const samePO = items.filter(i => i.po_number.toLowerCase() === form.po_number.toLowerCase().trim() && i.id !== editing?.id);
+      const existingProject = samePO.find(i => (i as any).project_id && (i as any).project_id !== form.project_id);
+      if (existingProject) { toast.error("Only one project is allowed per PO number. This PO already has a different project assigned."); return; }
+    }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
@@ -125,6 +138,8 @@ export default function PurchaseOrdersPage() {
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
                 <th className="data-table-header text-left px-4 py-2.5">PO Number</th>
+                <th className="data-table-header text-center px-4 py-2.5">Rev</th>
+                <th className="data-table-header text-left px-4 py-2.5">PO Line Item</th>
                 <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
                 <th className="data-table-header text-left px-4 py-2.5">SO</th>
                 <th className="data-table-header text-left px-4 py-2.5">Project No.</th>
@@ -132,13 +147,14 @@ export default function PurchaseOrdersPage() {
                 <th className="data-table-header text-center px-4 py-2.5">Start</th>
                 <th className="data-table-header text-center px-4 py-2.5">End</th>
                 <th className="data-table-header text-right px-4 py-2.5">Value (AED)</th>
-                <th className="data-table-header text-center px-4 py-2.5">Rev</th>
                 <th className="data-table-header text-center px-4 py-2.5">Status</th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{filtered.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-2.5 font-mono font-medium">{item.po_number}</td>
+                  <td className="px-4 py-2.5 text-center font-mono">{item.revision_number ?? 0}</td>
+                  <td className="px-4 py-2.5 text-xs">{item.po_reference || "—"}</td>
                   <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.service_orders?.so_number || "—"}</td>
                   <td className="px-4 py-2.5 font-mono text-xs">{item.projects?.project_number || "—"}</td>
@@ -146,7 +162,6 @@ export default function PurchaseOrdersPage() {
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.po_start_date)}</td>
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.po_end_date)}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{fmt(item.po_value)}</td>
-                  <td className="px-4 py-2.5 text-center font-mono">{item.revision_number ?? 0}</td>
                   <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>
                   <td className="px-4 py-2.5 text-center">
                     <DropdownMenu><DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
@@ -164,13 +179,13 @@ export default function PurchaseOrdersPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>PO Number *</Label><Input value={form.po_number} onChange={(e) => setForm({ ...form, po_number: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>PO Reference</Label><Input value={form.po_reference || ""} onChange={(e) => setForm({ ...form, po_reference: e.target.value || null })} /></div>
+              <div className="space-y-1.5"><Label>Revision No.</Label><Input type="number" value={form.revision_number ?? 0} onChange={(e) => setForm({ ...form, revision_number: parseInt(e.target.value) || 0 })} /></div>
+              <div className="space-y-1.5"><Label>PO Line Item</Label><Input value={form.po_reference || ""} onChange={(e) => setForm({ ...form, po_reference: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1.5"><Label>Service Order</Label><Select value={form.so_id || "none"} onValueChange={(v) => setForm({ ...form, so_id: v === "none" ? null : v })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredSOs.map((s) => <SelectItem key={s.id} value={s.id}>{s.so_number}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Service Order *</Label><Select value={form.so_id || ""} onValueChange={(v) => setForm({ ...form, so_id: v || null })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent>{filteredSOs.map((s) => <SelectItem key={s.id} value={s.id}>{s.so_number}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.po_start_date || ""} onChange={(e) => setForm({ ...form, po_start_date: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.po_end_date || ""} onChange={(e) => setForm({ ...form, po_end_date: e.target.value || null })} min={form.po_start_date || undefined} /></div>
               <div className="space-y-1.5"><Label>Value (AED)</Label><Input type="number" value={form.po_value ?? ""} onChange={(e) => setForm({ ...form, po_value: e.target.value ? parseFloat(e.target.value) : null })} /></div>
-              <div className="space-y-1.5"><Label>Revision No.</Label><Input type="number" value={form.revision_number ?? 0} onChange={(e) => setForm({ ...form, revision_number: parseInt(e.target.value) || 0 })} /></div>
               <div className="space-y-1.5"><Label>Portfolio</Label><Input value={form.portfolio || ""} onChange={(e) => setForm({ ...form, portfolio: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>Type</Label><Input value={form.type || ""} onChange={(e) => setForm({ ...form, type: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
