@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { LogOut } from "lucide-react";
 import {
   LayoutDashboard,
   Building2,
@@ -65,6 +67,7 @@ const navSections = [
 
 export default function AppSidebar() {
   const location = useLocation();
+  const { user, signOut } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
     Object.fromEntries(navSections.map((s) => [s.title, true]))
@@ -144,12 +147,22 @@ export default function AppSidebar() {
         <div className="px-4 py-3 border-t border-sidebar-border shrink-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-sidebar-accent flex items-center justify-center">
-              <span className="text-xs font-medium text-sidebar-accent-foreground">A</span>
+              <span className="text-xs font-medium text-sidebar-accent-foreground">
+                {user?.email?.[0]?.toUpperCase() || "?"}
+              </span>
             </div>
-            <div className="flex flex-col">
-              <span className="text-xs font-medium text-sidebar-accent-foreground">Admin User</span>
-              <span className="text-[10px] text-sidebar-muted">Superadmin</span>
+            <div className="flex flex-col flex-1 min-w-0">
+              <span className="text-xs font-medium text-sidebar-accent-foreground truncate">
+                {user?.email || "Unknown"}
+              </span>
             </div>
+            <button
+              onClick={signOut}
+              className="p-1.5 rounded hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors"
+              title="Sign out"
+            >
+              <LogOut size={14} />
+            </button>
           </div>
         </div>
       </aside>
