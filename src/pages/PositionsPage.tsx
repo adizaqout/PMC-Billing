@@ -70,6 +70,7 @@ export default function PositionsPage() {
     { key: "pos_id", label: "Position ID" }, { key: "sys_id", label: "System ID" }, { key: "name", label: "Position" },
     { key: "consultant", label: "Consultant" }, { key: "so", label: "SO" }, { key: "exp", label: "Exp" },
     { key: "y1", label: "Y1 Rate" }, { key: "y2", label: "Y2 Rate" }, { key: "y3", label: "Y3 Rate" },
+    { key: "y4", label: "Y4 Rate" }, { key: "y5", label: "Y5 Rate" },
     { key: "from", label: "From" }, { key: "to", label: "To" },
   ];
   const { visibleColumns, setVisibleColumns } = useColumnVisibility(posTableCols);
@@ -200,6 +201,8 @@ export default function PositionsPage() {
                 {visibleColumns.has("y1") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Y1 Rate" sortKey="year_1_rate" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("y2") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Y2 Rate" sortKey="year_2_rate" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("y3") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Y3 Rate" sortKey="year_3_rate" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("y4") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Y4 Rate" sortKey="year_4_rate" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("y5") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Y5 Rate" sortKey="year_5_rate" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("from") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="From" sortKey="effective_from" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("to") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="To" sortKey="effective_to" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 <th className="data-table-header w-10"></th>
@@ -215,6 +218,8 @@ export default function PositionsPage() {
                   {visibleColumns.has("y1") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.year_1_rate)}</td>}
                   {visibleColumns.has("y2") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.year_2_rate)}</td>}
                   {visibleColumns.has("y3") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.year_3_rate)}</td>}
+                  {visibleColumns.has("y4") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.year_4_rate)}</td>}
+                  {visibleColumns.has("y5") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.year_5_rate)}</td>}
                   {visibleColumns.has("from") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.effective_from)}</td>}
                   {visibleColumns.has("to") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.effective_to)}</td>}
                   <td className="px-4 py-2.5 text-center">
