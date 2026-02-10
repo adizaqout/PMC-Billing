@@ -26,6 +26,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Download, Upload, Save, Send, Plus, Trash2, Eye, Loader2, CheckCircle2, XCircle, RotateCcw, AlertTriangle, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type Submission = Tables<"deployment_submissions"> & { consultants?: { name: string } | null };
 type DeploymentLine = Tables<"deployment_lines">;
@@ -92,7 +102,25 @@ export default function DeploymentSchedulePage() {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected" | "returned">("approved");
   const [reviewComment, setReviewComment] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+
+  // Check if current user is admin or superadmin
+  const { data: userRole } = useQuery({
+    queryKey: ["user-role", user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data } = await supabase.from("user_roles").select("role").eq("user_id", user.id);
+      if (!data || data.length === 0) return null;
+      const roles = data.map(r => r.role);
+      if (roles.includes("superadmin")) return "superadmin";
+      if (roles.includes("admin")) return "admin";
+      return roles[0];
+    },
+    enabled: !!user?.id,
+  });
+
+  const canDeleteDraft = userRole === "superadmin" || userRole === "admin";
 
   // Load open period
   const { data: openPeriod } = useQuery({
@@ -375,6 +403,22 @@ export default function DeploymentSchedulePage() {
       setReviewDialogOpen(false);
       setReviewComment("");
       toast.success(`${selectedIds.size} submission(s) ${reviewAction}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  // Delete draft submission
+  const deleteMutation = useMutation({
+    mutationFn: async (subId: string) => {
+      // Delete lines first, then submission
+      await supabase.from("deployment_lines").delete().eq("submission_id", subId);
+      const { error } = await supabase.from("deployment_submissions").delete().eq("id", subId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
+      setDeleteTarget(null);
+      toast.success("Draft submission deleted");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -774,9 +818,16 @@ export default function DeploymentSchedulePage() {
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">{sub.submitted_on ? new Date(sub.submitted_on).toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2.5 text-xs text-muted-foreground">{sub.reviewed_on ? new Date(sub.reviewed_on).toLocaleDateString() : "—"}</td>
                     <td className="px-3 py-2.5">
-                      <Button size="sm" variant="ghost" onClick={() => { setSelectedSubmission(sub); setView("detail"); }}>
-                        <Eye size={14} />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => { setSelectedSubmission(sub); setView("detail"); }}>
+                          <Eye size={14} />
+                        </Button>
+                        {canDeleteDraft && sub.status === "draft" && (
+                          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(sub)}>
+                            <Trash2 size={14} />
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -840,6 +891,28 @@ export default function DeploymentSchedulePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Draft Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Draft Submission?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the {deleteTarget?.schedule_type} submission for {deleteTarget?.month} (Rev #{deleteTarget?.revision_no}) and all its deployment lines. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+            >
+              {deleteMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
