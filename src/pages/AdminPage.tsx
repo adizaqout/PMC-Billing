@@ -765,7 +765,7 @@ function PeriodConstraintsTab() {
         <div className="px-4 py-3 border-b flex items-center justify-between">
           <div>
             <span className="text-sm font-medium">Consultant Period Constraints</span>
-            <span className="text-xs text-muted-foreground ml-2">Control min/max month selection for forecast & baseline per consultant</span>
+            <span className="text-xs text-muted-foreground ml-2">Control min/max month selection for forecast, baseline, actual & workload per consultant</span>
           </div>
           <Button size="sm" onClick={openAdd}><Plus size={14} className="mr-1.5" />Add Constraint</Button>
         </div>
@@ -830,6 +830,8 @@ function PeriodConstraintsTab() {
                     <SelectContent>
                       <SelectItem value="forecast">Forecast</SelectItem>
                       <SelectItem value="baseline">Baseline</SelectItem>
+                      <SelectItem value="actual">Actual</SelectItem>
+                      <SelectItem value="workload">Workload</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
