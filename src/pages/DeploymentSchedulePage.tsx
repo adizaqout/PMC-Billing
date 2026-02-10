@@ -893,15 +893,17 @@ export default function DeploymentSchedulePage() {
       // Employee
       const empIdCode = get("employee id");
       const isBaseline = scheduleType === "baseline";
+      const isForecast = scheduleType === "forecast";
+      const allowEmptyEmployee = isBaseline || isForecast;
       let emp: Employee | undefined = undefined;
       if (!empIdCode) {
-        if (!isBaseline) {
+        if (!allowEmptyEmployee) {
           progress.errors.push({ row: rowNum, message: "Employee ID is missing" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue;
         }
-        // For baseline, allow missing employee ID — will insert as null
+        // For baseline/forecast, allow missing employee ID — will insert as null
       } else {
         emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
-        if (!emp && !isBaseline) {
+        if (!emp && !allowEmptyEmployee) {
           progress.errors.push({ row: rowNum, message: `Employee ID "${empIdCode}" not found` }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue;
         }
       }
@@ -935,14 +937,14 @@ export default function DeploymentSchedulePage() {
         }
       });
 
-      // For baseline, store employee code + month + position in notes for proper row grouping & display
+      // For baseline/forecast, store employee code + month + position in notes for proper row grouping & display
       let effectiveEmpCode = empIdCode;
-      if (!empIdCode && isBaseline) {
+      if (!empIdCode && allowEmptyEmployee) {
         placeholderSerial++;
         effectiveEmpCode = `PH-${placeholderSerial}`;
       }
       const posId = pos?.id || "";
-      const groupNote = isBaseline ? `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}` : null;
+      const groupNote = allowEmptyEmployee ? `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}` : null;
 
       // Build DB records directly
       if (projEntries.length === 0) {
@@ -989,6 +991,25 @@ export default function DeploymentSchedulePage() {
       await flushBatch();
     } catch (err) {
       progress.errors.push({ row: 0, message: `Final batch insert failed: ${err instanceof Error ? err.message : "Unknown error"}` });
+    }
+
+    // Reload data into UI BEFORE returning so rows appear before "done" dialog
+    if (selectedSubmission) {
+      const allLines: DeploymentLine[] = [];
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      while (true) {
+        const { data } = await supabase
+          .from("deployment_lines")
+          .select("*")
+          .eq("submission_id", selectedSubmission.id)
+          .range(from, from + PAGE_SIZE - 1);
+        if (!data || data.length === 0) break;
+        allLines.push(...(data as DeploymentLine[]));
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      setRows(buildUIRows(allLines));
     }
 
     onProgress({ ...progress });
