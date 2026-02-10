@@ -157,7 +157,7 @@ export default function ProjectsPage() {
     for (let i = 1; i < rows.length; i++) {
       const [projNum, projName, entity, portfolio, projType, classification, startDate, endDate, budget, pmcBudget, status] = rows[i];
       if (!projName?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const { error } = await supabase.from("projects").insert({
+      const payload: any = {
         project_number: projNum?.trim() || null, project_name: projName.trim(),
         entity: entity?.trim() || null, portfolio: portfolio?.trim() || null,
         project_type: projType?.trim() || null, classification: classification?.trim() || null,
@@ -165,8 +165,28 @@ export default function ProjectsPage() {
         latest_budget: budget ? parseFloat(String(budget)) : null,
         latest_pmc_budget: pmcBudget ? parseFloat(String(pmcBudget)) : null,
         status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-      } as any);
-      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
+      };
+      // Check if project exists by project_number or project_name
+      let existingId: string | null = null;
+      if (projNum?.trim()) {
+        const { data: existing } = await supabase.from("projects").select("id").eq("project_number", projNum.trim()).maybeSingle();
+        existingId = existing?.id || null;
+      }
+      if (!existingId) {
+        const { data: existing } = await supabase.from("projects").select("id").eq("project_name", projName.trim()).maybeSingle();
+        existingId = existing?.id || null;
+      }
+      let error: any;
+      if (existingId) {
+        const res = await supabase.from("projects").update(payload).eq("id", existingId);
+        error = res.error;
+        if (!error) (result as any).updated = ((result as any).updated || 0) + 1;
+      } else {
+        const res = await supabase.from("projects").insert(payload as any);
+        error = res.error;
+        if (!error) result.created++;
+      }
+      if (error) result.errors.push({ row: i + 1, message: error.message });
       result.processed++;
       onProgress({ ...result });
     }
