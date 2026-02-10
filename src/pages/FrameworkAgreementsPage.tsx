@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -8,7 +8,8 @@ import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
-import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
+import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
+import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,28 +87,28 @@ export default function FrameworkAgreementsPage() {
 
   const handleExport = () => { exportToExcel("framework-agreements.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("fa-template.xlsx", cols, { Consultants: consultants.map(c => c.name) }); toast.success("Template downloaded"); };
-  const handleImport = async (file: File) => {
-    try {
-      const rows = await parseExcelFile(file);
-      if (rows.length < 2) { toast.error("File is empty"); return; }
-      const errors: string[] = []; let created = 0;
-      for (let i = 1; i < rows.length; i++) {
-        const [faNo, consultantName, startDate, endDate, status] = rows[i];
-        if (!faNo?.trim()) continue;
-        const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
-        if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
-        const { error } = await supabase.from("framework_agreements").insert({
-          framework_agreement_no: faNo.trim(), consultant_id: consultant.id,
-          start_date: startDate?.trim() || null, end_date: endDate?.trim() || null,
-          status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-        } as FAInsert);
-        if (error) errors.push(`Row ${i + 1}: ${error.message}`); else created++;
-      }
-      queryClient.invalidateQueries({ queryKey: ["framework_agreements"] });
-      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
-      if (created) toast.success(`${created} record(s) imported`);
-    } catch { toast.error("Failed to parse file"); }
-  };
+  const handleImportWithProgress = useCallback(async (
+    rows: string[][], onProgress: (p: ImportProgress) => void
+  ): Promise<ImportProgress> => {
+    const total = rows.length - 1;
+    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
+    for (let i = 1; i < rows.length; i++) {
+      const [faNo, consultantName, startDate, endDate, status] = rows[i];
+      if (!faNo?.trim()) { result.processed++; onProgress({ ...result }); continue; }
+      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
+      const { error } = await supabase.from("framework_agreements").insert({
+        framework_agreement_no: faNo.trim(), consultant_id: consultant.id,
+        start_date: startDate?.trim() || null, end_date: endDate?.trim() || null,
+        status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      } as FAInsert);
+      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
+      result.processed++;
+      onProgress({ ...result });
+    }
+    return result;
+  }, [consultants]);
+  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["framework_agreements"] }); }, [queryClient]);
 
   return (
     <AppLayout>
@@ -115,7 +116,7 @@ export default function FrameworkAgreementsPage() {
         <div className="page-header">
           <div><h1 className="page-title">Framework Agreements</h1><p className="page-subtitle">Manage framework agreements with consultants</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Agreement</Button>
           </div>
         </div>

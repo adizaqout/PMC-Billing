@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -7,7 +7,8 @@ import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import { usePagination } from "@/hooks/usePagination";
-import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
+import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
+import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -112,35 +113,35 @@ export default function PurchaseOrdersPage() {
 
   const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("po-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
-  const handleImport = async (file: File) => {
-    try {
-      const rows = await parseExcelFile(file);
-      if (rows.length < 2) { toast.error("File is empty"); return; }
-      const errors: string[] = []; let created = 0;
-      for (let i = 1; i < rows.length; i++) {
-        const raw = rows[i];
-        const str = (v: any) => v == null ? "" : String(v).trim();
-        const padded = Array.from({ length: 13 }, (_, idx) => str(raw[idx]));
-        const [poNum, rev, poRef, consultantName, soNum, projNum, projName, startDate, endDate, amount, portfolio, type, status] = padded;
-        if (!poNum) continue;
-        const consultant = consultants.find(c => c.name.toLowerCase() === consultantName.toLowerCase());
-        if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
-        const so = soNum ? allServiceOrders.find(s => s.so_number.toLowerCase() === soNum.toLowerCase() && s.consultant_id === consultant.id) : null;
-        const project = projNum ? allProjects.find(p => p.project_number?.toLowerCase() === projNum.toLowerCase()) : null;
-        const { error } = await supabase.from("purchase_orders").insert({
-          po_number: poNum, consultant_id: consultant.id, so_id: so?.id || null,
-          po_reference: poRef || null, po_start_date: startDate || null, po_end_date: endDate || null,
-          po_value: amount ? parseFloat(amount) : null, portfolio: portfolio || null, type: type || null,
-          revision_number: rev ? parseInt(rev) : 0, status: (status.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-          project_id: project?.id || null,
-        } as TablesInsert<"purchase_orders">);
-        if (error) errors.push(`Row ${i + 1}: ${error.message}`); else created++;
-      }
-      queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
-      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
-      if (created) toast.success(`${created} record(s) imported`);
-    } catch (err) { console.error("PO Import error:", err); toast.error("Failed to parse file"); }
-  };
+  const handleImportWithProgress = useCallback(async (
+    rows: string[][], onProgress: (p: ImportProgress) => void
+  ): Promise<ImportProgress> => {
+    const total = rows.length - 1;
+    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
+    for (let i = 1; i < rows.length; i++) {
+      const raw = rows[i];
+      const str = (v: any) => v == null ? "" : String(v).trim();
+      const padded = Array.from({ length: 13 }, (_, idx) => str(raw[idx]));
+      const [poNum, rev, poRef, consultantName, soNum, projNum, projName, startDate, endDate, amount, portfolio, type, status] = padded;
+      if (!poNum) { result.processed++; onProgress({ ...result }); continue; }
+      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName.toLowerCase());
+      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
+      const so = soNum ? allServiceOrders.find(s => s.so_number.toLowerCase() === soNum.toLowerCase() && s.consultant_id === consultant.id) : null;
+      const project = projNum ? allProjects.find(p => p.project_number?.toLowerCase() === projNum.toLowerCase()) : null;
+      const { error } = await supabase.from("purchase_orders").insert({
+        po_number: poNum, consultant_id: consultant.id, so_id: so?.id || null,
+        po_reference: poRef || null, po_start_date: startDate || null, po_end_date: endDate || null,
+        po_value: amount ? parseFloat(amount) : null, portfolio: portfolio || null, type: type || null,
+        revision_number: rev ? parseInt(rev) : 0, status: (status.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        project_id: project?.id || null,
+      } as TablesInsert<"purchase_orders">);
+      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
+      result.processed++;
+      onProgress({ ...result });
+    }
+    return result;
+  }, [consultants, allServiceOrders, allProjects]);
+  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["purchase_orders"] }); }, [queryClient]);
 
   return (
     <AppLayout>
@@ -148,7 +149,7 @@ export default function PurchaseOrdersPage() {
         <div className="page-header">
           <div><h1 className="page-title">Purchase Orders</h1><p className="page-subtitle">Manage POs and PO line items</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add PO</Button>
           </div>
         </div>

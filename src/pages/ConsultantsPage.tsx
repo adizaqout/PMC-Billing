@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -8,7 +8,8 @@ import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
-import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
+import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
+import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -119,28 +120,26 @@ export default function ConsultantsPage() {
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns); toast.success("Template downloaded"); };
-  const handleImport = async (file: File) => {
-    try {
-      const rows = await parseExcelFile(file);
-      if (rows.length < 2) { toast.error("File is empty"); return; }
-      const errors: string[] = [];
-      let created = 0;
-      for (let i = 1; i < rows.length; i++) {
-        const [name, crNo, taxNo, email, phone, address, status] = rows[i];
-        if (!name?.trim()) continue;
-        const { error } = await supabase.from("consultants").insert({
-          name: name.trim(), commercial_registration_no: crNo?.trim() || null, tax_registration_no: taxNo?.trim() || null,
-          contact_email: email?.trim() || null, contact_phone: phone?.trim() || null, address: address?.trim() || null,
-          status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-        });
-        if (error) errors.push(`Row ${i + 1}: ${error.message}`);
-        else created++;
-      }
-      queryClient.invalidateQueries({ queryKey: ["consultants"] });
-      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
-      if (created) toast.success(`${created} consultant(s) imported`);
-    } catch { toast.error("Failed to parse file"); }
-  };
+  const handleImportWithProgress = useCallback(async (
+    rows: string[][], onProgress: (p: ImportProgress) => void
+  ): Promise<ImportProgress> => {
+    const total = rows.length - 1;
+    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
+    for (let i = 1; i < rows.length; i++) {
+      const [name, crNo, taxNo, email, phone, address, status] = rows[i];
+      if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
+      const { error } = await supabase.from("consultants").insert({
+        name: name.trim(), commercial_registration_no: crNo?.trim() || null, tax_registration_no: taxNo?.trim() || null,
+        contact_email: email?.trim() || null, contact_phone: phone?.trim() || null, address: address?.trim() || null,
+        status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      });
+      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
+      result.processed++;
+      onProgress({ ...result });
+    }
+    return result;
+  }, []);
+  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["consultants"] }); }, [queryClient]);
 
   return (
     <AppLayout>
@@ -151,7 +150,7 @@ export default function ConsultantsPage() {
             <p className="page-subtitle">Manage PMC consultant companies</p>
           </div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Consultant</Button>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -9,7 +9,8 @@ import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
-import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
+import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
+import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,29 +96,29 @@ export default function EmployeesPage() {
 
   const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, consultant_name: e.consultants?.name || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.name), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
-  const handleImport = async (file: File) => {
-    try {
-      const rows = await parseExcelFile(file);
-      if (rows.length < 2) { toast.error("File is empty"); return; }
-      const errors: string[] = []; let created = 0;
-      for (let i = 1; i < rows.length; i++) {
-        const [name, consultantName, , exp, startDate, endDate, status] = rows[i];
-        if (!name?.trim()) continue;
-        const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
-        if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
-        const { error } = await supabase.from("employees").insert({
-          employee_name: name.trim(), consultant_id: consultant.id,
-          experience_years: exp ? parseInt(String(exp)) : null,
-          start_date: startDate?.trim() || null, end_date: endDate?.trim() || null,
-          status: status?.trim()?.toLowerCase() || "active",
-        } as any);
-        if (error) errors.push(`Row ${i + 1}: ${error.message}`); else created++;
-      }
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
-      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
-      if (created) toast.success(`${created} employee(s) imported`);
-    } catch { toast.error("Failed to parse file"); }
-  };
+  const handleImportWithProgress = useCallback(async (
+    rows: string[][], onProgress: (p: ImportProgress) => void
+  ): Promise<ImportProgress> => {
+    const total = rows.length - 1;
+    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
+    for (let i = 1; i < rows.length; i++) {
+      const [name, consultantName, , exp, startDate, endDate, status] = rows[i];
+      if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
+      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
+      const { error } = await supabase.from("employees").insert({
+        employee_name: name.trim(), consultant_id: consultant.id,
+        experience_years: exp ? parseInt(String(exp)) : null,
+        start_date: startDate?.trim() || null, end_date: endDate?.trim() || null,
+        status: status?.trim()?.toLowerCase() || "active",
+      } as any);
+      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
+      result.processed++;
+      onProgress({ ...result });
+    }
+    return result;
+  }, [consultants]);
+  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["employees"] }); }, [queryClient]);
 
   return (
     <AppLayout>
@@ -125,7 +126,7 @@ export default function EmployeesPage() {
         <div className="page-header">
           <div><h1 className="page-title">Employees</h1><p className="page-subtitle">Manage PMC consultant employees</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Employee</Button>
           </div>
         </div>

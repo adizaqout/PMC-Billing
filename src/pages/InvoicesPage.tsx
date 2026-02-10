@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -8,7 +8,8 @@ import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
-import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
+import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
+import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -238,36 +239,35 @@ export default function InvoicesPage() {
 
   const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.name) }); toast.success("Template downloaded"); };
 
-  const handleImport = async (file: File) => {
-    try {
-      const rows = await parseExcelFile(file);
-      if (rows.length < 2) { toast.error("File is empty"); return; }
-      const errors: string[] = []; let created = 0;
-      for (let i = 1; i < rows.length; i++) {
-        const [invNum, month, consultantName, poNum, rev, lineRef, , billed, , paid, status, desc] = rows[i];
-        if (!invNum?.trim()) continue;
-        const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
-        if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
-        // Find PO by po_number + revision + line
-        const po = (poNum && lineRef) ? allPOs.find(p =>
-          p.po_number === String(poNum).trim() &&
-          (p.revision_number ?? 0) === (rev ? parseInt(String(rev)) : 0) &&
-          p.po_reference === String(lineRef).trim() &&
-          p.consultant_id === consultant.id
-        ) : null;
-        const { error } = await supabase.from("invoices").insert({
-          invoice_number: invNum.trim(), invoice_month: month?.trim() || "", consultant_id: consultant.id, po_id: po?.id || null,
-          billed_amount_no_vat: billed ? parseFloat(String(billed)) : null, paid_amount: paid ? parseFloat(String(paid)) : null,
-          status: (["paid", "cancelled"].includes(status?.trim()?.toLowerCase() || "") ? status.trim().toLowerCase() : "pending") as any,
-          description: desc?.trim() || null,
-        } as TablesInsert<"invoices">);
-        if (error) errors.push(`Row ${i + 1}: ${error.message}`); else created++;
-      }
-      queryClient.invalidateQueries({ queryKey: ["invoices"] });
-      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
-      if (created) toast.success(`${created} record(s) imported`);
-    } catch { toast.error("Failed to parse file"); }
-  };
+  const handleImportWithProgress = useCallback(async (
+    rows: string[][], onProgress: (p: ImportProgress) => void
+  ): Promise<ImportProgress> => {
+    const total = rows.length - 1;
+    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
+    for (let i = 1; i < rows.length; i++) {
+      const [invNum, month, consultantName, poNum, rev, lineRef, , billed, , paid, status, desc] = rows[i];
+      if (!invNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
+      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
+      const po = (poNum && lineRef) ? allPOs.find(p =>
+        p.po_number === String(poNum).trim() &&
+        (p.revision_number ?? 0) === (rev ? parseInt(String(rev)) : 0) &&
+        p.po_reference === String(lineRef).trim() &&
+        p.consultant_id === consultant.id
+      ) : null;
+      const { error } = await supabase.from("invoices").insert({
+        invoice_number: invNum.trim(), invoice_month: month?.trim() || "", consultant_id: consultant.id, po_id: po?.id || null,
+        billed_amount_no_vat: billed ? parseFloat(String(billed)) : null, paid_amount: paid ? parseFloat(String(paid)) : null,
+        status: (["paid", "cancelled"].includes(status?.trim()?.toLowerCase() || "") ? status.trim().toLowerCase() : "pending") as any,
+        description: desc?.trim() || null,
+      } as TablesInsert<"invoices">);
+      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
+      result.processed++;
+      onProgress({ ...result });
+    }
+    return result;
+  }, [consultants, allPOs]);
+  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); }, [queryClient]);
 
   return (
     <AppLayout>
@@ -275,7 +275,7 @@ export default function InvoicesPage() {
         <div className="page-header">
           <div><h1 className="page-title">Invoices</h1><p className="page-subtitle">Track and validate invoices</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Invoice</Button>
           </div>
         </div>
