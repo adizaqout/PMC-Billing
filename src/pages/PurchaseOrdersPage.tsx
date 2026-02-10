@@ -139,9 +139,18 @@ export default function PurchaseOrdersPage() {
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       const so = soNum ? allServiceOrders.find(s => s.so_number.toLowerCase() === soNum.toLowerCase() && s.consultant_id === consultant.id) : null;
       const project = projNum ? allProjects.find(p => p.project_number?.toLowerCase() === projNum.toLowerCase()) : null;
+      const excelDateToISO = (v: any): string | null => {
+        if (v == null || String(v).trim() === "") return null;
+        const s = String(v).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        const n = Number(s);
+        if (!isNaN(n) && n > 0) { const d = new Date(Math.round((n - 25569) * 86400000)); return d.toISOString().slice(0, 10); }
+        const parsed = new Date(s);
+        return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+      };
       const { error } = await supabase.from("purchase_orders").insert({
         po_number: poNum, consultant_id: consultant.id, so_id: so?.id || null,
-        po_reference: poRef || null, po_start_date: startDate || null, po_end_date: endDate || null,
+        po_reference: poRef || null, po_start_date: excelDateToISO(startDate), po_end_date: excelDateToISO(endDate),
         po_value: amount ? parseFloat(amount) : null, portfolio: portfolio || null, type: type || null,
         revision_number: rev ? parseInt(rev) : 0, status: (status.toLowerCase() === "inactive" ? "inactive" : "active") as any,
         project_id: project?.id || null,
