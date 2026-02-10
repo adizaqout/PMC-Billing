@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Save, Send, Plus, Trash2, Eye, Loader2, CheckCircle2, XCircle, RotateCcw, AlertTriangle } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { exportToExcel, downloadTemplate, parseExcelFile, type ExcelColumnDef } from "@/lib/excel-utils";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import { toast } from "sonner";
@@ -607,8 +608,6 @@ export default function DeploymentSchedulePage() {
       { header: "Position", key: "position_name", width: 20 },
       { header: "Rate Year (1-5)", key: "rate_year", width: 14 },
       { header: "Man-Months (max 1.0)", key: "man_months", width: 18 },
-      { header: "Service Order", key: "so_number", width: 18 },
-      { header: "Purchase Order", key: "po_number", width: 18 },
     ];
     // Add project columns
     projectColumns.forEach(p => {
@@ -622,15 +621,11 @@ export default function DeploymentSchedulePage() {
     const data = rows.map(row => {
       const emp = employees.find(e => e.id === row.employee_id);
       const pos = positions.find(p => p.id === row.position_id);
-      const so = serviceOrders.find(s => s.id === row.so_id);
-      const po = purchaseOrders.find(p => p.id === row.po_id);
       const rec: Record<string, any> = {
         employee_name: emp?.employee_name || "",
         position_name: pos?.position_name || "",
         rate_year: row.rate_year,
         man_months: row.man_months,
-        so_number: so?.so_number || "",
-        po_number: po?.po_number || "",
       };
       projectColumns.forEach(p => {
         rec[`proj_${p.id}`] = row.allocations[p.id] || "";
@@ -646,8 +641,6 @@ export default function DeploymentSchedulePage() {
     const refData: Record<string, string[]> = {
       "Employees": employees.map(e => e.employee_name),
       "Positions": positions.map(p => p.position_name),
-      "Service Orders": serviceOrders.map(s => s.so_number),
-      "Purchase Orders": purchaseOrders.map(p => p.po_number),
       "Projects": projectColumns.map(p => projLabel(p)),
     };
     downloadTemplate(`deployment-template-${scheduleType}.xlsx`, cols, refData);
@@ -823,11 +816,16 @@ export default function DeploymentSchedulePage() {
                   <th className="data-table-header text-center px-3 py-2.5 min-w-[90px]">Rate Year</th>
                   <th className="data-table-header text-center px-3 py-2.5 min-w-[80px]">Rate</th>
                   <th className="data-table-header text-center px-3 py-2.5 min-w-[100px]">Man-Months</th>
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[130px]">SO</th>
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[130px]">PO</th>
                   {projectColumns.map(p => (
-                    <th key={p.id} className="data-table-header text-center px-2 py-2.5 min-w-[100px]" title={projLabel(p)}>
-                      <div className="text-xs truncate max-w-[100px]">{p.project_number || p.project_name.slice(0, 10)}</div>
+                    <th key={p.id} className="data-table-header text-center px-2 py-2.5 min-w-[100px]">
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div className="text-xs truncate max-w-[100px] cursor-help">{p.project_number || p.project_name.slice(0, 10)}</div>
+                          </TooltipTrigger>
+                          <TooltipContent><p>{p.project_name}</p></TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <div className="text-[10px] text-muted-foreground truncate max-w-[100px]">%</div>
                     </th>
                   ))}
@@ -837,14 +835,13 @@ export default function DeploymentSchedulePage() {
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={9 + projectColumns.length + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">No rows yet. Click "Add Row" or import from Excel.</td></tr>
+                  <tr><td colSpan={7 + projectColumns.length + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">No rows yet. Click "Add Row" or import from Excel.</td></tr>
                 ) : (
                   rows.map((row, idx) => {
                     const emp = employees.find(e => e.id === row.employee_id);
                     const pos = positions.find(p => p.id === row.position_id);
                     const rate = getRateForRow(row);
                     const allocSum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
-                    const filteredPOs = purchaseOrders.filter(po => !row.so_id || po.so_id === row.so_id);
 
                     return (
                       <tr key={row._key} className="border-b last:border-0 hover:bg-muted/50">
@@ -916,24 +913,6 @@ export default function DeploymentSchedulePage() {
                               className="h-8 text-xs text-center w-20"
                             />
                           ) : <span className="text-xs font-mono text-center block">{row.man_months}</span>}
-                        </td>
-                        {/* SO */}
-                        <td className="px-3 py-1.5">
-                          {isEditable ? (
-                            <Select value={row.so_id} onValueChange={(v) => { updateRow(idx, "so_id", v); updateRow(idx, "po_id", ""); }}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                              <SelectContent>{serviceOrders.map(so => <SelectItem key={so.id} value={so.id}>{so.so_number}</SelectItem>)}</SelectContent>
-                            </Select>
-                          ) : <span className="text-xs">{serviceOrders.find(s => s.id === row.so_id)?.so_number || "—"}</span>}
-                        </td>
-                        {/* PO */}
-                        <td className="px-3 py-1.5">
-                          {isEditable ? (
-                            <Select value={row.po_id} onValueChange={(v) => updateRow(idx, "po_id", v)}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                              <SelectContent>{filteredPOs.map(po => <SelectItem key={po.id} value={po.id}>{po.po_number}</SelectItem>)}</SelectContent>
-                            </Select>
-                          ) : <span className="text-xs">{purchaseOrders.find(p => p.id === row.po_id)?.po_number || "—"}</span>}
                         </td>
                         {/* Project allocation columns */}
                         {projectColumns.map(p => (
