@@ -8,7 +8,9 @@ import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
+import SortableHeader from "@/components/SortableHeader";
 import { usePagination } from "@/hooks/usePagination";
+import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
 import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
@@ -91,7 +93,8 @@ export default function EmployeesPage() {
     }
     return true;
   });
-  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
+  const { sorted, sort, toggleSort } = useSort(filtered, "employee_name", "asc");
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
   const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, consultant_name: e.consultants?.name || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
@@ -138,13 +141,13 @@ export default function EmployeesPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No employees found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">Name<ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></th>
-                <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
-                <th className="data-table-header text-left px-4 py-2.5">Position<ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></th>
-                <th className="data-table-header text-center px-4 py-2.5">Exp (Yrs)</th>
-                <th className="data-table-header text-center px-4 py-2.5">Start Date</th>
-                <th className="data-table-header text-center px-4 py-2.5">End Date</th>
-                <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="employee_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></SortableHeader></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position" sortKey="positions.position_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></SortableHeader></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Exp (Yrs)" sortKey="experience_years" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start Date" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End Date" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((emp) => (

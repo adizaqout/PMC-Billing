@@ -7,7 +7,9 @@ import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
+import SortableHeader from "@/components/SortableHeader";
 import { usePagination } from "@/hooks/usePagination";
+import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
 import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
@@ -116,7 +118,8 @@ export default function ConsultantsPage() {
     }
     return true;
   });
-  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
+  const { sorted, sort, toggleSort } = useSort(filtered, "name", "asc");
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns); toast.success("Template downloaded"); };
@@ -172,12 +175,12 @@ export default function ConsultantsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="data-table-header text-left px-4 py-2.5">Name<ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></th>
-                    <th className="data-table-header text-left px-4 py-2.5">CR No.<ColumnFilter value={colFilters.cr || ""} onChange={(v) => setColFilter("cr", v)} label="CR No." /></th>
-                    <th className="data-table-header text-left px-4 py-2.5">Tax No.<ColumnFilter value={colFilters.tax || ""} onChange={(v) => setColFilter("tax", v)} label="Tax No." /></th>
-                    <th className="data-table-header text-left px-4 py-2.5">Email<ColumnFilter value={colFilters.email || ""} onChange={(v) => setColFilter("email", v)} label="Email" /></th>
-                    <th className="data-table-header text-left px-4 py-2.5">Phone<ColumnFilter value={colFilters.phone || ""} onChange={(v) => setColFilter("phone", v)} label="Phone" /></th>
-                    <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
+                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></SortableHeader></th>
+                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="CR No." sortKey="commercial_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.cr || ""} onChange={(v) => setColFilter("cr", v)} label="CR No." /></SortableHeader></th>
+                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Tax No." sortKey="tax_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.tax || ""} onChange={(v) => setColFilter("tax", v)} label="Tax No." /></SortableHeader></th>
+                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Email" sortKey="contact_email" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.email || ""} onChange={(v) => setColFilter("email", v)} label="Email" /></SortableHeader></th>
+                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Phone" sortKey="contact_phone" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.phone || ""} onChange={(v) => setColFilter("phone", v)} label="Phone" /></SortableHeader></th>
+                    <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>
                     <th className="data-table-header w-10"></th>
                   </tr>
                 </thead>

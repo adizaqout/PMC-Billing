@@ -6,7 +6,9 @@ import AppLayout from "@/components/AppLayout";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
+import SortableHeader from "@/components/SortableHeader";
 import { usePagination } from "@/hooks/usePagination";
+import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
 import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
@@ -83,7 +85,8 @@ export default function ServiceOrdersPage() {
     if (colFilters.framework && !(i.framework_agreements?.framework_agreement_no || "").toLowerCase().includes(colFilters.framework.toLowerCase())) return false;
     return true;
   });
-  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
+  const { sorted, sort, toggleSort } = useSort(filtered, "so_number", "asc");
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
@@ -129,12 +132,12 @@ export default function ServiceOrdersPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">SO Number<ColumnFilter value={colFilters.so_number || ""} onChange={(v) => setColFilter("so_number", v)} label="SO Number" /></th>
-                <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
-                <th className="data-table-header text-left px-4 py-2.5">Framework<ColumnFilter value={colFilters.framework || ""} onChange={(v) => setColFilter("framework", v)} label="Framework" /></th>
-                <th className="data-table-header text-center px-4 py-2.5">Start</th>
-                <th className="data-table-header text-center px-4 py-2.5">End</th>
-                <th className="data-table-header text-right px-4 py-2.5">Value (AED)</th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="SO Number" sortKey="so_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.so_number || ""} onChange={(v) => setColFilter("so_number", v)} label="SO Number" /></SortableHeader></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Framework" sortKey="framework_agreements.framework_agreement_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.framework || ""} onChange={(v) => setColFilter("framework", v)} label="Framework" /></SortableHeader></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start" sortKey="so_start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End" sortKey="so_end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Value (AED)" sortKey="so_value" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((item) => (
