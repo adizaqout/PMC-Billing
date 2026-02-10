@@ -452,23 +452,36 @@ export default function DeploymentSchedulePage() {
         .single();
       if (error) throw error;
 
-      // Copy lines from latest if exists
-      if (latest?.id) {
-        const { data: oldLines } = await supabase.from("deployment_lines").select("*").eq("submission_id", latest.id);
-        if (oldLines && oldLines.length > 0) {
-          const copied = oldLines.map(l => ({
-            submission_id: newSub.id,
-            employee_id: l.employee_id,
-            worked_project_id: l.worked_project_id,
-            billed_project_id: l.billed_project_id,
-            po_id: l.po_id,
-            po_item_id: l.po_item_id,
-            so_id: l.so_id,
-            allocation_pct: l.allocation_pct,
-            rate_year: (l as any).rate_year,
-            man_months: (l as any).man_months,
-          }));
-          await supabase.from("deployment_lines").insert(copied);
+      // Only copy lines from a previous APPROVED revision (not rejected/returned)
+      if (latest?.id && latest.status === "approved") {
+        const allOldLines: any[] = [];
+        const PAGE = 1000;
+        let from = 0;
+        while (true) {
+          const { data } = await supabase.from("deployment_lines").select("*").eq("submission_id", latest.id).range(from, from + PAGE - 1);
+          if (!data || data.length === 0) break;
+          allOldLines.push(...data);
+          if (data.length < PAGE) break;
+          from += PAGE;
+        }
+        if (allOldLines.length > 0) {
+          const BATCH = 200;
+          for (let b = 0; b < allOldLines.length; b += BATCH) {
+            const batch = allOldLines.slice(b, b + BATCH).map(l => ({
+              submission_id: newSub.id,
+              employee_id: l.employee_id,
+              worked_project_id: l.worked_project_id,
+              billed_project_id: l.billed_project_id,
+              po_id: l.po_id,
+              po_item_id: l.po_item_id,
+              so_id: l.so_id,
+              allocation_pct: l.allocation_pct,
+              rate_year: l.rate_year,
+              man_months: l.man_months,
+              notes: l.notes,
+            }));
+            await supabase.from("deployment_lines").insert(batch);
+          }
         }
       }
 
