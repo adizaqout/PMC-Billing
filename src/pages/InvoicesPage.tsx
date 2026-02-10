@@ -6,6 +6,7 @@ import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
+import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,10 @@ export default function InvoicesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState<InvoiceForm>(emptyForm);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
+
+  const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: items = [], isLoading } = useQuery({ queryKey: ["invoices"], queryFn: async () => { const { data, error } = await supabase.from("invoices").select("*, consultants(name), purchase_orders(po_number)").order("invoice_month", { ascending: false }); if (error) throw error; return data as Invoice[]; } });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
@@ -72,7 +76,15 @@ export default function InvoicesPage() {
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
-  const filtered = items.filter((i) => i.invoice_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const filtered = items.filter((i) => {
+    if (search && !i.invoice_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (colFilters.invoice_number && !i.invoice_number.toLowerCase().includes(colFilters.invoice_number.toLowerCase())) return false;
+    if (colFilters.month && !i.invoice_month.toLowerCase().includes(colFilters.month.toLowerCase())) return false;
+    if (colFilters.consultant && !(i.consultants?.name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
+    if (colFilters.po && !(i.purchase_orders?.po_number || "").toLowerCase().includes(colFilters.po.toLowerCase())) return false;
+    if (colFilters.status && !i.status.toLowerCase().includes(colFilters.status.toLowerCase())) return false;
+    return true;
+  });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("invoices.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", po_number: i.purchase_orders?.po_number || "" }))); toast.success("Exported"); };
@@ -120,13 +132,13 @@ export default function InvoicesPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">Invoice No.</th>
-                <th className="data-table-header text-left px-4 py-2.5">Month</th>
-                <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
-                <th className="data-table-header text-left px-4 py-2.5">PO</th>
+                <th className="data-table-header text-left px-4 py-2.5">Invoice No.<ColumnFilter value={colFilters.invoice_number || ""} onChange={(v) => setColFilter("invoice_number", v)} label="Invoice No." /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Month<ColumnFilter value={colFilters.month || ""} onChange={(v) => setColFilter("month", v)} label="Month" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">PO<ColumnFilter value={colFilters.po || ""} onChange={(v) => setColFilter("po", v)} label="PO" /></th>
                 <th className="data-table-header text-right px-4 py-2.5">Billed (AED)</th>
                 <th className="data-table-header text-right px-4 py-2.5">Paid (AED)</th>
-                <th className="data-table-header text-center px-4 py-2.5">Status</th>
+                <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((item) => (

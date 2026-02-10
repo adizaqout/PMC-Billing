@@ -5,6 +5,7 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
+import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
@@ -38,7 +39,10 @@ export default function ServiceOrdersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SO | null>(null);
   const [form, setForm] = useState<SOForm>(emptyForm);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
+
+  const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: items = [], isLoading } = useQuery({ queryKey: ["service_orders"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("*, consultants(name), framework_agreements(framework_agreement_no)").order("so_number"); if (error) throw error; return data as SO[]; } });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
@@ -71,7 +75,13 @@ export default function ServiceOrdersPage() {
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
-  const filtered = items.filter((i) => i.so_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const filtered = items.filter((i) => {
+    if (search && !i.so_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (colFilters.so_number && !i.so_number.toLowerCase().includes(colFilters.so_number.toLowerCase())) return false;
+    if (colFilters.consultant && !(i.consultants?.name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
+    if (colFilters.framework && !(i.framework_agreements?.framework_agreement_no || "").toLowerCase().includes(colFilters.framework.toLowerCase())) return false;
+    return true;
+  });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
@@ -118,9 +128,9 @@ export default function ServiceOrdersPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">SO Number</th>
-                <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
-                <th className="data-table-header text-left px-4 py-2.5">Framework</th>
+                <th className="data-table-header text-left px-4 py-2.5">SO Number<ColumnFilter value={colFilters.so_number || ""} onChange={(v) => setColFilter("so_number", v)} label="SO Number" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Framework<ColumnFilter value={colFilters.framework || ""} onChange={(v) => setColFilter("framework", v)} label="Framework" /></th>
                 <th className="data-table-header text-center px-4 py-2.5">Start</th>
                 <th className="data-table-header text-center px-4 py-2.5">End</th>
                 <th className="data-table-header text-right px-4 py-2.5">Value (AED)</th>

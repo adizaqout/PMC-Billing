@@ -18,6 +18,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useLookupValues } from "@/hooks/useLookupValues";
+import ColumnFilter from "@/components/ColumnFilter";
 
 type PO = Tables<"purchase_orders"> & { consultants?: { name: string } | null; service_orders?: { so_number: string } | null; projects?: { project_name: string; project_number: string | null } | null };
 interface POForm { po_number: string; consultant_id: string; so_id: string | null; po_reference: string | null; po_start_date: string | null; po_end_date: string | null; po_value: number | null; amount: number | null; portfolio: string | null; type: string | null; status: "active" | "inactive"; comments: string | null; revision_number: number | null; project_id: string | null; }
@@ -46,7 +47,10 @@ export default function PurchaseOrdersPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PO | null>(null);
   const [form, setForm] = useState<POForm>(emptyForm);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
+
+  const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: items = [], isLoading } = useQuery({ queryKey: ["purchase_orders"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("*, consultants(name), service_orders(so_number), projects(project_name, project_number)").order("po_number"); if (error) throw error; return data as PO[]; } });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
@@ -94,7 +98,16 @@ export default function PurchaseOrdersPage() {
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
-  const filtered = items.filter((i) => i.po_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const filtered = items.filter((i) => {
+    if (search && !i.po_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (colFilters.po_number && !i.po_number.toLowerCase().includes(colFilters.po_number.toLowerCase())) return false;
+    if (colFilters.consultant && !(i.consultants?.name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
+    if (colFilters.so && !(i.service_orders?.so_number || "").toLowerCase().includes(colFilters.so.toLowerCase())) return false;
+    if (colFilters.project && !(i.projects?.project_name || "").toLowerCase().includes(colFilters.project.toLowerCase()) && !(i.projects?.project_number || "").toLowerCase().includes(colFilters.project.toLowerCase())) return false;
+    if (colFilters.type && !(i.type || "").toLowerCase().includes(colFilters.type.toLowerCase())) return false;
+    if (colFilters.status && !i.status.toLowerCase().includes(colFilters.status.toLowerCase())) return false;
+    return true;
+  });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
@@ -147,18 +160,18 @@ export default function PurchaseOrdersPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">PO Number</th>
+                <th className="data-table-header text-left px-4 py-2.5">PO Number<ColumnFilter value={colFilters.po_number || ""} onChange={(v) => setColFilter("po_number", v)} label="PO Number" /></th>
                 <th className="data-table-header text-center px-4 py-2.5">Rev</th>
                 <th className="data-table-header text-left px-4 py-2.5">PO Line Item</th>
-                <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
-                <th className="data-table-header text-left px-4 py-2.5">SO</th>
-                <th className="data-table-header text-left px-4 py-2.5">Project No.</th>
+                <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">SO<ColumnFilter value={colFilters.so || ""} onChange={(v) => setColFilter("so", v)} label="SO" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Project No.<ColumnFilter value={colFilters.project || ""} onChange={(v) => setColFilter("project", v)} label="Project" /></th>
                 <th className="data-table-header text-left px-4 py-2.5">Project Name</th>
                 <th className="data-table-header text-center px-4 py-2.5">Start</th>
                 <th className="data-table-header text-center px-4 py-2.5">End</th>
                 <th className="data-table-header text-right px-4 py-2.5">Amount (AED)</th>
-                <th className="data-table-header text-center px-4 py-2.5">Type</th>
-                <th className="data-table-header text-center px-4 py-2.5">Status</th>
+                <th className="data-table-header text-center px-4 py-2.5">Type<ColumnFilter value={colFilters.type || ""} onChange={(v) => setColFilter("type", v)} label="Type" /></th>
+                <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((item) => (

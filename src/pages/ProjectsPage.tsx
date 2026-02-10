@@ -6,6 +6,7 @@ import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
+import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,10 @@ export default function ProjectsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState<Partial<ProjectInsert>>(emptyForm);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
+
+  const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
@@ -106,10 +110,18 @@ export default function ProjectsPage() {
   };
 
   const numVal = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-  const filtered = projects.filter((p) => 
-    p.project_name.toLowerCase().includes(search.toLowerCase()) ||
-    ((p as any).project_number || "").toLowerCase().includes(search.toLowerCase())
-  );
+
+  const filtered = projects.filter((p) => {
+    const s = search.toLowerCase();
+    if (search && !p.project_name.toLowerCase().includes(s) && !((p as any).project_number || "").toLowerCase().includes(s)) return false;
+    if (colFilters.project_number && !((p as any).project_number || "").toLowerCase().includes(colFilters.project_number.toLowerCase())) return false;
+    if (colFilters.project_name && !p.project_name.toLowerCase().includes(colFilters.project_name.toLowerCase())) return false;
+    if (colFilters.entity && !(p.entity || "").toLowerCase().includes(colFilters.entity.toLowerCase())) return false;
+    if (colFilters.portfolio && !(p.portfolio || "").toLowerCase().includes(colFilters.portfolio.toLowerCase())) return false;
+    if (colFilters.type && !(p.project_type || "").toLowerCase().includes(colFilters.type.toLowerCase())) return false;
+    if (colFilters.status && !p.status.toLowerCase().includes(colFilters.status.toLowerCase())) return false;
+    return true;
+  });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => {
@@ -180,14 +192,14 @@ export default function ProjectsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="data-table-header text-left px-4 py-2.5">Project No.</th>
-                    <th className="data-table-header text-left px-4 py-2.5">Project Name</th>
-                    <th className="data-table-header text-left px-4 py-2.5">Entity</th>
-                    <th className="data-table-header text-left px-4 py-2.5">Portfolio</th>
+                    <th className="data-table-header text-left px-4 py-2.5">Project No.<ColumnFilter value={colFilters.project_number || ""} onChange={(v) => setColFilter("project_number", v)} label="Project No." /></th>
+                    <th className="data-table-header text-left px-4 py-2.5">Project Name<ColumnFilter value={colFilters.project_name || ""} onChange={(v) => setColFilter("project_name", v)} label="Project Name" /></th>
+                    <th className="data-table-header text-left px-4 py-2.5">Entity<ColumnFilter value={colFilters.entity || ""} onChange={(v) => setColFilter("entity", v)} label="Entity" /></th>
+                    <th className="data-table-header text-left px-4 py-2.5">Portfolio<ColumnFilter value={colFilters.portfolio || ""} onChange={(v) => setColFilter("portfolio", v)} label="Portfolio" /></th>
                     <th className="data-table-header text-right px-4 py-2.5">Budget (AED)</th>
                     <th className="data-table-header text-right px-4 py-2.5">PMC Budget</th>
-                    <th className="data-table-header text-center px-4 py-2.5">Type</th>
-                    <th className="data-table-header text-center px-4 py-2.5">Status</th>
+                    <th className="data-table-header text-center px-4 py-2.5">Type<ColumnFilter value={colFilters.type || ""} onChange={(v) => setColFilter("type", v)} label="Type" /></th>
+                    <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
                     <th className="data-table-header w-10"></th>
                   </tr>
                 </thead>
