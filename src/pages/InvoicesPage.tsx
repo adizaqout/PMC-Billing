@@ -209,8 +209,13 @@ export default function InvoicesPage() {
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
 
   const handleConsultantChange = (v: string) => { setForm({ ...form, consultant_id: v, po_id: null, _po_key: "" }); };
-  const handlePORevChange = (v: string) => { setForm({ ...form, _po_key: v === "none" ? "" : v, po_id: null }); };
-  const handleLineChange = (v: string) => { setForm({ ...form, po_id: v === "none" ? null : v }); };
+  const handlePORevChange = (v: string) => {
+    if (v === "none") { setForm({ ...form, _po_key: "", po_id: null }); return; }
+    const [poNum, revStr] = v.split("|");
+    const rev = parseInt(revStr);
+    const match = allPOs.find(p => p.consultant_id === form.consultant_id && p.po_number === poNum && (p.revision_number ?? 0) === rev);
+    setForm({ ...form, _po_key: v, po_id: match?.id || null });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -266,11 +271,12 @@ export default function InvoicesPage() {
         p.po_reference === String(lineRef).trim() &&
         p.consultant_id === consultant.id
       ) : null;
+      const safeTrim = (v: any) => v == null ? "" : String(v).trim();
       const { error } = await supabase.from("invoices").insert({
-        invoice_number: invNum.trim(), invoice_month: month?.trim() || "", consultant_id: consultant.id, po_id: po?.id || null,
+        invoice_number: safeTrim(invNum), invoice_month: safeTrim(month), consultant_id: consultant.id, po_id: po?.id || null,
         billed_amount_no_vat: billed ? parseFloat(String(billed)) : null, paid_amount: paid ? parseFloat(String(paid)) : null,
-        status: (["paid", "cancelled"].includes(status?.trim()?.toLowerCase() || "") ? status.trim().toLowerCase() : "pending") as any,
-        description: desc?.trim() || null,
+        status: (["paid", "cancelled"].includes(safeTrim(status).toLowerCase()) ? safeTrim(status).toLowerCase() : "pending") as any,
+        description: safeTrim(desc) || null,
       } as TablesInsert<"invoices">);
       if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
       result.processed++;
@@ -357,25 +363,10 @@ export default function InvoicesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {form._po_key && (
+              {form._po_key && selectedPO && (
                 <>
-                  <div className="space-y-1.5"><Label>Line Item</Label>
-                    <Select value={form.po_id || "none"} onValueChange={handleLineChange}>
-                      <SelectTrigger><SelectValue placeholder="Select line" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">None</SelectItem>
-                        {lineOptions.map((line) => (
-                          <SelectItem key={line.id} value={line.id}>
-                            {line.po_reference || "—"} — {line.project_id ? (projectMap[line.project_id] || "Unknown project") : "No project"}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {selectedPO && (
-                    <div className="space-y-1.5"><Label>PO Value (AED)</Label><Input value={fmt(selectedPO.po_value)} disabled className="bg-muted" /></div>
-                  )}
-                  {selectedPO && billedToDate != null && (
+                  <div className="space-y-1.5"><Label>PO Value (AED)</Label><Input value={fmt(selectedPO.po_value)} disabled className="bg-muted" /></div>
+                  {billedToDate != null && (
                     <div className="space-y-1.5"><Label>Billed To Date (AED)</Label><Input value={fmt(billedToDate)} disabled className="bg-muted font-semibold" /></div>
                   )}
                 </>
