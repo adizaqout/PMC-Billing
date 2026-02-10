@@ -16,13 +16,13 @@ You have deep knowledge of:
 - Period control and approval workflows
 
 When users ask analytical questions:
-1. Provide clear, data-driven answers
-2. When appropriate, suggest visualizations by using the generate_chart tool
-3. Always provide follow-up questions to guide deeper analysis
+1. Provide clear, data-driven answers in text. Use markdown tables when presenting tabular data — they are easier to read.
+2. Do NOT generate charts or graphs unless the user explicitly asks for a chart, graph, or visualization.
+3. Always provide follow-up questions to guide deeper analysis. Include a chart/visualization option as one of the follow-up questions when it makes sense.
 
-IMPORTANT: After every response, you MUST call the suggest_followups tool to provide 2-4 relevant follow-up questions the user might want to ask next.
+IMPORTANT: After every response, you MUST call the suggest_followups tool to provide 2-4 relevant follow-up questions the user might want to ask next. One of the follow-ups can suggest visualizing the data as a chart if relevant.
 
-When the user asks for charts, graphs, or visualizations, use the generate_chart tool with appropriate data. Use realistic sample data if you don't have actual data. Chart types: bar, line, pie, area.`;
+Only use the generate_chart tool when the user explicitly requests a chart, graph, or visualization. Use realistic sample data if you don't have actual data. Chart types: bar, line, pie, area.`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
