@@ -631,6 +631,7 @@ export type Database = {
           position_id: string
           position_name: string
           so_id: string | null
+          system_id: string | null
           total_years_of_exp: number | null
           updated_at: string
           updated_by: string | null
@@ -651,6 +652,7 @@ export type Database = {
           position_id: string
           position_name: string
           so_id?: string | null
+          system_id?: string | null
           total_years_of_exp?: number | null
           updated_at?: string
           updated_by?: string | null
@@ -671,6 +673,7 @@ export type Database = {
           position_id?: string
           position_name?: string
           so_id?: string | null
+          system_id?: string | null
           total_years_of_exp?: number | null
           updated_at?: string
           updated_by?: string | null

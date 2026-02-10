@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -7,7 +7,8 @@ import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
-import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
+import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
+import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -86,29 +87,29 @@ export default function ServiceOrdersPage() {
 
   const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
-  const handleImport = async (file: File) => {
-    try {
-      const rows = await parseExcelFile(file);
-      if (rows.length < 2) { toast.error("File is empty"); return; }
-      const errors: string[] = []; let created = 0;
-      for (let i = 1; i < rows.length; i++) {
-        const [soNum, consultantName, fwNo, startDate, endDate, value, comments] = rows[i];
-        if (!soNum?.trim()) continue;
-        const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
-        if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
-        const fw = fwNo ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === fwNo.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
-        const { error } = await supabase.from("service_orders").insert({
-          so_number: soNum.trim(), consultant_id: consultant.id, framework_id: fw?.id || null,
-          so_start_date: startDate?.trim() || null, so_end_date: endDate?.trim() || null,
-          so_value: value ? parseFloat(String(value)) : null, comments: comments?.trim() || null,
-        } as TablesInsert<"service_orders">);
-        if (error) errors.push(`Row ${i + 1}: ${error.message}`); else created++;
-      }
-      queryClient.invalidateQueries({ queryKey: ["service_orders"] });
-      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
-      if (created) toast.success(`${created} record(s) imported`);
-    } catch { toast.error("Failed to parse file"); }
-  };
+  const handleImportWithProgress = useCallback(async (
+    rows: string[][], onProgress: (p: ImportProgress) => void
+  ): Promise<ImportProgress> => {
+    const total = rows.length - 1;
+    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
+    for (let i = 1; i < rows.length; i++) {
+      const [soNum, consultantName, fwNo, startDate, endDate, value, comments] = rows[i];
+      if (!soNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
+      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
+      const fw = fwNo ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === fwNo.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("service_orders").insert({
+        so_number: soNum.trim(), consultant_id: consultant.id, framework_id: fw?.id || null,
+        so_start_date: startDate?.trim() || null, so_end_date: endDate?.trim() || null,
+        so_value: value ? parseFloat(String(value)) : null, comments: comments?.trim() || null,
+      } as TablesInsert<"service_orders">);
+      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
+      result.processed++;
+      onProgress({ ...result });
+    }
+    return result;
+  }, [consultants, frameworks]);
+  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["service_orders"] }); }, [queryClient]);
 
   return (
     <AppLayout>
@@ -116,7 +117,7 @@ export default function ServiceOrdersPage() {
         <div className="page-header">
           <div><h1 className="page-title">Service Orders</h1><p className="page-subtitle">Track service orders per consultant</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Service Order</Button>
           </div>
         </div>
