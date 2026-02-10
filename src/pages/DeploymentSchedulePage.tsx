@@ -449,8 +449,9 @@ export default function DeploymentSchedulePage() {
       await supabase.from("deployment_lines").delete().eq("submission_id", selectedSubmission.id);
 
       const toInsert: any[] = [];
+      const isBaseline = selectedSubmission.schedule_type === "baseline";
       rows.forEach(row => {
-        if (!row.employee_id) return;
+        if (!row.employee_id && !isBaseline) return;
         const hasAllocations = Object.values(row.allocations).some(v => v > 0);
         if (!hasAllocations && row.man_months <= 0) return;
 
@@ -460,7 +461,7 @@ export default function DeploymentSchedulePage() {
           // Save row even without project allocations (just employee + man_months)
           toInsert.push({
             submission_id: selectedSubmission.id,
-            employee_id: row.employee_id,
+            employee_id: row.employee_id || null,
             worked_project_id: null,
             billed_project_id: null,
             po_id: row.po_id || null,
@@ -476,7 +477,7 @@ export default function DeploymentSchedulePage() {
             const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
             toInsert.push({
               submission_id: selectedSubmission.id,
-              employee_id: row.employee_id,
+              employee_id: row.employee_id || null,
               worked_project_id: projId,
               billed_project_id: projId,
               po_id: poId,
@@ -661,8 +662,9 @@ export default function DeploymentSchedulePage() {
   // Validation
   const allocationErrors = useMemo(() => {
     const errors: string[] = [];
+    const isBaseline = scheduleType === "baseline";
     rows.forEach((row, idx) => {
-      if (!row.employee_id) return;
+      if (!row.employee_id && !isBaseline) return;
       const sum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
       if (sum > 0 && sum !== 100) {
         const emp = employees.find(e => e.id === row.employee_id);
@@ -792,9 +794,19 @@ export default function DeploymentSchedulePage() {
 
       // Employee
       const empIdCode = get("employee id");
-      if (!empIdCode) { progress.errors.push({ row: rowNum, message: "Employee ID is missing" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
-      const emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
-      if (!emp) { progress.errors.push({ row: rowNum, message: `Employee ID "${empIdCode}" not found` }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
+      const isBaseline = scheduleType === "baseline";
+      let emp: Employee | undefined = undefined;
+      if (!empIdCode) {
+        if (!isBaseline) {
+          progress.errors.push({ row: rowNum, message: "Employee ID is missing" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue;
+        }
+        // For baseline, allow missing employee ID — will insert as null
+      } else {
+        emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
+        if (!emp && !isBaseline) {
+          progress.errors.push({ row: rowNum, message: `Employee ID "${empIdCode}" not found` }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue;
+        }
+      }
 
       // Position
       const posIdCode = get("position id");
@@ -827,7 +839,7 @@ export default function DeploymentSchedulePage() {
       if (projEntries.length === 0) {
         pendingInserts.push({
           submission_id: selectedSubmission.id,
-          employee_id: emp.id,
+          employee_id: emp?.id || null,
           worked_project_id: null, billed_project_id: null,
           po_id: null, po_item_id: null, so_id: null,
           allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
@@ -838,7 +850,7 @@ export default function DeploymentSchedulePage() {
           const poId = poItemId ? (poByItem[poItemId] || null) : null;
           pendingInserts.push({
             submission_id: selectedSubmission.id,
-            employee_id: emp.id,
+            employee_id: emp?.id || null,
             worked_project_id: projId, billed_project_id: projId,
             po_id: poId, po_item_id: poItemId, so_id: null,
             allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
