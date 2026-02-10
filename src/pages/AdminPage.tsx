@@ -11,13 +11,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban, CalendarRange, CalendarIcon, X } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban, CalendarRange, CalendarIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import StatusBadge from "@/components/StatusBadge";
-import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { format, parse } from "date-fns";
 import { cn } from "@/lib/utils";
 
 // ---- Types ----
@@ -579,39 +577,70 @@ function LookupsTab() {
   );
 }
 
-// ---- Month Calendar Picker Component ----
-function MonthCalendarPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
-  const dateValue = value ? parse(`${value}-01`, "yyyy-MM-dd", new Date()) : undefined;
+// ---- Month/Year Picker Component ----
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  const handleSelect = (date: Date | undefined) => {
-    if (date) {
-      onChange(format(date, "yyyy-MM"));
-    }
+function MonthCalendarPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const currentYear = new Date().getFullYear();
+  const [viewYear, setViewYear] = useState(() => {
+    if (value) return parseInt(value.split("-")[0]);
+    return currentYear;
+  });
+
+  const selectedMonth = value ? parseInt(value.split("-")[1]) : null;
+  const selectedYear = value ? parseInt(value.split("-")[0]) : null;
+
+  const handleSelect = (month: number) => {
+    onChange(`${viewYear}-${String(month).padStart(2, "0")}`);
+    setOpen(false);
   };
 
   const displayLabel = value
-    ? (() => { const [y, m] = value.split("-").map(Number); const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${names[m-1]} ${y}`; })()
+    ? `${MONTH_NAMES[(selectedMonth || 1) - 1]} ${selectedYear}`
     : `No ${label.toLowerCase().replace("month", "").trim()}`;
 
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
       <div className="flex items-center gap-2">
-        <Popover>
+        <Popover open={open} onOpenChange={(o) => { setOpen(o); if (o && value) setViewYear(parseInt(value.split("-")[0])); }}>
           <PopoverTrigger asChild>
             <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !value && "text-muted-foreground")}>
               <CalendarIcon className="mr-2 h-4 w-4" />
               {displayLabel}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={dateValue}
-              onSelect={handleSelect}
-              initialFocus
-              className={cn("p-3 pointer-events-auto")}
-            />
+          <PopoverContent className="w-[280px] p-3 pointer-events-auto" align="start">
+            {/* Year navigation */}
+            <div className="flex items-center justify-between mb-3">
+              <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => setViewYear(y => y - 1)}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm font-medium">{viewYear}</span>
+              <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => setViewYear(y => y + 1)}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+            {/* Month grid */}
+            <div className="grid grid-cols-3 gap-2">
+              {MONTH_NAMES.map((name, idx) => {
+                const m = idx + 1;
+                const isSelected = selectedYear === viewYear && selectedMonth === m;
+                return (
+                  <Button
+                    key={m}
+                    type="button"
+                    variant={isSelected ? "default" : "ghost"}
+                    size="sm"
+                    className="h-9 text-xs"
+                    onClick={() => handleSelect(m)}
+                  >
+                    {name}
+                  </Button>
+                );
+              })}
+            </div>
           </PopoverContent>
         </Popover>
         {value && (
