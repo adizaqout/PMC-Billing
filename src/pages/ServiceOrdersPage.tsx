@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
 import SortableHeader from "@/components/SortableHeader";
@@ -37,12 +38,22 @@ const cols = [
   { header: "Comments", key: "comments", width: 30 },
 ];
 
+const soTableCols: ColumnDef[] = [
+  { key: "so_number", label: "SO Number" },
+  { key: "consultant", label: "Consultant" },
+  { key: "framework", label: "Framework" },
+  { key: "start_date", label: "Start Date" },
+  { key: "end_date", label: "End Date" },
+  { key: "value", label: "Value" },
+];
+
 export default function ServiceOrdersPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<SO | null>(null);
   const [form, setForm] = useState<SOForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const { visibleColumns, setVisibleColumns } = useColumnVisibility(soTableCols);
   const queryClient = useQueryClient();
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
@@ -131,6 +142,7 @@ export default function ServiceOrdersPage() {
           <div><h1 className="page-title">Service Orders</h1><p className="page-subtitle">Track service orders per consultant</p></div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ColumnVisibilityToggle columns={soTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Service Order</Button>
           </div>
         </div>
@@ -142,22 +154,22 @@ export default function ServiceOrdersPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="SO Number" sortKey="so_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.so_number || ""} onChange={(v) => setColFilter("so_number", v)} label="SO Number" /></SortableHeader></th>
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Framework" sortKey="framework_agreements.framework_agreement_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.framework || ""} onChange={(v) => setColFilter("framework", v)} label="Framework" /></SortableHeader></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start" sortKey="so_start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End" sortKey="so_end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Value (AED)" sortKey="so_value" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                {visibleColumns.has("so_number") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="SO Number" sortKey="so_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.so_number || ""} onChange={(v) => setColFilter("so_number", v)} label="SO Number" /></SortableHeader></th>}
+                {visibleColumns.has("consultant") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>}
+                {visibleColumns.has("framework") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Framework" sortKey="framework_agreements.framework_agreement_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.framework || ""} onChange={(v) => setColFilter("framework", v)} label="Framework" /></SortableHeader></th>}
+                {visibleColumns.has("start_date") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start" sortKey="so_start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("end_date") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End" sortKey="so_end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("value") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Value (AED)" sortKey="so_value" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                  <td className="px-4 py-2.5 font-mono font-medium">{item.so_number}</td>
-                  <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{item.framework_agreements?.framework_agreement_no || "—"}</td>
-                  <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.so_start_date)}</td>
-                  <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.so_end_date)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono">{fmt(item.so_value)}</td>
+                  {visibleColumns.has("so_number") && <td className="px-4 py-2.5 font-mono font-medium">{item.so_number}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("framework") && <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{item.framework_agreements?.framework_agreement_no || "—"}</td>}
+                  {visibleColumns.has("start_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.so_start_date)}</td>}
+                  {visibleColumns.has("end_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.so_end_date)}</td>}
+                  {visibleColumns.has("value") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.so_value)}</td>}
                   <td className="px-4 py-2.5 text-center">
                     <DropdownMenu><DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => openEdit(item)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(item.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu>

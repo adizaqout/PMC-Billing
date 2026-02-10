@@ -8,6 +8,7 @@ import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
 import SortableHeader from "@/components/SortableHeader";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import { usePagination } from "@/hooks/usePagination";
 import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
@@ -35,12 +36,21 @@ const cols = [
   { header: "Status", key: "status", width: 10 },
 ];
 
+const tableCols: ColumnDef[] = [
+  { key: "agreement_no", label: "Agreement No." },
+  { key: "consultant", label: "Consultant" },
+  { key: "start_date", label: "Start Date" },
+  { key: "end_date", label: "End Date" },
+  { key: "status", label: "Status" },
+];
+
 export default function FrameworkAgreementsPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<FA | null>(null);
   const [form, setForm] = useState<FAForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const { visibleColumns, setVisibleColumns } = useColumnVisibility(tableCols);
   const queryClient = useQueryClient();
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
@@ -118,8 +128,9 @@ export default function FrameworkAgreementsPage() {
       <div className="animate-fade-in">
         <div className="page-header">
           <div><h1 className="page-title">Framework Agreements</h1><p className="page-subtitle">Manage framework agreements with consultants</p></div>
-          <div className="flex items-center gap-2">
+         <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ColumnVisibilityToggle columns={tableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Agreement</Button>
           </div>
         </div>
@@ -131,20 +142,20 @@ export default function FrameworkAgreementsPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Agreement No." sortKey="framework_agreement_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.agreement_no || ""} onChange={(v) => setColFilter("agreement_no", v)} label="Agreement No." /></SortableHeader></th>
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start Date" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End Date" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>
+                {visibleColumns.has("agreement_no") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Agreement No." sortKey="framework_agreement_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.agreement_no || ""} onChange={(v) => setColFilter("agreement_no", v)} label="Agreement No." /></SortableHeader></th>}
+                {visibleColumns.has("consultant") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>}
+                {visibleColumns.has("start_date") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start Date" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("end_date") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End Date" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("status") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>}
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                  <td className="px-4 py-2.5 font-mono font-medium">{item.framework_agreement_no}</td>
-                  <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
-                  <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.start_date)}</td>
-                  <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.end_date)}</td>
-                  <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>
+                  {visibleColumns.has("agreement_no") && <td className="px-4 py-2.5 font-mono font-medium">{item.framework_agreement_no}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("start_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.start_date)}</td>}
+                  {visibleColumns.has("end_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.end_date)}</td>}
+                  {visibleColumns.has("status") && <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>}
                   <td className="px-4 py-2.5 text-center">
                     <DropdownMenu><DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => openEdit(item)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(item.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu>

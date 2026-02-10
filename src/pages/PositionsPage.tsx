@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import type { ImportProgress } from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
@@ -65,6 +66,13 @@ export default function PositionsPage() {
   const [editing, setEditing] = useState<Position | null>(null);
   const [form, setForm] = useState<PosForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const posTableCols: ColumnDef[] = [
+    { key: "pos_id", label: "Position ID" }, { key: "sys_id", label: "System ID" }, { key: "name", label: "Position" },
+    { key: "consultant", label: "Consultant" }, { key: "so", label: "SO" }, { key: "exp", label: "Exp" },
+    { key: "y1", label: "Y1 Rate" }, { key: "y2", label: "Y2 Rate" }, { key: "y3", label: "Y3 Rate" },
+    { key: "from", label: "From" }, { key: "to", label: "To" },
+  ];
+  const { visibleColumns, setVisibleColumns } = useColumnVisibility(posTableCols);
   const queryClient = useQueryClient();
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
@@ -171,6 +179,7 @@ export default function PositionsPage() {
           <div><h1 className="page-title">Positions</h1><p className="page-subtitle">Rate card with yearly rates linked to SOs</p></div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ColumnVisibilityToggle columns={posTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Position</Button>
           </div>
         </div>

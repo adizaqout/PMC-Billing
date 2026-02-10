@@ -8,6 +8,7 @@ import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
 import SortableHeader from "@/components/SortableHeader";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import { usePagination } from "@/hooks/usePagination";
 import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
@@ -38,15 +39,26 @@ const columns = [
   { header: "Status", key: "status", width: 10 },
 ];
 
+const tableCols: ColumnDef[] = [
+  { key: "name", label: "Name" },
+  { key: "cr", label: "CR No." },
+  { key: "tax", label: "Tax No." },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Phone" },
+  { key: "status", label: "Status" },
+];
+
 export default function ConsultantsPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Consultant | null>(null);
   const [form, setForm] = useState<Partial<ConsultantInsert>>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const { visibleColumns, setVisibleColumns } = useColumnVisibility(tableCols);
   const queryClient = useQueryClient();
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
+  const v = (key: string) => visibleColumns.has(key);
 
   const { data: consultants = [], isLoading } = useQuery({
     queryKey: ["consultants"],
@@ -108,13 +120,13 @@ export default function ConsultantsPage() {
     if (s && !c.name.toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
-      const v = val.toLowerCase();
-      if (key === "name" && !c.name.toLowerCase().includes(v)) return false;
-      if (key === "cr" && !(c.commercial_registration_no || "").toLowerCase().includes(v)) return false;
-      if (key === "tax" && !(c.tax_registration_no || "").toLowerCase().includes(v)) return false;
-      if (key === "email" && !(c.contact_email || "").toLowerCase().includes(v)) return false;
-      if (key === "phone" && !(c.contact_phone || "").toLowerCase().includes(v)) return false;
-      if (key === "status" && !c.status.toLowerCase().includes(v)) return false;
+      const lv = val.toLowerCase();
+      if (key === "name" && !c.name.toLowerCase().includes(lv)) return false;
+      if (key === "cr" && !(c.commercial_registration_no || "").toLowerCase().includes(lv)) return false;
+      if (key === "tax" && !(c.tax_registration_no || "").toLowerCase().includes(lv)) return false;
+      if (key === "email" && !(c.contact_email || "").toLowerCase().includes(lv)) return false;
+      if (key === "phone" && !(c.contact_phone || "").toLowerCase().includes(lv)) return false;
+      if (key === "status" && !c.status.toLowerCase().includes(lv)) return false;
     }
     return true;
   });
@@ -154,6 +166,7 @@ export default function ConsultantsPage() {
           </div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ColumnVisibilityToggle columns={tableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Consultant</Button>
           </div>
         </div>
@@ -175,24 +188,24 @@ export default function ConsultantsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></SortableHeader></th>
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="CR No." sortKey="commercial_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.cr || ""} onChange={(v) => setColFilter("cr", v)} label="CR No." /></SortableHeader></th>
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Tax No." sortKey="tax_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.tax || ""} onChange={(v) => setColFilter("tax", v)} label="Tax No." /></SortableHeader></th>
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Email" sortKey="contact_email" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.email || ""} onChange={(v) => setColFilter("email", v)} label="Email" /></SortableHeader></th>
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Phone" sortKey="contact_phone" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.phone || ""} onChange={(v) => setColFilter("phone", v)} label="Phone" /></SortableHeader></th>
-                    <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>
+                    {v("name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(lv) => setColFilter("name", lv)} label="Name" /></SortableHeader></th>}
+                    {v("cr") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="CR No." sortKey="commercial_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.cr || ""} onChange={(lv) => setColFilter("cr", lv)} label="CR No." /></SortableHeader></th>}
+                    {v("tax") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Tax No." sortKey="tax_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.tax || ""} onChange={(lv) => setColFilter("tax", lv)} label="Tax No." /></SortableHeader></th>}
+                    {v("email") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Email" sortKey="contact_email" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.email || ""} onChange={(lv) => setColFilter("email", lv)} label="Email" /></SortableHeader></th>}
+                    {v("phone") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Phone" sortKey="contact_phone" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.phone || ""} onChange={(lv) => setColFilter("phone", lv)} label="Phone" /></SortableHeader></th>}
+                    {v("status") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(lv) => setColFilter("status", lv)} label="Status" /></SortableHeader></th>}
                     <th className="data-table-header w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedItems.map((c) => (
                     <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                      <td className="px-4 py-2.5 font-medium">{c.name}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.commercial_registration_no || "—"}</td>
-                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.tax_registration_no || "—"}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{c.contact_email || "—"}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{c.contact_phone || "—"}</td>
-                      <td className="px-4 py-2.5 text-center"><StatusBadge status={c.status} /></td>
+                      {v("name") && <td className="px-4 py-2.5 font-medium">{c.name}</td>}
+                      {v("cr") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.commercial_registration_no || "—"}</td>}
+                      {v("tax") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.tax_registration_no || "—"}</td>}
+                      {v("email") && <td className="px-4 py-2.5 text-muted-foreground">{c.contact_email || "—"}</td>}
+                      {v("phone") && <td className="px-4 py-2.5 text-muted-foreground">{c.contact_phone || "—"}</td>}
+                      {v("status") && <td className="px-4 py-2.5 text-center"><StatusBadge status={c.status} /></td>}
                       <td className="px-4 py-2.5 text-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
@@ -225,7 +238,7 @@ export default function ConsultantsPage() {
               <div className="col-span-2 space-y-1.5"><Label>Address</Label><Input value={form.address || ""} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
               <div className="space-y-1.5">
                 <Label>Status</Label>
-                <Select value={form.status || "active"} onValueChange={(v) => setForm({ ...form, status: v as "active" | "inactive" })}>
+                <Select value={form.status || "active"} onValueChange={(lv) => setForm({ ...form, status: lv as "active" | "inactive" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
                 </Select>
