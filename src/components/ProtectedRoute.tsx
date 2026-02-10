@@ -1,8 +1,14 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, loading } = useAuth();
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  adminOnly?: boolean;
+  module?: string;
+}
+
+export default function ProtectedRoute({ children, adminOnly, module }: ProtectedRouteProps) {
+  const { session, loading, isSuperAdmin, roles, hasModuleAccess } = useAuth();
 
   if (loading) {
     return (
@@ -17,6 +23,14 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   if (!session) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (adminOnly && !isSuperAdmin && !roles.includes("admin")) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (module && !hasModuleAccess(module)) {
+    return <Navigate to="/" replace />;
   }
 
   return <>{children}</>;

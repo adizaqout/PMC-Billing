@@ -23,7 +23,20 @@ import {
   X,
 } from "lucide-react";
 
-const navSections = [
+interface NavItem {
+  label: string;
+  icon: any;
+  path: string;
+  module?: string; // maps to group_permissions module_name
+  adminOnly?: boolean;
+}
+
+interface NavSection {
+  title: string;
+  items: NavItem[];
+}
+
+const navSections: NavSection[] = [
   {
     title: "Overview",
     items: [
@@ -33,51 +46,65 @@ const navSections = [
   {
     title: "Master Data",
     items: [
-      { label: "Consultants", icon: Building2, path: "/consultants" },
-      { label: "Framework Agreements", icon: FileText, path: "/framework-agreements" },
-      { label: "Service Orders", icon: ShoppingCart, path: "/service-orders" },
-      { label: "Purchase Orders", icon: Receipt, path: "/purchase-orders" },
-      { label: "Projects", icon: FolderKanban, path: "/projects" },
-      { label: "Invoices", icon: FileText, path: "/invoices" },
-      { label: "Positions", icon: Briefcase, path: "/positions" },
-      { label: "Employees", icon: Users, path: "/employees" },
+      { label: "Consultants", icon: Building2, path: "/consultants", module: "consultants" },
+      { label: "Framework Agreements", icon: FileText, path: "/framework-agreements", module: "framework_agreements" },
+      { label: "Service Orders", icon: ShoppingCart, path: "/service-orders", module: "service_orders" },
+      { label: "Purchase Orders", icon: Receipt, path: "/purchase-orders", module: "purchase_orders" },
+      { label: "Projects", icon: FolderKanban, path: "/projects", module: "projects" },
+      { label: "Invoices", icon: FileText, path: "/invoices", module: "invoices" },
+      { label: "Positions", icon: Briefcase, path: "/positions", module: "positions" },
+      { label: "Employees", icon: Users, path: "/employees", module: "employees" },
     ],
   },
   {
     title: "Deployment",
     items: [
-      { label: "Deployment Schedules", icon: Grid3X3, path: "/deployments" },
-      { label: "Period Control", icon: Lock, path: "/period-control" },
+      { label: "Deployment Schedules", icon: Grid3X3, path: "/deployments", module: "deployments" },
+      { label: "Period Control", icon: Lock, path: "/period-control", module: "period_control" },
     ],
   },
   {
     title: "Analytics",
     items: [
-      { label: "Reports", icon: BarChart3, path: "/reports" },
-      { label: "AI Assistant", icon: Bot, path: "/ai-assistant" },
+      { label: "Reports", icon: BarChart3, path: "/reports", module: "reports" },
+      { label: "AI Assistant", icon: Bot, path: "/ai-assistant", module: "ai_assistant" },
     ],
   },
   {
     title: "Administration",
     items: [
-      { label: "Admin Panel", icon: Settings, path: "/admin" },
+      { label: "Admin Panel", icon: Settings, path: "/admin", adminOnly: true },
     ],
   },
 ];
 
 export default function AppSidebar() {
   const location = useLocation();
-  const { user, signOut } = useAuth();
+  const { user, signOut, hasModuleAccess, isSuperAdmin, roles } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mini, setMini] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
     Object.fromEntries(navSections.map((s) => [s.title, true]))
   );
 
+  const isAdminRole = isSuperAdmin || roles.includes("admin");
+
   const toggleSection = (title: string) => {
     if (mini) return;
     setExpandedSections((prev) => ({ ...prev, [title]: !prev[title] }));
   };
+
+  // Filter nav items based on permissions
+  const filteredSections = navSections
+    .map(section => ({
+      ...section,
+      items: section.items.filter(item => {
+        if (item.adminOnly) return isAdminRole;
+        if (!item.module) return true; // Dashboard always visible
+        return hasModuleAccess(item.module);
+      }),
+    }))
+    .filter(section => section.items.length > 0);
 
   return (
     <>
@@ -121,7 +148,7 @@ export default function AppSidebar() {
 
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-1">
-          {navSections.map((section) => (
+          {filteredSections.map((section) => (
             <div key={section.title}>
               {!mini && (
                 <button

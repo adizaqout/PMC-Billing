@@ -26,7 +26,7 @@ type GroupPermission = Tables<"group_permissions">;
 interface LookupValue { id: string; category: string; value: string; label: string; sort_order: number; is_active: boolean; }
 
 const APP_ROLES = ["superadmin", "admin", "pmc_user", "pmc_reviewer", "aldar_team", "viewer"] as const;
-const MODULES = ["consultants", "employees", "projects", "framework_agreements", "service_orders", "purchase_orders", "invoices", "positions", "deployments", "period_control"] as const;
+const MODULES = ["consultants", "employees", "projects", "framework_agreements", "service_orders", "purchase_orders", "invoices", "positions", "deployments", "period_control", "reports", "ai_assistant"] as const;
 const PERMISSIONS = ["no_access", "read", "modify"] as const;
 
 // All dropdown categories available in the system
