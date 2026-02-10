@@ -363,13 +363,23 @@ export default function DeploymentSchedulePage() {
   });
 
   // Convert DB lines to UI rows (group by employee_id — each employee has multiple lines for different projects)
-  // For null employee_id (baseline), each line becomes its own row
+  // For null employee_id (baseline), group by notes field if available (contains original emp code + month)
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
     if (lines.length === 0) return [];
     const grouped: Record<string, DeploymentLine[]> = {};
     let nullCounter = 0;
     lines.forEach(l => {
-      const key = l.employee_id || `__null_${++nullCounter}`;
+      let key: string;
+      if (l.employee_id) {
+        // For matched employees, group by employee_id + month info from notes
+        const monthFromNotes = (l as any).notes?.match(/month:([^|]+)/)?.[1];
+        key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
+      } else if ((l as any).notes) {
+        // For unmatched baseline employees, group by notes (contains emp code + month)
+        key = (l as any).notes;
+      } else {
+        key = `__null_${++nullCounter}`;
+      }
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(l);
     });
@@ -865,6 +875,9 @@ export default function DeploymentSchedulePage() {
         }
       });
 
+      // For baseline, store employee code + month in notes for proper row grouping
+      const groupNote = isBaseline ? `emp:${empIdCode || "none"}|month:${rowMonth}` : null;
+
       // Build DB records directly
       if (projEntries.length === 0) {
         pendingInserts.push({
@@ -873,6 +886,7 @@ export default function DeploymentSchedulePage() {
           worked_project_id: null, billed_project_id: null,
           po_id: null, po_item_id: null, so_id: null,
           allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
+          notes: groupNote,
         });
       } else {
         projEntries.forEach(([projId, pct]) => {
@@ -884,6 +898,7 @@ export default function DeploymentSchedulePage() {
             worked_project_id: projId, billed_project_id: projId,
             po_id: poId, po_item_id: poItemId, so_id: null,
             allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
+            notes: groupNote,
           });
         });
       }
