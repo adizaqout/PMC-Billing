@@ -392,7 +392,7 @@ export default function DeploymentSchedulePage() {
       const allocations: Record<string, number> = {};
       grpLines.forEach(l => {
         const projId = l.worked_project_id || l.billed_project_id;
-        if (projId) allocations[projId] = Number(l.allocation_pct);
+        if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
       });
       // Extract position from notes for rows without matched employees
       const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
@@ -568,6 +568,7 @@ export default function DeploymentSchedulePage() {
 
   const submitMutation = useMutation({
     mutationFn: async () => {
+      if (allocationErrors.length > 0) throw new Error("Cannot submit with validation errors. Please fix all errors first.");
       await saveMutation.mutateAsync();
       const { error } = await supabase
         .from("deployment_submissions")
