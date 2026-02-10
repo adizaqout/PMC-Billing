@@ -338,28 +338,24 @@ export default function DeploymentSchedulePage() {
   });
 
   // Convert DB lines to UI rows (group by employee_id — each employee has multiple lines for different projects)
-  useEffect(() => {
-    if (!selectedSubmission) return;
-    if (existingLines.length === 0) { setRows([]); return; }
-
-    // Group lines by employee_id (each group = 1 UI row)
+  const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
+    if (lines.length === 0) return [];
     const grouped: Record<string, DeploymentLine[]> = {};
-    existingLines.forEach(l => {
+    lines.forEach(l => {
       const key = l.employee_id;
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(l);
     });
-
-    const uiRows: UIRow[] = Object.entries(grouped).map(([empId, lines]) => {
-      const first = lines[0];
+    return Object.entries(grouped).map(([empId, grpLines]) => {
+      const first = grpLines[0];
       const allocations: Record<string, number> = {};
-      lines.forEach(l => {
+      grpLines.forEach(l => {
         const projId = l.worked_project_id || l.billed_project_id;
         if (projId) allocations[projId] = Number(l.allocation_pct);
       });
       return {
         _key: newRowKey(),
-        month: selectedSubmission.month,
+        month: selectedSubmission?.month || first.submission_id,
         employee_id: empId,
         position_id: employees.find(e => e.id === empId)?.position_id || first.po_item_id || "",
         rate_year: (first as any).rate_year || 1,
@@ -369,7 +365,11 @@ export default function DeploymentSchedulePage() {
         allocations,
       };
     });
-    setRows(uiRows);
+  };
+
+  useEffect(() => {
+    if (!selectedSubmission) return;
+    setRows(buildUIRows(existingLines));
   }, [existingLines, selectedSubmission, employees]);
 
   const isEditable = selectedSubmission && ["draft", "returned"].includes(selectedSubmission.status);
@@ -742,94 +742,139 @@ export default function DeploymentSchedulePage() {
     toast.success("Template downloaded");
   };
 
-  const handleImport = async (file: File) => {
-    try {
-      const rawRows = await parseExcelFile(file);
-      if (rawRows.length < 2) { toast.error("File is empty"); return; }
+  const handleImportWithProgress = async (
+    rawRows: string[][],
+    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void
+  ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
+    if (!selectedSubmission) throw new Error("No submission selected");
 
-      const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
-      const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
-      const errors: string[] = [];
-      const newRows: UIRow[] = [];
+    const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
+    const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
+    const progress: import("@/components/ImportProgressDialog").ImportProgress = {
+      total: dataRows.length, processed: 0, created: 0, errors: [],
+    };
+    onProgress({ ...progress });
 
-      dataRows.forEach((row, i) => {
-        const get = (key: string) => {
-          const idx = headers.findIndex(h => h.includes(key));
-          return idx >= 0 ? String(row[idx] || "").trim() : "";
-        };
+    // Parse all rows into DB-ready records
+    const BATCH_SIZE = 500;
+    let pendingInserts: any[] = [];
 
-        // Month
-        const monthRaw = get("month");
-        let rowMonth = monthRaw;
-        if (!rowMonth) {
-          errors.push(`Row ${i + 2}: Month is missing`);
-          return;
-        }
-        // Handle Excel serial date for month
-        const monthNum = Number(rowMonth);
-        if (!isNaN(monthNum) && monthNum > 10000) {
-          const d = new Date(Math.round((monthNum - 25569) * 86400 * 1000));
-          rowMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-        } else if (/^\d{4}-\d{2}-\d{2}/.test(rowMonth)) {
-          rowMonth = rowMonth.slice(0, 7);
-        }
+    const flushBatch = async () => {
+      if (pendingInserts.length === 0) return;
+      const { error } = await supabase.from("deployment_lines").insert(pendingInserts);
+      if (error) throw error;
+      pendingInserts = [];
+    };
 
-        // Employee ID lookup
-        const empIdCode = get("employee id");
-        if (!empIdCode) { errors.push(`Row ${i + 2}: Employee ID is missing`); return; }
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const rowNum = i + 2;
+      const get = (key: string) => {
+        const idx = headers.findIndex(h => h.includes(key));
+        return idx >= 0 ? String(row[idx] || "").trim() : "";
+      };
 
-        const emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
-        if (!emp) { errors.push(`Row ${i + 2}: Employee ID "${empIdCode}" not found`); return; }
+      // Month
+      let rowMonth = get("month");
+      if (!rowMonth) {
+        progress.errors.push({ row: rowNum, message: "Month is missing" });
+        progress.processed++;
+        if (i % 100 === 0) onProgress({ ...progress });
+        continue;
+      }
+      const monthNum = Number(rowMonth);
+      if (!isNaN(monthNum) && monthNum > 10000) {
+        const d = new Date(Math.round((monthNum - 25569) * 86400 * 1000));
+        rowMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      } else if (/^\d{4}-\d{2}-\d{2}/.test(rowMonth)) {
+        rowMonth = rowMonth.slice(0, 7);
+      }
 
-        // Position ID lookup
-        const posIdCode = get("position id");
-        const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+      // Employee
+      const empIdCode = get("employee id");
+      if (!empIdCode) { progress.errors.push({ row: rowNum, message: "Employee ID is missing" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
+      const emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
+      if (!emp) { progress.errors.push({ row: rowNum, message: `Employee ID "${empIdCode}" not found` }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
 
-        const rateYear = parseInt(get("rate year")) || 1;
-        if (rateYear < 1 || rateYear > 5) { errors.push(`Row ${i + 2}: Invalid rate year`); return; }
+      // Position
+      const posIdCode = get("position id");
+      const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
 
-        const manMonths = parseFloat(get("man-months") || get("man_months") || get("manmonths")) || 0;
-        if (manMonths > 1) { errors.push(`Row ${i + 2}: Man-months exceeds 1.0`); return; }
+      const rateYear = parseInt(get("rate year")) || 1;
+      if (rateYear < 1 || rateYear > 5) { progress.errors.push({ row: rowNum, message: "Invalid rate year" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
 
-        // Parse project allocation columns (headers starting with %)
-        const allocations: Record<string, number> = {};
-        headers.forEach((h, colIdx) => {
-          if (h.startsWith("% ") || h.startsWith("%")) {
-            const projPart = h.replace(/^%\s*/, "");
-            const proj = projectColumns.find(p =>
-              projLabel(p).toLowerCase() === projPart.toLowerCase() ||
-              p.project_name.toLowerCase() === projPart.toLowerCase() ||
-              (p.project_number && p.project_number.toLowerCase() === projPart.toLowerCase())
-            );
-            if (proj) {
-              const val = parseFloat(String(row[colIdx] || "")) || 0;
-              if (val > 0) allocations[proj.id] = val;
-            }
+      const manMonths = parseFloat(get("man-months") || get("man_months") || get("manmonths")) || 0;
+      if (manMonths > 1) { progress.errors.push({ row: rowNum, message: "Man-months exceeds 1.0" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
+
+      // Project allocations
+      const projEntries: [string, number][] = [];
+      headers.forEach((h, colIdx) => {
+        if (h.startsWith("% ") || h.startsWith("%")) {
+          const projPart = h.replace(/^%\s*/, "");
+          const proj = projectColumns.find(p =>
+            projLabel(p).toLowerCase() === projPart.toLowerCase() ||
+            p.project_name.toLowerCase() === projPart.toLowerCase() ||
+            (p.project_number && p.project_number.toLowerCase() === projPart.toLowerCase())
+          );
+          if (proj) {
+            const val = parseFloat(String(row[colIdx] || "")) || 0;
+            if (val > 0) projEntries.push([proj.id, val]);
           }
-        });
-
-        newRows.push({
-          _key: newRowKey(),
-          month: rowMonth,
-          employee_id: emp.id,
-          position_id: pos?.id || emp.position_id || "",
-          rate_year: rateYear,
-          man_months: manMonths,
-          so_id: "",
-          po_id: "",
-          allocations,
-        });
+        }
       });
 
-      if (errors.length > 0) {
-        toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}${errors.length > 3 ? "..." : ""}`);
+      // Build DB records directly
+      if (projEntries.length === 0) {
+        pendingInserts.push({
+          submission_id: selectedSubmission.id,
+          employee_id: emp.id,
+          worked_project_id: null, billed_project_id: null,
+          po_id: null, po_item_id: null, so_id: null,
+          allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
+        });
+      } else {
+        projEntries.forEach(([projId, pct]) => {
+          const poItemId = poItemByProject[projId] || null;
+          const poId = poItemId ? (poByItem[poItemId] || null) : null;
+          pendingInserts.push({
+            submission_id: selectedSubmission.id,
+            employee_id: emp.id,
+            worked_project_id: projId, billed_project_id: projId,
+            po_id: poId, po_item_id: poItemId, so_id: null,
+            allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
+          });
+        });
       }
-      if (newRows.length > 0) {
-        setRows(prev => [...prev, ...newRows]);
-        toast.success(`${newRows.length} row(s) imported`);
+
+      progress.created++;
+      progress.processed++;
+
+      // Flush batch when full
+      if (pendingInserts.length >= BATCH_SIZE) {
+        try { await flushBatch(); } catch (err) {
+          progress.errors.push({ row: rowNum, message: `DB batch insert failed: ${err instanceof Error ? err.message : "Unknown error"}` });
+        }
       }
-    } catch (err) {
-      toast.error("Failed to parse file");
+
+      if (i % 100 === 0) onProgress({ ...progress });
+    }
+
+    // Flush remaining
+    try { await flushBatch(); } catch (err) {
+      progress.errors.push({ row: 0, message: `Final batch insert failed: ${err instanceof Error ? err.message : "Unknown error"}` });
+    }
+
+    onProgress({ ...progress });
+    return progress;
+  };
+
+  const handleImportComplete = () => {
+    queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+    // Reload rows from DB
+    if (selectedSubmission) {
+      supabase.from("deployment_lines").select("*").eq("submission_id", selectedSubmission.id).then(({ data }) => {
+        if (data) setRows(buildUIRows(data));
+      });
     }
   };
 
@@ -911,7 +956,7 @@ export default function DeploymentSchedulePage() {
             <div className="flex items-center gap-2 mb-4">
               <Button variant="outline" size="sm" onClick={addRow}><Plus size={14} className="mr-1.5" />Add Row</Button>
               <div className="ml-auto flex items-center gap-2">
-                <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+                <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
                 <Button variant="outline" size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Save size={14} className="mr-1.5" />}Save Draft
                 </Button>
