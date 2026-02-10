@@ -144,7 +144,7 @@ export default function DeploymentSchedulePage() {
     queryKey: ["deployment-employees", consultantId],
     queryFn: async () => {
       if (!consultantId) return [];
-      const { data, error } = await supabase.from("employees").select("*, positions(position_name)").eq("consultant_id", consultantId).eq("status", "active").order("employee_name");
+      const { data, error } = await supabase.from("employees").select("*, positions(position_name)").eq("consultant_id", consultantId).in("status", ["active", "mobilized"]).order("employee_name");
       if (error) throw error;
       return data as Employee[];
     },
@@ -175,9 +175,9 @@ export default function DeploymentSchedulePage() {
     queryKey: ["deployment-pos", consultantId],
     queryFn: async () => {
       if (!consultantId) return [];
-      const { data, error } = await supabase.from("purchase_orders").select("id, po_number, consultant_id, so_id").eq("consultant_id", consultantId).eq("status", "active");
+      const { data, error } = await supabase.from("purchase_orders").select("id, po_number, consultant_id, so_id, project_id").eq("consultant_id", consultantId).eq("status", "active");
       if (error) throw error;
-      return data as PurchaseOrder[];
+      return data as (PurchaseOrder & { project_id: string | null })[];
     },
     enabled: !!consultantId,
   });
@@ -207,12 +207,13 @@ export default function DeploymentSchedulePage() {
 
   const scheduleType = selectedSubmission?.schedule_type || newType;
 
-  // Derive project columns from PO items (unique projects)
+  // Derive project columns from POs (via project_id on PO)
   const poProjectIds = useMemo(() => {
     const ids = new Set<string>();
+    purchaseOrders.forEach(po => { if ((po as any).project_id) ids.add((po as any).project_id); });
     poItems.forEach(pi => { if (pi.project_id) ids.add(pi.project_id); });
     return ids;
-  }, [poItems]);
+  }, [purchaseOrders, poItems]);
 
   const poProjects = useMemo(() => allProjects.filter(p => poProjectIds.has(p.id)), [allProjects, poProjectIds]);
 
@@ -788,9 +789,18 @@ export default function DeploymentSchedulePage() {
                       <tr key={row._key} className="border-b last:border-0 hover:bg-muted/50">
                         {/* Month */}
                         <td className="px-3 py-1.5">
-                          <div className="h-8 px-2 text-xs border rounded-md bg-muted flex items-center font-mono text-muted-foreground">
-                            {row.month || periodMonth}
-                          </div>
+                          {isEditable ? (
+                            <Input
+                              type="month"
+                              value={row.month || periodMonth}
+                              onChange={(e) => updateRow(idx, "month", e.target.value)}
+                              className="h-8 text-xs w-[130px]"
+                            />
+                          ) : (
+                            <div className="h-8 px-2 text-xs border rounded-md bg-muted flex items-center font-mono text-muted-foreground">
+                              {row.month || periodMonth}
+                            </div>
+                          )}
                         </td>
                         {/* Employee */}
                         <td className="px-3 py-1.5">
