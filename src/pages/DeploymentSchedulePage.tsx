@@ -874,11 +874,11 @@ export default function DeploymentSchedulePage() {
                         {/* Position */}
                         <td className="px-3 py-1.5">
                           {isEditable ? (
-                            <Select value={row.position_id} onValueChange={(v) => updateRow(idx, "position_id", v)}>
+                             <Select value={row.position_id} onValueChange={(v) => updateRow(idx, "position_id", v)}>
                               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                              <SelectContent>{positions.map(p => <SelectItem key={p.id} value={p.id}>{p.position_name}</SelectItem>)}</SelectContent>
+                              <SelectContent>{positions.map(p => <SelectItem key={p.id} value={p.id}>{p.position_id ? `${p.position_id} - ${p.position_name}` : p.position_name}</SelectItem>)}</SelectContent>
                             </Select>
-                          ) : <span className="text-xs">{pos?.position_name || "—"}</span>}
+                          ) : <span className="text-xs">{pos ? (pos.position_id ? `${pos.position_id} - ${pos.position_name}` : pos.position_name) : "—"}</span>}
                         </td>
                         {/* Rate Year */}
                         <td className="px-3 py-1.5">
