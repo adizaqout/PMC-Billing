@@ -26,8 +26,8 @@ type Employee = Tables<"employees"> & { consultants?: { name: string } | null; p
 type Consultant = { id: string; name: string };
 type Position = { id: string; position_id: string; position_name: string; consultant_id: string };
 
-interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }
-const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", experience_years: null, start_date: null, end_date: null, status: "active" };
+interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }
+const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", position_id: "", experience_years: null, start_date: null, end_date: null, status: "active" };
 
 /** Convert Excel serial number or date string to YYYY-MM-DD */
 function parseImportDate(val: any): string | null {
@@ -77,7 +77,7 @@ export default function EmployeesPage() {
 
   const upsertMutation = useMutation({
     mutationFn: async (values: EmployeeForm & { id?: string }) => {
-      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any };
+      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any };
       if (values.id) { const { error } = await supabase.from("employees").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("employees").insert({ ...payload } as any); if (error) throw error; }
     },
@@ -87,7 +87,7 @@ export default function EmployeesPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["employees"] }); toast.success("Employee deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status }); setDialogOpen(true); };
+  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -211,7 +211,8 @@ export default function EmployeesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Employee ID</Label><Input value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} placeholder="e.g. EMP-001" /></div>
               <div className="space-y-1.5"><Label>Employee Name *</Label><Input value={form.employee_name} onChange={(e) => setForm({ ...form, employee_name: e.target.value })} /></div>
-              <div className="col-span-2 space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="col-span-2 space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v, position_id: "" })}><SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="col-span-2 space-y-1.5"><Label>Position</Label><Select value={form.position_id} onValueChange={(v) => setForm({ ...form, position_id: v })}><SelectTrigger><SelectValue placeholder="Select position" /></SelectTrigger><SelectContent>{allPositions.filter(p => p.consultant_id === form.consultant_id).map((p) => <SelectItem key={p.id} value={p.id}>{p.position_id} — {p.position_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Experience (Years)</Label><Input type="number" value={form.experience_years ?? ""} onChange={(e) => setForm({ ...form, experience_years: e.target.value ? parseInt(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statuses.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.start_date || ""} onChange={(e) => setForm({ ...form, start_date: e.target.value || null })} /></div>
