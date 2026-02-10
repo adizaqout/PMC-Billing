@@ -5,6 +5,7 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
+import ColumnFilter from "@/components/ColumnFilter";
 import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
@@ -17,13 +18,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Position = Tables<"positions"> & { consultants?: { name: string } | null; service_orders?: { so_number: string } | null };
+type Position = Tables<"positions"> & { consultants?: { name: string } | null; service_orders?: { so_number: string } | null; position_id?: string };
 interface PosForm { position_name: string; consultant_id: string; so_id: string | null; total_years_of_exp: number | null; year_1_rate: number | null; year_2_rate: number | null; year_3_rate: number | null; year_4_rate: number | null; year_5_rate: number | null; effective_from: string | null; effective_to: string | null; notes: string | null; }
 const emptyForm: PosForm = { position_name: "", consultant_id: "", so_id: null, total_years_of_exp: null, year_1_rate: null, year_2_rate: null, year_3_rate: null, year_4_rate: null, year_5_rate: null, effective_from: null, effective_to: null, notes: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
 const cols = [
+  { header: "Position ID", key: "position_id", width: 14 },
   { header: "Position Name", key: "position_name", width: 25 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Service Order", key: "so_number", width: 18 },
@@ -43,7 +45,10 @@ export default function PositionsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
   const [form, setForm] = useState<PosForm>(emptyForm);
+  const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const queryClient = useQueryClient();
+
+  const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: items = [], isLoading } = useQuery({ queryKey: ["positions"], queryFn: async () => { const { data, error } = await supabase.from("positions").select("*, consultants(name), service_orders(so_number)").order("position_name"); if (error) throw error; return data as Position[]; } });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
@@ -77,10 +82,24 @@ export default function PositionsPage() {
   };
 
   const numSet = (key: keyof PosForm, v: string) => setForm({ ...form, [key]: v ? parseFloat(v) : null });
-  const filtered = items.filter((i) => i.position_name.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+
+  const filtered = items.filter((i) => {
+    const s = search.toLowerCase();
+    const matchSearch = !s || i.position_name.toLowerCase().includes(s) || (i.consultants?.name || "").toLowerCase().includes(s) || ((i as any).position_id || "").toLowerCase().includes(s);
+    if (!matchSearch) return false;
+    for (const [key, val] of Object.entries(colFilters)) {
+      if (!val) continue;
+      const v = val.toLowerCase();
+      if (key === "position_id" && !((i as any).position_id || "").toLowerCase().includes(v)) return false;
+      if (key === "position_name" && !i.position_name.toLowerCase().includes(v)) return false;
+      if (key === "consultant" && !(i.consultants?.name || "").toLowerCase().includes(v)) return false;
+      if (key === "so" && !(i.service_orders?.so_number || "").toLowerCase().includes(v)) return false;
+    }
+    return true;
+  });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
-  const handleExport = () => { exportToExcel("positions.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("positions.xlsx", cols, filtered.map(i => ({ ...i, position_id: (i as any).position_id || "", consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("positions-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
   const handleImport = async (file: File) => {
     try {
@@ -88,7 +107,7 @@ export default function PositionsPage() {
       if (rows.length < 2) { toast.error("File is empty"); return; }
       const errors: string[] = []; let created = 0;
       for (let i = 1; i < rows.length; i++) {
-        const [name, consultantName, soNum, exp, y1, y2, y3, y4, y5, from, to, notes] = rows[i];
+        const [, name, consultantName, soNum, exp, y1, y2, y3, y4, y5, from, to, notes] = rows[i];
         if (!name?.trim()) continue;
         const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
         if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
@@ -127,9 +146,10 @@ export default function PositionsPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">Position</th>
-                <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
-                <th className="data-table-header text-left px-4 py-2.5">SO</th>
+                <th className="data-table-header text-left px-4 py-2.5">Position ID<ColumnFilter value={colFilters.position_id || ""} onChange={(v) => setColFilter("position_id", v)} label="Position ID" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Position<ColumnFilter value={colFilters.position_name || ""} onChange={(v) => setColFilter("position_name", v)} label="Position" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
+                <th className="data-table-header text-left px-4 py-2.5">SO<ColumnFilter value={colFilters.so || ""} onChange={(v) => setColFilter("so", v)} label="SO" /></th>
                 <th className="data-table-header text-center px-4 py-2.5">Exp</th>
                 <th className="data-table-header text-right px-4 py-2.5">Y1 Rate</th>
                 <th className="data-table-header text-right px-4 py-2.5">Y2 Rate</th>
@@ -140,6 +160,7 @@ export default function PositionsPage() {
               </tr></thead>
               <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                  <td className="px-4 py-2.5 font-mono text-xs text-primary">{(item as any).position_id || "—"}</td>
                   <td className="px-4 py-2.5 font-medium">{item.position_name}</td>
                   <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.service_orders?.so_number || "—"}</td>
@@ -162,7 +183,7 @@ export default function PositionsPage() {
       </div>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <DialogHeader><DialogTitle>{editing ? "Edit Position" : "Add Position"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editing ? `Edit Position${(editing as any).position_id ? ` (${(editing as any).position_id})` : ""}` : "Add Position"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-3 space-y-1.5"><Label>Position Name *</Label><Input value={form.position_name} onChange={(e) => setForm({ ...form, position_name: e.target.value })} /></div>

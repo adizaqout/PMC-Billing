@@ -7,12 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
+import StatusBadge from "@/components/StatusBadge";
 
 // ---- Types ----
 type Profile = Tables<"profiles">;
@@ -57,6 +59,10 @@ function UsersTab() {
   const [roleForm, setRoleForm] = useState({ group_id: "", role: "pmc_user" as string });
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState({ email: "", password: "", full_name: "", consultant_id: "", group_id: "", role: "pmc_user" });
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
+  const [editForm, setEditForm] = useState({ full_name: "", email: "", consultant_id: "", status: "active" as string, password: "" });
+  const [deleteTarget, setDeleteTarget] = useState<Profile | null>(null);
   const queryClient = useQueryClient();
 
   const { data: profiles = [], isLoading } = useQuery({
@@ -91,28 +97,12 @@ function UsersTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const updateProfileMutation = useMutation({
-    mutationFn: async ({ id, consultant_id }: { id: string; consultant_id: string | null }) => {
-      const { error } = await supabase.from("profiles").update({ consultant_id }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["admin-profiles"] }); toast.success("Profile updated"); },
-    onError: (e: Error) => toast.error(e.message),
-  });
-
   const createUserMutation = useMutation({
     mutationFn: async () => {
       if (!createForm.email || !createForm.password) throw new Error("Email and password required");
       if (createForm.password.length < 6) throw new Error("Password must be at least 6 characters");
       const { data, error } = await supabase.functions.invoke("create-user", {
-        body: {
-          email: createForm.email,
-          password: createForm.password,
-          full_name: createForm.full_name || createForm.email,
-          consultant_id: createForm.consultant_id || null,
-          group_id: createForm.group_id || null,
-          role: createForm.role || null,
-        },
+        body: { email: createForm.email, password: createForm.password, full_name: createForm.full_name || createForm.email, consultant_id: createForm.consultant_id || null, group_id: createForm.group_id || null, role: createForm.role || null },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -128,7 +118,69 @@ function UsersTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const editUserMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingProfile) throw new Error("No user selected");
+      const updates: Record<string, any> = {};
+      if (editForm.full_name !== editingProfile.full_name) updates.full_name = editForm.full_name;
+      if (editForm.consultant_id !== (editingProfile.consultant_id || "")) updates.consultant_id = editForm.consultant_id || null;
+      if (editForm.status !== editingProfile.status) updates.status = editForm.status;
+      if (editForm.email !== editingProfile.email) updates.email = editForm.email;
+      if (editForm.password) updates.password = editForm.password;
+      
+      const { data, error } = await supabase.functions.invoke("manage-user", {
+        body: { action: "update", user_id: editingProfile.user_id, updates },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
+      toast.success("User updated");
+      setEditDialogOpen(false);
+      setEditingProfile(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const { data, error } = await supabase.functions.invoke("manage-user", {
+        body: { action: "delete", user_id: userId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
+      toast.success("User deleted");
+      setDeleteTarget(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deactivateUserMutation = useMutation({
+    mutationFn: async ({ userId, status }: { userId: string; status: string }) => {
+      const { data, error } = await supabase.functions.invoke("manage-user", {
+        body: { action: "update", user_id: userId, updates: { status } },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
+      toast.success("User status updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const openAssignRole = (p: Profile) => { setSelectedProfile(p); setRoleForm({ group_id: groups[0]?.id || "", role: "pmc_user" }); setDialogOpen(true); };
+  const openEditUser = (p: Profile) => {
+    setEditingProfile(p);
+    setEditForm({ full_name: p.full_name || "", email: p.email, consultant_id: p.consultant_id || "", status: p.status, password: "" });
+    setEditDialogOpen(true);
+  };
 
   const filtered = profiles.filter((p) => p.email.toLowerCase().includes(search.toLowerCase()) || (p.full_name || "").toLowerCase().includes(search.toLowerCase()));
 
@@ -146,6 +198,7 @@ function UsersTab() {
               <th className="data-table-header text-left px-4 py-2.5">Email</th>
               <th className="data-table-header text-left px-4 py-2.5">Full Name</th>
               <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
+              <th className="data-table-header text-center px-4 py-2.5">Status</th>
               <th className="data-table-header text-left px-4 py-2.5">Roles</th>
               <th className="data-table-header w-10"></th>
             </tr></thead>
@@ -155,12 +208,10 @@ function UsersTab() {
                 <tr key={p.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-2.5 font-mono text-xs">{p.email}</td>
                   <td className="px-4 py-2.5">{p.full_name || "—"}</td>
-                  <td className="px-4 py-2.5">
-                    <Select value={p.consultant_id || "none"} onValueChange={(v) => updateProfileMutation.mutate({ id: p.id, consultant_id: v === "none" ? null : v })}>
-                      <SelectTrigger className="h-7 text-xs w-40"><SelectValue placeholder="None" /></SelectTrigger>
-                      <SelectContent><SelectItem value="none">None</SelectItem>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                    </Select>
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">
+                    {consultants.find(c => c.id === p.consultant_id)?.name || "—"}
                   </td>
+                  <td className="px-4 py-2.5 text-center"><StatusBadge status={p.status} /></td>
                   <td className="px-4 py-2.5">
                     <div className="flex flex-wrap gap-1">
                       {roles.map((r) => (
@@ -172,7 +223,22 @@ function UsersTab() {
                       {roles.length === 0 && <span className="text-xs text-muted-foreground">No roles</span>}
                     </div>
                   </td>
-                  <td className="px-4 py-2.5 text-center"><Button size="sm" variant="ghost" onClick={() => openAssignRole(p)}><Plus size={14} /></Button></td>
+                  <td className="px-4 py-2.5 text-center">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEditUser(p)}><Pencil size={14} className="mr-2" />Edit Profile</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openAssignRole(p)}><Plus size={14} className="mr-2" />Assign Role</DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        {p.status === "active" ? (
+                          <DropdownMenuItem onClick={() => deactivateUserMutation.mutate({ userId: p.user_id, status: "inactive" })}><Ban size={14} className="mr-2" />Deactivate</DropdownMenuItem>
+                        ) : (
+                          <DropdownMenuItem onClick={() => deactivateUserMutation.mutate({ userId: p.user_id, status: "active" })}><UserPlus size={14} className="mr-2" />Activate</DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(p)}><UserX size={14} className="mr-2" />Delete User</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </td>
                 </tr>
               );
             })}</tbody></table>
@@ -188,6 +254,36 @@ function UsersTab() {
             <div className="space-y-1.5"><Label>Group</Label><Select value={roleForm.group_id} onValueChange={(v) => setRoleForm({ ...roleForm, group_id: v })}><SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger><SelectContent>{groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1.5"><Label>Role</Label><Select value={roleForm.role} onValueChange={(v) => setRoleForm({ ...roleForm, role: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{APP_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="submit" disabled={addRoleMutation.isPending}>{addRoleMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}Assign</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit User Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Edit User Profile</DialogTitle></DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); editUserMutation.mutate(); }} className="space-y-4">
+            <div className="space-y-1.5"><Label>Full Name</Label><Input value={editForm.full_name} onChange={(e) => setEditForm({ ...editForm, full_name: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={editForm.email} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })} /></div>
+            <div className="space-y-1.5"><Label>Consultant</Label>
+              <Select value={editForm.consultant_id || "none"} onValueChange={(v) => setEditForm({ ...editForm, consultant_id: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">None</SelectItem>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label>Status</Label>
+              <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label>New Password (leave blank to keep)</Label><Input type="password" value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} placeholder="Leave blank to keep current" /></div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={editUserMutation.isPending}>
+                {editUserMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}Save
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
@@ -227,6 +323,24 @@ function UsersTab() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete <strong>{deleteTarget?.email}</strong>? This will remove all their roles, profile data, and authentication. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => deleteTarget && deleteUserMutation.mutate(deleteTarget.user_id)}>
+              {deleteUserMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

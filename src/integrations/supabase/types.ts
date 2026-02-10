@@ -628,6 +628,7 @@ export type Database = {
           effective_to: string | null
           id: string
           notes: string | null
+          position_id: string
           position_name: string
           so_id: string | null
           total_years_of_exp: number | null
@@ -647,6 +648,7 @@ export type Database = {
           effective_to?: string | null
           id?: string
           notes?: string | null
+          position_id: string
           position_name: string
           so_id?: string | null
           total_years_of_exp?: number | null
@@ -666,6 +668,7 @@ export type Database = {
           effective_to?: string | null
           id?: string
           notes?: string | null
+          position_id?: string
           position_name?: string
           so_id?: string | null
           total_years_of_exp?: number | null
