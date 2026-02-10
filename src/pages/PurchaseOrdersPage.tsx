@@ -104,7 +104,8 @@ export default function PurchaseOrdersPage() {
       for (let i = 1; i < rows.length; i++) {
         const raw = rows[i];
         const str = (v: any) => v == null ? "" : String(v).trim();
-        const [poNum, rev, poRef, consultantName, soNum, projNum, projName, startDate, endDate, amount, portfolio, type, status] = raw.map(str);
+        const padded = Array.from({ length: 13 }, (_, idx) => str(raw[idx]));
+        const [poNum, rev, poRef, consultantName, soNum, projNum, projName, startDate, endDate, amount, portfolio, type, status] = padded;
         if (!poNum) continue;
         const consultant = consultants.find(c => c.name.toLowerCase() === consultantName.toLowerCase());
         if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
