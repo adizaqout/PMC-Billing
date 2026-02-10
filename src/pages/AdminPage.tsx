@@ -11,10 +11,14 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban, CalendarRange } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban, CalendarRange, CalendarIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import StatusBadge from "@/components/StatusBadge";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { format, parse } from "date-fns";
+import { cn } from "@/lib/utils";
 
 // ---- Types ----
 type Profile = Tables<"profiles">;
@@ -575,6 +579,51 @@ function LookupsTab() {
   );
 }
 
+// ---- Month Calendar Picker Component ----
+function MonthCalendarPicker({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const dateValue = value ? parse(`${value}-01`, "yyyy-MM-dd", new Date()) : undefined;
+
+  const handleSelect = (date: Date | undefined) => {
+    if (date) {
+      onChange(format(date, "yyyy-MM"));
+    }
+  };
+
+  const displayLabel = value
+    ? (() => { const [y, m] = value.split("-").map(Number); const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return `${names[m-1]} ${y}`; })()
+    : `No ${label.toLowerCase().replace("month", "").trim()}`;
+
+  return (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <div className="flex items-center gap-2">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !value && "text-muted-foreground")}>
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {displayLabel}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateValue}
+              onSelect={handleSelect}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+            />
+          </PopoverContent>
+        </Popover>
+        {value && (
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => onChange("")}>
+            <X size={14} />
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // =============== PERIOD CONSTRAINTS TAB ===============
 interface PeriodConstraint {
   id: string;
@@ -757,26 +806,16 @@ function PeriodConstraintsTab() {
                 </div>
               </>
             )}
-            <div className="space-y-1.5">
-              <Label>Min Month</Label>
-              <Select value={form.min_month || "none"} onValueChange={(v) => setForm({ ...form, min_month: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="No minimum" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No minimum</SelectItem>
-                  {monthSelectOptions.map(m => <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Max Month</Label>
-              <Select value={form.max_month || "none"} onValueChange={(v) => setForm({ ...form, max_month: v === "none" ? "" : v })}>
-                <SelectTrigger><SelectValue placeholder="No maximum" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No maximum</SelectItem>
-                  {monthSelectOptions.map(m => <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
+            <MonthCalendarPicker
+              label="Min Month"
+              value={form.min_month}
+              onChange={(v) => setForm({ ...form, min_month: v })}
+            />
+            <MonthCalendarPicker
+              label="Max Month"
+              value={form.max_month}
+              onChange={(v) => setForm({ ...form, max_month: v })}
+            />
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={upsertMutation.isPending}>
