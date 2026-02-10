@@ -101,9 +101,11 @@ export type Database = {
           derived_monthly_rate: number | null
           employee_id: string
           id: string
+          man_months: number | null
           notes: string | null
           po_id: string | null
           po_item_id: string | null
+          rate_year: number | null
           so_id: string | null
           submission_id: string
           updated_at: string
@@ -117,9 +119,11 @@ export type Database = {
           derived_monthly_rate?: number | null
           employee_id: string
           id?: string
+          man_months?: number | null
           notes?: string | null
           po_id?: string | null
           po_item_id?: string | null
+          rate_year?: number | null
           so_id?: string | null
           submission_id: string
           updated_at?: string
@@ -133,9 +137,11 @@ export type Database = {
           derived_monthly_rate?: number | null
           employee_id?: string
           id?: string
+          man_months?: number | null
           notes?: string | null
           po_id?: string | null
           po_item_id?: string | null
+          rate_year?: number | null
           so_id?: string | null
           submission_id?: string
           updated_at?: string
