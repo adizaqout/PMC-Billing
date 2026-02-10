@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -19,9 +19,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Invoice = Tables<"invoices"> & { consultants?: { name: string } | null; purchase_orders?: { po_number: string } | null };
-interface InvoiceForm { invoice_number: string; invoice_month: string; consultant_id: string; po_id: string | null; billed_amount_no_vat: number | null; paid_amount: number | null; status: "pending" | "paid" | "cancelled"; description: string | null; }
-const emptyForm: InvoiceForm = { invoice_number: "", invoice_month: "", consultant_id: "", po_id: null, billed_amount_no_vat: null, paid_amount: null, status: "pending", description: null };
+type Invoice = Tables<"invoices"> & { consultants?: { name: string } | null; purchase_orders?: { po_number: string; revision_number: number | null; amount: number | null } | null; purchase_order_items?: { po_item_ref: string | null; amount: number | null } | null };
+interface InvoiceForm { invoice_number: string; invoice_month: string; consultant_id: string; po_id: string | null; po_item_id: string | null; billed_amount_no_vat: number | null; paid_amount: number | null; status: "pending" | "paid" | "cancelled"; description: string | null; }
+const emptyForm: InvoiceForm = { invoice_number: "", invoice_month: "", consultant_id: "", po_id: null, po_item_id: null, billed_amount_no_vat: null, paid_amount: null, status: "pending", description: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(v) : "—";
 
 const cols = [
@@ -29,7 +29,11 @@ const cols = [
   { header: "Month", key: "invoice_month", width: 12 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "PO Number", key: "po_number", width: 18 },
+  { header: "PO Rev", key: "po_revision", width: 8 },
+  { header: "Line", key: "po_line", width: 10 },
+  { header: "PO Amount", key: "po_amount", width: 15 },
   { header: "Billed Amount", key: "billed_amount_no_vat", width: 15 },
+  { header: "Billed To Date", key: "billed_to_date", width: 15 },
   { header: "Paid Amount", key: "paid_amount", width: 15 },
   { header: "Status", key: "status", width: 10 },
   { header: "Description", key: "description", width: 30 },
@@ -45,14 +49,48 @@ export default function InvoicesPage() {
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["invoices"], queryFn: async () => { const { data, error } = await supabase.from("invoices").select("*, consultants(name), purchase_orders(po_number)").order("invoice_month", { ascending: false }); if (error) throw error; return data as Invoice[]; } });
+  const { data: items = [], isLoading } = useQuery({ queryKey: ["invoices"], queryFn: async () => { const { data, error } = await supabase.from("invoices").select("*, consultants(name), purchase_orders(po_number, revision_number, amount), purchase_order_items(po_item_ref, amount)").order("invoice_month", { ascending: false }); if (error) throw error; return data as Invoice[]; } });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
-  const { data: allPOs = [] } = useQuery({ queryKey: ["po-all"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("id, po_number, consultant_id").eq("status", "active").order("po_number"); if (error) throw error; return data as { id: string; po_number: string; consultant_id: string }[]; } });
+  const { data: allPOs = [] } = useQuery({ queryKey: ["po-all"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("id, po_number, consultant_id, revision_number, amount").eq("status", "active").order("po_number"); if (error) throw error; return data as { id: string; po_number: string; consultant_id: string; revision_number: number | null; amount: number | null }[]; } });
+  const { data: allPOItems = [] } = useQuery({ queryKey: ["po-items-all"], queryFn: async () => { const { data, error } = await supabase.from("purchase_order_items").select("id, po_id, po_item_ref, amount").order("po_item_ref"); if (error) throw error; return data as { id: string; po_id: string; po_item_ref: string | null; amount: number | null }[]; } });
+
   const filteredPOs = form.consultant_id ? allPOs.filter(p => p.consultant_id === form.consultant_id) : [];
+  const filteredPOItems = form.po_id ? allPOItems.filter(i => i.po_id === form.po_id) : [];
+  const selectedPO = form.po_id ? allPOs.find(p => p.id === form.po_id) : null;
+  const selectedPOItem = form.po_item_id ? allPOItems.find(i => i.id === form.po_item_id) : null;
+
+  // Calculate billed to date for the form's current PO + line item selection
+  const billedToDate = useMemo(() => {
+    if (!form.po_id) return null;
+    return items
+      .filter(inv => inv.po_id === form.po_id && inv.po_item_id === form.po_item_id && inv.id !== editing?.id)
+      .reduce((sum, inv) => sum + (inv.billed_amount_no_vat || 0), 0);
+  }, [form.po_id, form.po_item_id, items, editing]);
+
+  // Calculate billed to date for each invoice row in the table
+  const billedToDateMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const inv of items) {
+      if (!inv.po_id) continue;
+      const key = `${inv.po_id}|${inv.po_item_id || ""}`;
+      if (!map[key]) {
+        map[key] = items
+          .filter(i => i.po_id === inv.po_id && i.po_item_id === inv.po_item_id)
+          .reduce((sum, i) => sum + (i.billed_amount_no_vat || 0), 0);
+      }
+    }
+    return map;
+  }, [items]);
+
+  const getBilledToDate = (inv: Invoice) => {
+    if (!inv.po_id) return null;
+    const key = `${inv.po_id}|${inv.po_item_id || ""}`;
+    return billedToDateMap[key] ?? null;
+  };
 
   const upsertMutation = useMutation({
     mutationFn: async (values: InvoiceForm & { id?: string }) => {
-      const payload: any = { invoice_number: values.invoice_number, invoice_month: values.invoice_month, consultant_id: values.consultant_id, po_id: values.po_id || null, billed_amount_no_vat: values.billed_amount_no_vat, paid_amount: values.paid_amount, status: values.status, description: values.description || null };
+      const payload: any = { invoice_number: values.invoice_number, invoice_month: values.invoice_month, consultant_id: values.consultant_id, po_id: values.po_id || null, po_item_id: values.po_item_id || null, billed_amount_no_vat: values.billed_amount_no_vat, paid_amount: values.paid_amount, status: values.status, description: values.description || null };
       if (values.id) { const { error } = await supabase.from("invoices").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("invoices").insert(payload as TablesInsert<"invoices">); if (error) throw error; }
     },
@@ -62,9 +100,10 @@ export default function InvoicesPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("invoices").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (item: Invoice) => { setEditing(item); setForm({ invoice_number: item.invoice_number, invoice_month: item.invoice_month, consultant_id: item.consultant_id, po_id: item.po_id, billed_amount_no_vat: item.billed_amount_no_vat, paid_amount: item.paid_amount, status: item.status, description: item.description }); setDialogOpen(true); };
+  const openEdit = (item: Invoice) => { setEditing(item); setForm({ invoice_number: item.invoice_number, invoice_month: item.invoice_month, consultant_id: item.consultant_id, po_id: item.po_id, po_item_id: item.po_item_id, billed_amount_no_vat: item.billed_amount_no_vat, paid_amount: item.paid_amount, status: item.status, description: item.description }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
-  const handleConsultantChange = (v: string) => { setForm({ ...form, consultant_id: v, po_id: null }); };
+  const handleConsultantChange = (v: string) => { setForm({ ...form, consultant_id: v, po_id: null, po_item_id: null }); };
+  const handlePOChange = (v: string) => { setForm({ ...form, po_id: v === "none" ? null : v, po_item_id: null }); };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -87,7 +126,7 @@ export default function InvoicesPage() {
   });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
-  const handleExport = () => { exportToExcel("invoices.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", po_number: i.purchase_orders?.po_number || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("invoices.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", po_number: i.purchase_orders?.po_number || "", po_revision: i.purchase_orders?.revision_number ?? "", po_line: i.purchase_order_items?.po_item_ref || "", po_amount: i.purchase_order_items?.amount ?? i.purchase_orders?.amount ?? "", billed_to_date: getBilledToDate(i) ?? "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "PO Numbers": allPOs.map(p => p.po_number) }); toast.success("Template downloaded"); };
   const handleImport = async (file: File) => {
     try {
@@ -95,7 +134,7 @@ export default function InvoicesPage() {
       if (rows.length < 2) { toast.error("File is empty"); return; }
       const errors: string[] = []; let created = 0;
       for (let i = 1; i < rows.length; i++) {
-        const [invNum, month, consultantName, poNum, billed, paid, status, desc] = rows[i];
+        const [invNum, month, consultantName, poNum, , , , billed, , paid, status, desc] = rows[i];
         if (!invNum?.trim()) continue;
         const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
         if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
@@ -136,7 +175,11 @@ export default function InvoicesPage() {
                 <th className="data-table-header text-left px-4 py-2.5">Month<ColumnFilter value={colFilters.month || ""} onChange={(v) => setColFilter("month", v)} label="Month" /></th>
                 <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
                 <th className="data-table-header text-left px-4 py-2.5">PO<ColumnFilter value={colFilters.po || ""} onChange={(v) => setColFilter("po", v)} label="PO" /></th>
+                <th className="data-table-header text-center px-4 py-2.5">Rev</th>
+                <th className="data-table-header text-left px-4 py-2.5">Line</th>
+                <th className="data-table-header text-right px-4 py-2.5">PO Amt (AED)</th>
                 <th className="data-table-header text-right px-4 py-2.5">Billed (AED)</th>
+                <th className="data-table-header text-right px-4 py-2.5">Billed To Date</th>
                 <th className="data-table-header text-right px-4 py-2.5">Paid (AED)</th>
                 <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
                 <th className="data-table-header w-10"></th>
@@ -147,7 +190,11 @@ export default function InvoicesPage() {
                   <td className="px-4 py-2.5 font-mono text-xs">{item.invoice_month}</td>
                   <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
                   <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.purchase_orders?.po_number || "—"}</td>
+                  <td className="px-4 py-2.5 text-center font-mono text-xs">{item.purchase_orders?.revision_number ?? "—"}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{item.purchase_order_items?.po_item_ref || "—"}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-xs text-muted-foreground">{fmt(item.purchase_order_items?.amount ?? item.purchase_orders?.amount ?? null)}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{fmt(item.billed_amount_no_vat)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono text-xs font-semibold">{fmt(getBilledToDate(item))}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{fmt(item.paid_amount)}</td>
                   <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>
                   <td className="px-4 py-2.5 text-center">
@@ -169,7 +216,15 @@ export default function InvoicesPage() {
               <div className="space-y-1.5"><Label>Invoice Number *</Label><Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Invoice Month * (YYYY-MM)</Label><Input value={form.invoice_month} onChange={(e) => setForm({ ...form, invoice_month: e.target.value })} placeholder="2026-02" /></div>
               <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1.5"><Label>Purchase Order</Label><Select value={form.po_id || "none"} onValueChange={(v) => setForm({ ...form, po_id: v === "none" ? null : v })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredPOs.map((p) => <SelectItem key={p.id} value={p.id}>{p.po_number}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Purchase Order</Label><Select value={form.po_id || "none"} onValueChange={handlePOChange} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredPOs.map((p) => <SelectItem key={p.id} value={p.id}>{p.po_number}{p.revision_number ? ` (Rev ${p.revision_number})` : ""}</SelectItem>)}</SelectContent></Select></div>
+              {selectedPO && (
+                <>
+                  <div className="space-y-1.5"><Label>PO Revision</Label><Input value={selectedPO.revision_number ?? "—"} disabled className="bg-muted" /></div>
+                  <div className="space-y-1.5"><Label>Line Item</Label><Select value={form.po_item_id || "none"} onValueChange={(v) => setForm({ ...form, po_item_id: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="Select line" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredPOItems.map((item) => <SelectItem key={item.id} value={item.id}>{item.po_item_ref || item.id.slice(0, 8)}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-1.5"><Label>PO Amount (AED)</Label><Input value={fmt(selectedPOItem?.amount ?? selectedPO.amount ?? null)} disabled className="bg-muted" /></div>
+                  <div className="space-y-1.5"><Label>Billed To Date (AED)</Label><Input value={billedToDate != null ? fmt(billedToDate) : "—"} disabled className="bg-muted font-semibold" /></div>
+                </>
+              )}
               <div className="space-y-1.5"><Label>Billed Amount (AED)</Label><Input type="number" step="0.01" value={form.billed_amount_no_vat ?? ""} onChange={(e) => setForm({ ...form, billed_amount_no_vat: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Paid Amount (AED)</Label><Input type="number" step="0.01" value={form.paid_amount ?? ""} onChange={(e) => setForm({ ...form, paid_amount: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select></div>
