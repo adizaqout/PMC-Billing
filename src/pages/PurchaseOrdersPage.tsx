@@ -122,7 +122,7 @@ export default function PurchaseOrdersPage() {
       queryClient.invalidateQueries({ queryKey: ["purchase_orders"] });
       if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
       if (created) toast.success(`${created} record(s) imported`);
-    } catch { toast.error("Failed to parse file"); }
+    } catch (err) { console.error("PO Import error:", err); toast.error("Failed to parse file"); }
   };
 
   return (
