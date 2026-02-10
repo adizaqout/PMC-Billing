@@ -511,14 +511,11 @@ export default function DeploymentSchedulePage() {
         const hasAllocations = Object.values(row.allocations).some(v => v > 0);
         if (!hasAllocations && row.man_months <= 0) return;
 
-        // Build notes for grouping (baseline/forecast placeholder rows)
-        let groupNote: string | null = null;
-        if (allowEmpty) {
-          const empCode = row.employee_id
-            ? (employees.find(e => e.id === row.employee_id) as any)?.employee_id || row.employee_id
-            : `PH-${rowIdx + 1}`;
-          groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
-        }
+        // Build notes for grouping (all types need month for proper row grouping)
+        const empCode = row.employee_id
+          ? (employees.find(e => e.id === row.employee_id) as any)?.employee_id || row.employee_id
+          : `PH-${rowIdx + 1}`;
+        const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
 
         // Create one deployment_line per project allocation
         const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
@@ -748,10 +745,9 @@ export default function DeploymentSchedulePage() {
       
       const rawSum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
       const sum = Math.round(rawSum * 100) / 100; // fix floating point
-      // Only enforce 100% allocation for baseline/forecast with real employees
+      // Skip 100% allocation check for placeholder rows (no employee) in baseline/forecast
       const isPlaceholder = !row.employee_id && allowEmptyEmployee;
-      const skipAllocationCheck = isPlaceholder || scheduleType === "actual" || scheduleType === "workload";
-      if (sum > 0 && Math.abs(sum - 100) > 0.5 && !skipAllocationCheck) {
+      if (sum > 0 && Math.abs(sum - 100) > 0.5 && !isPlaceholder) {
         const emp = employees.find(e => e.id === row.employee_id);
         errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): allocation sums to ${sum}%, must be 100%`);
       }
@@ -951,14 +947,16 @@ export default function DeploymentSchedulePage() {
         }
       });
 
-      // For baseline/forecast, store employee code + month + position in notes for proper row grouping & display
+      // Store employee code + month + position in notes for proper row grouping & display
       let effectiveEmpCode = empIdCode;
       if (!empIdCode && allowEmptyEmployee) {
         placeholderSerial++;
         effectiveEmpCode = `PH-${placeholderSerial}`;
+      } else if (empIdCode) {
+        effectiveEmpCode = empIdCode;
       }
       const posId = pos?.id || "";
-      const groupNote = allowEmptyEmployee ? `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}` : null;
+      const groupNote = `emp:${effectiveEmpCode || ""}|month:${rowMonth}|posId:${posId}`;
 
       // Build DB records directly
       if (projEntries.length === 0) {
