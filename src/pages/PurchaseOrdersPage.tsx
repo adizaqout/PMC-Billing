@@ -33,8 +33,7 @@ const cols = [
   { header: "Project Name", key: "project_name", width: 25 },
   { header: "Start Date", key: "po_start_date", width: 14 },
   { header: "End Date", key: "po_end_date", width: 14 },
-  { header: "Value (AED)", key: "po_value", width: 15 },
-  { header: "Amount (AED)", key: "amount", width: 15 },
+  { header: "Amount (AED)", key: "po_value", width: 15 },
   { header: "Portfolio", key: "portfolio", width: 15 },
   { header: "Type", key: "type", width: 12 },
   { header: "Status", key: "status", width: 10 },
@@ -149,7 +148,6 @@ export default function PurchaseOrdersPage() {
                 <th className="data-table-header text-left px-4 py-2.5">Project Name</th>
                 <th className="data-table-header text-center px-4 py-2.5">Start</th>
                 <th className="data-table-header text-center px-4 py-2.5">End</th>
-                <th className="data-table-header text-right px-4 py-2.5">Value (AED)</th>
                 <th className="data-table-header text-right px-4 py-2.5">Amount (AED)</th>
                 <th className="data-table-header text-center px-4 py-2.5">Type</th>
                 <th className="data-table-header text-center px-4 py-2.5">Status</th>
@@ -167,7 +165,6 @@ export default function PurchaseOrdersPage() {
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.po_start_date)}</td>
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.po_end_date)}</td>
                   <td className="px-4 py-2.5 text-right font-mono">{fmt(item.po_value)}</td>
-                  <td className="px-4 py-2.5 text-right font-mono">{fmt((item as any).amount)}</td>
                   <td className="px-4 py-2.5 text-center text-xs">{item.type || "—"}</td>
                   <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>
                   <td className="px-4 py-2.5 text-center">
@@ -192,8 +189,7 @@ export default function PurchaseOrdersPage() {
               <div className="space-y-1.5"><Label>Service Order *</Label><Select value={form.so_id || ""} onValueChange={(v) => setForm({ ...form, so_id: v || null })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent>{filteredSOs.map((s) => <SelectItem key={s.id} value={s.id}>{s.so_number}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.po_start_date || ""} onChange={(e) => setForm({ ...form, po_start_date: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.po_end_date || ""} onChange={(e) => setForm({ ...form, po_end_date: e.target.value || null })} min={form.po_start_date || undefined} /></div>
-              <div className="space-y-1.5"><Label>Value (AED)</Label><Input type="number" value={form.po_value ?? ""} onChange={(e) => setForm({ ...form, po_value: e.target.value ? parseFloat(e.target.value) : null })} /></div>
-              <div className="space-y-1.5"><Label>Amount (AED)</Label><Input type="number" value={form.amount ?? ""} onChange={(e) => setForm({ ...form, amount: e.target.value ? parseFloat(e.target.value) : null })} /></div>
+              <div className="space-y-1.5"><Label>Amount (AED)</Label><Input type="number" value={form.po_value ?? ""} onChange={(e) => setForm({ ...form, po_value: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Portfolio</Label><Input value={form.portfolio || ""} onChange={(e) => setForm({ ...form, portfolio: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>Type</Label><Select value={form.type || "none"} onValueChange={(v) => setForm({ ...form, type: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{poTypes.map((t) => <SelectItem key={t.id} value={t.value}>{t.label}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
