@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX idx_employees_employee_id_consultant ON public.employees (employee_id, consultant_id) WHERE employee_id IS NOT NULL;
