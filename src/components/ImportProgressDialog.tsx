@@ -67,8 +67,9 @@ export default function ImportProgressDialog({ onImport, onComplete }: ImportPro
       setProgress(result);
       setStage("done");
       onComplete?.();
-    } catch {
-      setProgress(prev => ({ ...prev, errors: [...prev.errors, { row: 0, message: "Failed to parse file" }] }));
+    } catch (err) {
+      console.error("Import error:", err);
+      setProgress(prev => ({ ...prev, errors: [...prev.errors, { row: 0, message: err instanceof Error ? err.message : "Failed to parse file" }] }));
       setStage("done");
     }
   };
