@@ -205,7 +205,51 @@ export default function DeploymentSchedulePage() {
     enabled: !!consultantId,
   });
 
+  const { data: frameworkAgreements = [] } = useQuery({
+    queryKey: ["deployment-fas", consultantId],
+    queryFn: async () => {
+      if (!consultantId) return [];
+      const { data, error } = await supabase.from("framework_agreements").select("id, framework_agreement_no, start_date, end_date").eq("consultant_id", consultantId).eq("status", "active");
+      if (error) throw error;
+      return data as { id: string; framework_agreement_no: string; start_date: string | null; end_date: string | null }[];
+    },
+    enabled: !!consultantId,
+  });
+
   const scheduleType = selectedSubmission?.schedule_type || newType;
+
+  // Compute earliest framework start month (YYYY-MM) for month constraints
+  const frameworkStartMonth = useMemo(() => {
+    const starts = frameworkAgreements.map(fa => fa.start_date).filter(Boolean) as string[];
+    if (starts.length === 0) return null;
+    starts.sort();
+    const earliest = starts[0]; // YYYY-MM-DD
+    return earliest.slice(0, 7); // YYYY-MM
+  }, [frameworkAgreements]);
+
+  // Month min/max based on schedule type
+  const getMonthConstraints = (type: string) => {
+    const fwStart = frameworkStartMonth || undefined;
+    switch (type) {
+      case "actual":
+      case "workload":
+        return { min: fwStart, max: periodMonth || undefined };
+      case "forecast":
+        // forecast > period, so min is next month after period
+        if (periodMonth) {
+          const [y, m] = periodMonth.split("-").map(Number);
+          const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+          return { min: next, max: undefined };
+        }
+        return { min: fwStart, max: undefined };
+      case "baseline":
+        return { min: fwStart, max: undefined };
+      default:
+        return { min: fwStart, max: undefined };
+    }
+  };
+
+  const monthConstraints = getMonthConstraints(scheduleType);
 
   // Derive project columns from POs (via project_id on PO)
   const poProjectIds = useMemo(() => {
@@ -465,11 +509,19 @@ export default function DeploymentSchedulePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // ---- Row helpers ----
+  // Default month for new rows based on schedule type
+  const defaultMonth = useMemo(() => {
+    if (scheduleType === "forecast" && periodMonth) {
+      const [y, m] = periodMonth.split("-").map(Number);
+      return m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+    }
+    return frameworkStartMonth || periodMonth;
+  }, [scheduleType, periodMonth, frameworkStartMonth]);
+
   const addRow = () => {
     setRows(prev => [...prev, {
       _key: newRowKey(),
-      month: periodMonth,
+      month: defaultMonth,
       employee_id: "",
       position_id: "",
       rate_year: 1,
@@ -529,9 +581,18 @@ export default function DeploymentSchedulePage() {
       if (row.man_months > 1) {
         errors.push(`Row ${idx + 1}: man-months exceeds 1.0`);
       }
+      // Validate month against constraints
+      if (row.month) {
+        if (monthConstraints.min && row.month < monthConstraints.min) {
+          errors.push(`Row ${idx + 1}: month ${row.month} is before allowed start (${monthConstraints.min})`);
+        }
+        if (monthConstraints.max && row.month > monthConstraints.max) {
+          errors.push(`Row ${idx + 1}: month ${row.month} is after allowed end (${monthConstraints.max})`);
+        }
+      }
     });
     return errors;
-  }, [rows, employees]);
+  }, [rows, employees, monthConstraints]);
 
   const hasErrors = allocationErrors.length > 0;
 
@@ -792,13 +853,15 @@ export default function DeploymentSchedulePage() {
                           {isEditable ? (
                             <Input
                               type="month"
-                              value={row.month || periodMonth}
+                              value={row.month || defaultMonth}
                               onChange={(e) => updateRow(idx, "month", e.target.value)}
-                              className="h-8 text-xs w-[130px]"
+                              min={monthConstraints.min}
+                              max={monthConstraints.max}
+                              className="h-8 text-xs w-[140px]"
                             />
                           ) : (
                             <div className="h-8 px-2 text-xs border rounded-md bg-muted flex items-center font-mono text-muted-foreground">
-                              {row.month || periodMonth}
+                              {row.month || defaultMonth}
                             </div>
                           )}
                         </td>
