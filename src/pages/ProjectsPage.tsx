@@ -80,6 +80,8 @@ export default function ProjectsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.project_name?.trim()) { toast.error("Project name is required"); return; }
+    const dup = projects.find(p => p.project_name.toLowerCase() === form.project_name!.toLowerCase().trim() && p.id !== editing?.id);
+    if (dup) { toast.error("A project with this name already exists"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
