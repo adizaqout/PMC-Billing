@@ -102,16 +102,18 @@ export default function PurchaseOrdersPage() {
       if (rows.length < 2) { toast.error("File is empty"); return; }
       const errors: string[] = []; let created = 0;
       for (let i = 1; i < rows.length; i++) {
-        const [poNum, consultantName, soNum, poRef, startDate, endDate, value, portfolio, type, rev, status] = rows[i];
+        const [poNum, rev, poRef, consultantName, soNum, projNum, projName, startDate, endDate, amount, portfolio, type, status] = rows[i];
         if (!poNum?.trim()) continue;
         const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
         if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
         const so = soNum ? allServiceOrders.find(s => s.so_number.toLowerCase() === soNum.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+        const project = projNum ? allProjects.find(p => p.project_number?.toLowerCase() === String(projNum).trim().toLowerCase()) : null;
         const { error } = await supabase.from("purchase_orders").insert({
           po_number: poNum.trim(), consultant_id: consultant.id, so_id: so?.id || null,
           po_reference: poRef?.trim() || null, po_start_date: startDate?.trim() || null, po_end_date: endDate?.trim() || null,
-          po_value: value ? parseFloat(String(value)) : null, portfolio: portfolio?.trim() || null, type: type?.trim() || null,
+          po_value: amount ? parseFloat(String(amount)) : null, portfolio: portfolio?.trim() || null, type: type?.trim() || null,
           revision_number: rev ? parseInt(String(rev)) : 0, status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+          project_id: project?.id || null,
         } as TablesInsert<"purchase_orders">);
         if (error) errors.push(`Row ${i + 1}: ${error.message}`); else created++;
       }
