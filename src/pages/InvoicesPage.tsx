@@ -36,7 +36,10 @@ export default function InvoicesPage() {
     queryFn: async () => { const { data, error } = await supabase.from("invoices").select("*, consultants(name), purchase_orders(po_number)").order("invoice_month", { ascending: false }); if (error) throw error; return data as Invoice[]; },
   });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
-  const { data: pos = [] } = useQuery({ queryKey: ["po-list"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("id, po_number").eq("status", "active").order("po_number"); if (error) throw error; return data as { id: string; po_number: string }[]; } });
+  const { data: allPOs = [] } = useQuery({ queryKey: ["po-all"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("id, po_number, consultant_id").eq("status", "active").order("po_number"); if (error) throw error; return data as { id: string; po_number: string; consultant_id: string }[]; } });
+
+  // Filter POs by selected consultant
+  const filteredPOs = form.consultant_id ? allPOs.filter(p => p.consultant_id === form.consultant_id) : [];
 
   const upsertMutation = useMutation({
     mutationFn: async (values: InvoiceForm & { id?: string }) => {
@@ -53,11 +56,17 @@ export default function InvoicesPage() {
   const openEdit = (item: Invoice) => { setEditing(item); setForm({ invoice_number: item.invoice_number, invoice_month: item.invoice_month, consultant_id: item.consultant_id, po_id: item.po_id, billed_amount_no_vat: item.billed_amount_no_vat, paid_amount: item.paid_amount, status: item.status, description: item.description }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
 
+  const handleConsultantChange = (v: string) => {
+    setForm({ ...form, consultant_id: v, po_id: null });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.invoice_number.trim()) { toast.error("Invoice number is required"); return; }
     if (!form.invoice_month.trim()) { toast.error("Invoice month is required"); return; }
     if (!form.consultant_id) { toast.error("Consultant is required"); return; }
+    const dup = items.find(i => i.invoice_number.toLowerCase() === form.invoice_number.toLowerCase().trim() && i.consultant_id === form.consultant_id && i.id !== editing?.id);
+    if (dup) { toast.error("This invoice number already exists for this consultant"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
@@ -113,8 +122,13 @@ export default function InvoicesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Invoice Number *</Label><Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Invoice Month * (YYYY-MM)</Label><Input value={form.invoice_month} onChange={(e) => setForm({ ...form, invoice_month: e.target.value })} placeholder="2026-02" /></div>
-              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1.5"><Label>Purchase Order</Label><Select value={form.po_id || "none"} onValueChange={(v) => setForm({ ...form, po_id: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="None" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{pos.map((p) => <SelectItem key={p.id} value={p.id}>{p.po_number}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Purchase Order</Label>
+                <Select value={form.po_id || "none"} onValueChange={(v) => setForm({ ...form, po_id: v === "none" ? null : v })} disabled={!form.consultant_id}>
+                  <SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">None</SelectItem>{filteredPOs.map((p) => <SelectItem key={p.id} value={p.id}>{p.po_number}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1.5"><Label>Billed Amount (AED)</Label><Input type="number" step="0.01" value={form.billed_amount_no_vat ?? ""} onChange={(e) => setForm({ ...form, billed_amount_no_vat: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Paid Amount (AED)</Label><Input type="number" step="0.01" value={form.paid_amount ?? ""} onChange={(e) => setForm({ ...form, paid_amount: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select></div>

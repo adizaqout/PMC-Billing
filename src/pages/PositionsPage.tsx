@@ -37,7 +37,10 @@ export default function PositionsPage() {
     queryFn: async () => { const { data, error } = await supabase.from("positions").select("*, consultants(name), service_orders(so_number)").order("position_name"); if (error) throw error; return data as Position[]; },
   });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
-  const { data: serviceOrders = [] } = useQuery({ queryKey: ["so-list"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("id, so_number").order("so_number"); if (error) throw error; return data as { id: string; so_number: string }[]; } });
+  const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number"); if (error) throw error; return data as { id: string; so_number: string; consultant_id: string }[]; } });
+
+  // Filter SOs by selected consultant
+  const filteredSOs = form.consultant_id ? allServiceOrders.filter(s => s.consultant_id === form.consultant_id) : [];
 
   const upsertMutation = useMutation({
     mutationFn: async (values: PosForm & { id?: string }) => {
@@ -54,10 +57,17 @@ export default function PositionsPage() {
   const openEdit = (item: Position) => { setEditing(item); setForm({ position_name: item.position_name, consultant_id: item.consultant_id, so_id: item.so_id, total_years_of_exp: item.total_years_of_exp, year_1_rate: item.year_1_rate, year_2_rate: item.year_2_rate, year_3_rate: item.year_3_rate, year_4_rate: item.year_4_rate, year_5_rate: item.year_5_rate, effective_from: item.effective_from, effective_to: item.effective_to, notes: item.notes }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
 
+  const handleConsultantChange = (v: string) => {
+    setForm({ ...form, consultant_id: v, so_id: null });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.position_name.trim()) { toast.error("Position name is required"); return; }
     if (!form.consultant_id) { toast.error("Consultant is required"); return; }
+    if (form.effective_from && form.effective_to && form.effective_to < form.effective_from) { toast.error("Effective To must be after Effective From"); return; }
+    const dup = items.find(i => i.position_name.toLowerCase() === form.position_name.toLowerCase().trim() && i.consultant_id === form.consultant_id && i.id !== editing?.id);
+    if (dup) { toast.error("This position name already exists for this consultant"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
@@ -117,8 +127,13 @@ export default function PositionsPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div className="col-span-3 space-y-1.5"><Label>Position Name *</Label><Input value={form.position_name} onChange={(e) => setForm({ ...form, position_name: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1.5"><Label>Service Order</Label><Select value={form.so_id || "none"} onValueChange={(v) => setForm({ ...form, so_id: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="None" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{serviceOrders.map((s) => <SelectItem key={s.id} value={s.id}>{s.so_number}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Service Order</Label>
+                <Select value={form.so_id || "none"} onValueChange={(v) => setForm({ ...form, so_id: v === "none" ? null : v })} disabled={!form.consultant_id}>
+                  <SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">None</SelectItem>{filteredSOs.map((s) => <SelectItem key={s.id} value={s.id}>{s.so_number}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
               <div className="space-y-1.5"><Label>Total Exp (Yrs)</Label><Input type="number" value={form.total_years_of_exp ?? ""} onChange={(e) => numSet("total_years_of_exp", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Year 1 Rate</Label><Input type="number" value={form.year_1_rate ?? ""} onChange={(e) => numSet("year_1_rate", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Year 2 Rate</Label><Input type="number" value={form.year_2_rate ?? ""} onChange={(e) => numSet("year_2_rate", e.target.value)} /></div>
@@ -126,7 +141,7 @@ export default function PositionsPage() {
               <div className="space-y-1.5"><Label>Year 4 Rate</Label><Input type="number" value={form.year_4_rate ?? ""} onChange={(e) => numSet("year_4_rate", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Year 5 Rate</Label><Input type="number" value={form.year_5_rate ?? ""} onChange={(e) => numSet("year_5_rate", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Effective From</Label><Input type="date" value={form.effective_from || ""} onChange={(e) => setForm({ ...form, effective_from: e.target.value || null })} /></div>
-              <div className="space-y-1.5"><Label>Effective To</Label><Input type="date" value={form.effective_to || ""} onChange={(e) => setForm({ ...form, effective_to: e.target.value || null })} /></div>
+              <div className="space-y-1.5"><Label>Effective To</Label><Input type="date" value={form.effective_to || ""} onChange={(e) => setForm({ ...form, effective_to: e.target.value || null })} min={form.effective_from || undefined} /></div>
               <div className="space-y-1.5"></div>
               <div className="col-span-3 space-y-1.5"><Label>Notes</Label><Textarea value={form.notes || ""} onChange={(e) => setForm({ ...form, notes: e.target.value || null })} rows={2} /></div>
             </div>

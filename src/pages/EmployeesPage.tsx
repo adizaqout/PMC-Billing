@@ -116,6 +116,10 @@ export default function EmployeesPage() {
     e.preventDefault();
     if (!form.employee_name.trim()) { toast.error("Name is required"); return; }
     if (!form.consultant_id) { toast.error("Consultant is required"); return; }
+    if (form.start_date && form.end_date && form.end_date < form.start_date) { toast.error("End date must be after start date"); return; }
+    // Duplicate: same name for same consultant
+    const dup = employees.find(i => i.employee_name.toLowerCase() === form.employee_name.toLowerCase().trim() && i.consultant_id === form.consultant_id && i.id !== editing?.id);
+    if (dup) { toast.error("This employee name already exists for this consultant"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
@@ -229,7 +233,7 @@ export default function EmployeesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>End Date</Label>
-                <Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} />
+                <Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} min={form.start_date || undefined} />
               </div>
             </div>
             <DialogFooter>
