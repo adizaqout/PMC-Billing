@@ -68,12 +68,14 @@ const navSections = [
 export default function AppSidebar() {
   const location = useLocation();
   const { user, signOut } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mini, setMini] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
     Object.fromEntries(navSections.map((s) => [s.title, true]))
   );
 
   const toggleSection = (title: string) => {
+    if (mini) return;
     setExpandedSections((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
@@ -81,10 +83,10 @@ export default function AppSidebar() {
     <>
       {/* Mobile toggle */}
       <button
-        onClick={() => setCollapsed(!collapsed)}
+        onClick={() => setMobileOpen(!mobileOpen)}
         className="fixed top-3 left-3 z-50 lg:hidden p-2 rounded-md bg-sidebar text-sidebar-foreground"
       >
-        {collapsed ? <X size={18} /> : <Menu size={18} />}
+        {mobileOpen ? <X size={18} /> : <Menu size={18} />}
       </button>
 
       <aside
@@ -92,49 +94,62 @@ export default function AppSidebar() {
           fixed top-0 left-0 h-screen z-40 flex flex-col
           bg-sidebar border-r border-sidebar-border
           transition-all duration-200
-          ${collapsed ? "w-64 translate-x-0" : "-translate-x-full w-64"}
-          lg:translate-x-0 lg:static lg:w-60 lg:shrink-0
+          ${mobileOpen ? "translate-x-0" : "-translate-x-full"}
+          ${mini ? "w-14" : "w-60"}
+          lg:translate-x-0 lg:static lg:shrink-0
         `}
       >
-        {/* Logo */}
-        <div className="flex items-center gap-2 px-4 h-14 border-b border-sidebar-border shrink-0">
-          <div className="w-7 h-7 rounded bg-sidebar-primary flex items-center justify-center">
-            <span className="text-sidebar-primary-foreground text-xs font-bold">PMC</span>
+        {/* Logo + collapse toggle */}
+        <div className="flex items-center gap-2 px-3 h-14 border-b border-sidebar-border shrink-0">
+          <div className="w-7 h-7 rounded bg-sidebar-primary flex items-center justify-center shrink-0">
+            <span className="text-sidebar-primary-foreground text-xs font-bold">P</span>
           </div>
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-sidebar-accent-foreground leading-tight">PMC Billing</span>
-            <span className="text-[10px] text-sidebar-muted leading-tight">Deployment Control</span>
-          </div>
+          {!mini && (
+            <div className="flex flex-col flex-1 min-w-0">
+              <span className="text-sm font-semibold text-sidebar-accent-foreground leading-tight">PMC Billing</span>
+              <span className="text-[10px] text-sidebar-muted leading-tight">Deployment Control</span>
+            </div>
+          )}
+          <button
+            onClick={() => setMini(!mini)}
+            className="hidden lg:flex p-1 rounded hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors shrink-0"
+            title={mini ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {mini ? <ChevronRight size={14} /> : <ChevronDown size={14} className="rotate-90" />}
+          </button>
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-1">
+        <nav className="flex-1 overflow-y-auto py-2 px-1.5 space-y-1">
           {navSections.map((section) => (
             <div key={section.title}>
-              <button
-                onClick={() => toggleSection(section.title)}
-                className="sidebar-section-title flex items-center justify-between w-full mt-3 first:mt-1"
-              >
-                {section.title}
-                {expandedSections[section.title] ? (
-                  <ChevronDown size={12} />
-                ) : (
-                  <ChevronRight size={12} />
-                )}
-              </button>
-              {expandedSections[section.title] && (
+              {!mini && (
+                <button
+                  onClick={() => toggleSection(section.title)}
+                  className="sidebar-section-title flex items-center justify-between w-full mt-3 first:mt-1"
+                >
+                  {section.title}
+                  {expandedSections[section.title] ? (
+                    <ChevronDown size={12} />
+                  ) : (
+                    <ChevronRight size={12} />
+                  )}
+                </button>
+              )}
+              {(mini || expandedSections[section.title]) && (
                 <div className="space-y-0.5">
                   {section.items.map((item) => (
                     <NavLink
                       key={item.path}
                       to={item.path}
-                      onClick={() => setCollapsed(false)}
+                      onClick={() => setMobileOpen(false)}
                       className={`sidebar-nav-item ${
                         location.pathname === item.path ? "active" : ""
-                      }`}
+                      } ${mini ? "justify-center px-0" : ""}`}
+                      title={mini ? item.label : undefined}
                     >
                       <item.icon size={16} />
-                      <span>{item.label}</span>
+                      {!mini && <span>{item.label}</span>}
                     </NavLink>
                   ))}
                 </div>
@@ -144,34 +159,38 @@ export default function AppSidebar() {
         </nav>
 
         {/* Footer */}
-        <div className="px-4 py-3 border-t border-sidebar-border shrink-0">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-sidebar-accent flex items-center justify-center">
+        <div className="px-2 py-3 border-t border-sidebar-border shrink-0">
+          <div className={`flex items-center ${mini ? "justify-center" : "gap-2"}`}>
+            <div className="w-7 h-7 rounded-full bg-sidebar-accent flex items-center justify-center shrink-0">
               <span className="text-xs font-medium text-sidebar-accent-foreground">
                 {user?.email?.[0]?.toUpperCase() || "?"}
               </span>
             </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-xs font-medium text-sidebar-accent-foreground truncate">
-                {user?.email || "Unknown"}
-              </span>
-            </div>
-            <button
-              onClick={signOut}
-              className="p-1.5 rounded hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors"
-              title="Sign out"
-            >
-              <LogOut size={14} />
-            </button>
+            {!mini && (
+              <>
+                <div className="flex flex-col flex-1 min-w-0">
+                  <span className="text-xs font-medium text-sidebar-accent-foreground truncate">
+                    {user?.email || "Unknown"}
+                  </span>
+                </div>
+                <button
+                  onClick={signOut}
+                  className="p-1.5 rounded hover:bg-sidebar-accent text-sidebar-muted hover:text-sidebar-accent-foreground transition-colors"
+                  title="Sign out"
+                >
+                  <LogOut size={14} />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </aside>
 
       {/* Mobile overlay */}
-      {collapsed && (
+      {mobileOpen && (
         <div
           className="fixed inset-0 z-30 bg-foreground/20 lg:hidden"
-          onClick={() => setCollapsed(false)}
+          onClick={() => setMobileOpen(false)}
         />
       )}
     </>
