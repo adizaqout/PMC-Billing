@@ -81,6 +81,9 @@ export default function FrameworkAgreementsPage() {
     e.preventDefault();
     if (!form.framework_agreement_no.trim()) { toast.error("Agreement number is required"); return; }
     if (!form.consultant_id) { toast.error("Consultant is required"); return; }
+    if (form.start_date && form.end_date && form.end_date < form.start_date) { toast.error("End date must be after start date"); return; }
+    const dup = items.find(i => i.framework_agreement_no.toLowerCase() === form.framework_agreement_no.toLowerCase().trim() && i.consultant_id === form.consultant_id && i.id !== editing?.id);
+    if (dup) { toast.error("This agreement number already exists for this consultant"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
@@ -139,7 +142,7 @@ export default function FrameworkAgreementsPage() {
                 <Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select>
               </div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.start_date || ""} onChange={(e) => setForm({ ...form, start_date: e.target.value || null })} /></div>
-              <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} /></div>
+              <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} min={form.start_date || undefined} /></div>
               <div className="space-y-1.5"><Label>Status</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select>
               </div>

@@ -46,7 +46,10 @@ export default function ServiceOrdersPage() {
   });
 
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
-  const { data: frameworks = [] } = useQuery({ queryKey: ["frameworks-list"], queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("id, framework_agreement_no").eq("status", "active").order("framework_agreement_no"); if (error) throw error; return data as { id: string; framework_agreement_no: string }[]; } });
+  const { data: frameworks = [] } = useQuery({ queryKey: ["frameworks-all"], queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("id, framework_agreement_no, consultant_id").eq("status", "active").order("framework_agreement_no"); if (error) throw error; return data as { id: string; framework_agreement_no: string; consultant_id: string }[]; } });
+
+  // Filter frameworks by selected consultant
+  const filteredFrameworks = form.consultant_id ? frameworks.filter(f => f.consultant_id === form.consultant_id) : [];
 
   const upsertMutation = useMutation({
     mutationFn: async (values: SOForm & { id?: string }) => {
@@ -64,10 +67,18 @@ export default function ServiceOrdersPage() {
   const openEdit = (item: SO) => { setEditing(item); setForm({ so_number: item.so_number, consultant_id: item.consultant_id, framework_id: item.framework_id, so_start_date: item.so_start_date, so_end_date: item.so_end_date, so_value: item.so_value, comments: item.comments }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
 
+  const handleConsultantChange = (v: string) => {
+    setForm({ ...form, consultant_id: v, framework_id: null });
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.so_number.trim()) { toast.error("SO number is required"); return; }
     if (!form.consultant_id) { toast.error("Consultant is required"); return; }
+    if (form.so_start_date && form.so_end_date && form.so_end_date < form.so_start_date) { toast.error("End date must be after start date"); return; }
+    // Duplicate check: same so_number for same consultant
+    const dup = items.find(i => i.so_number.toLowerCase() === form.so_number.toLowerCase().trim() && i.consultant_id === form.consultant_id && i.id !== editing?.id);
+    if (dup) { toast.error("This SO number already exists for this consultant"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
@@ -121,13 +132,16 @@ export default function ServiceOrdersPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-1.5"><Label>SO Number *</Label><Input value={form.so_number} onChange={(e) => setForm({ ...form, so_number: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Consultant *</Label>
-                <Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select>
               </div>
               <div className="space-y-1.5"><Label>Framework Agreement</Label>
-                <Select value={form.framework_id || "none"} onValueChange={(v) => setForm({ ...form, framework_id: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="None" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{frameworks.map((f) => <SelectItem key={f.id} value={f.id}>{f.framework_agreement_no}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.framework_id || "none"} onValueChange={(v) => setForm({ ...form, framework_id: v === "none" ? null : v })} disabled={!form.consultant_id}>
+                  <SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger>
+                  <SelectContent><SelectItem value="none">None</SelectItem>{filteredFrameworks.map((f) => <SelectItem key={f.id} value={f.id}>{f.framework_agreement_no}</SelectItem>)}</SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.so_start_date || ""} onChange={(e) => setForm({ ...form, so_start_date: e.target.value || null })} /></div>
-              <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.so_end_date || ""} onChange={(e) => setForm({ ...form, so_end_date: e.target.value || null })} /></div>
+              <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.so_end_date || ""} onChange={(e) => setForm({ ...form, so_end_date: e.target.value || null })} min={form.so_start_date || undefined} /></div>
               <div className="space-y-1.5"><Label>Value (AED)</Label><Input type="number" value={form.so_value ?? ""} onChange={(e) => setForm({ ...form, so_value: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="col-span-2 space-y-1.5"><Label>Comments</Label><Textarea value={form.comments || ""} onChange={(e) => setForm({ ...form, comments: e.target.value || null })} rows={2} /></div>
             </div>
