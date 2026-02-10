@@ -505,16 +505,24 @@ export default function DeploymentSchedulePage() {
       await supabase.from("deployment_lines").delete().eq("submission_id", selectedSubmission.id);
 
       const toInsert: any[] = [];
-      const isBaseline = selectedSubmission.schedule_type === "baseline";
-      rows.forEach(row => {
-        if (!row.employee_id && !isBaseline) return;
+      const allowEmpty = selectedSubmission.schedule_type === "baseline" || selectedSubmission.schedule_type === "forecast";
+      rows.forEach((row, rowIdx) => {
+        if (!row.employee_id && !allowEmpty) return;
         const hasAllocations = Object.values(row.allocations).some(v => v > 0);
         if (!hasAllocations && row.man_months <= 0) return;
+
+        // Build notes for grouping (baseline/forecast placeholder rows)
+        let groupNote: string | null = null;
+        if (allowEmpty) {
+          const empCode = row.employee_id
+            ? (employees.find(e => e.id === row.employee_id) as any)?.employee_id || row.employee_id
+            : `PH-${rowIdx + 1}`;
+          groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
+        }
 
         // Create one deployment_line per project allocation
         const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
         if (projEntries.length === 0) {
-          // Save row even without project allocations (just employee + man_months)
           toInsert.push({
             submission_id: selectedSubmission.id,
             employee_id: row.employee_id || null,
@@ -526,6 +534,7 @@ export default function DeploymentSchedulePage() {
             allocation_pct: 0,
             rate_year: row.rate_year,
             man_months: row.man_months,
+            notes: groupNote,
           });
         } else {
           projEntries.forEach(([projId, pct]) => {
@@ -542,6 +551,7 @@ export default function DeploymentSchedulePage() {
               allocation_pct: pct,
               rate_year: row.rate_year,
               man_months: row.man_months,
+              notes: groupNote,
             });
           });
         }
@@ -718,13 +728,13 @@ export default function DeploymentSchedulePage() {
   // Validation
   const allocationErrors = useMemo(() => {
     const errors: string[] = [];
-    const isBaseline = scheduleType === "baseline";
+    const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
     
     // Check for duplicate employee per month
     const empMonthMap = new Map<string, number>();
     
     rows.forEach((row, idx) => {
-      if (!row.employee_id && !isBaseline) return;
+      if (!row.employee_id && !allowEmptyEmployee) return;
       
       // Duplicate employee per month check
       if (row.employee_id) {
@@ -737,7 +747,9 @@ export default function DeploymentSchedulePage() {
       }
       
       const sum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
-      if (sum > 0 && sum !== 100) {
+      // Skip 100% allocation check for placeholder rows (no employee) in baseline/forecast
+      const isPlaceholder = !row.employee_id && allowEmptyEmployee;
+      if (sum > 0 && sum !== 100 && !isPlaceholder) {
         const emp = employees.find(e => e.id === row.employee_id);
         errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): allocation sums to ${sum}%, must be 100%`);
       }
