@@ -1,0 +1,1 @@
+ALTER TABLE public.deployment_lines ALTER COLUMN employee_id DROP NOT NULL;
