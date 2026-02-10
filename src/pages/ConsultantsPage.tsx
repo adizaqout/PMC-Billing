@@ -86,6 +86,8 @@ export default function ConsultantsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name?.trim()) { toast.error("Name is required"); return; }
+    const dup = consultants.find(c => c.name.toLowerCase() === form.name!.toLowerCase().trim() && c.id !== editing?.id);
+    if (dup) { toast.error("A consultant with this name already exists"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 

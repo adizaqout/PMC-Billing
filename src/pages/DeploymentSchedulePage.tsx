@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -23,7 +23,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Upload, Save, Send, Plus, Trash2, Eye, Loader2, CheckCircle2, XCircle, RotateCcw, AlertTriangle } from "lucide-react";
+import { Download, Upload, Save, Send, Plus, Trash2, Eye, Loader2, CheckCircle2, XCircle, RotateCcw, AlertTriangle, FileSpreadsheet } from "lucide-react";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -33,6 +33,7 @@ type Period = Tables<"period_control">;
 type Employee = Tables<"employees"> & { positions?: { position_name: string } | null };
 type Project = { id: string; project_name: string };
 type PurchaseOrder = { id: string; po_number: string; consultant_id: string; so_id: string | null };
+type POItem = { id: string; po_id: string; po_item_ref: string | null; project_id: string | null };
 type ServiceOrder = { id: string; so_number: string; consultant_id: string; framework_id: string | null; so_start_date: string | null; so_end_date: string | null };
 
 interface LineRow {
@@ -44,6 +45,38 @@ interface LineRow {
   po_id: string;
   so_id: string;
   allocation_pct: number;
+}
+
+// CSV helpers
+function downloadCSV(filename: string, headers: string[], rows: string[][]) {
+  const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${(c || "").replace(/"/g, '""')}"`).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function parseCSV(text: string): string[][] {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  return lines.map(line => {
+    const cols: string[] = [];
+    let cur = "", inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuote) {
+        if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (ch === '"') inQuote = false;
+        else cur += ch;
+      } else {
+        if (ch === '"') inQuote = true;
+        else if (ch === ',') { cols.push(cur.trim()); cur = ""; }
+        else cur += ch;
+      }
+    }
+    cols.push(cur.trim());
+    return cols;
+  });
 }
 
 export default function DeploymentSchedulePage() {
@@ -59,6 +92,7 @@ export default function DeploymentSchedulePage() {
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected" | "returned">("approved");
   const [reviewComment, setReviewComment] = useState("");
+  const importRef = useRef<HTMLInputElement>(null);
 
   // Load open period
   const { data: openPeriod } = useQuery({
@@ -104,7 +138,7 @@ export default function DeploymentSchedulePage() {
     enabled: !!consultantId,
   });
 
-  // Load employees, projects, POs, SOs for detail view
+  // Load employees
   const { data: employees = [] } = useQuery({
     queryKey: ["deployment-employees", consultantId],
     queryFn: async () => {
@@ -116,6 +150,7 @@ export default function DeploymentSchedulePage() {
     enabled: !!consultantId,
   });
 
+  // Load all projects (for workload fallback and display)
   const { data: allProjects = [] } = useQuery({
     queryKey: ["deployment-projects"],
     queryFn: async () => {
@@ -125,6 +160,7 @@ export default function DeploymentSchedulePage() {
     },
   });
 
+  // Load POs for consultant
   const { data: purchaseOrders = [] } = useQuery({
     queryKey: ["deployment-pos", consultantId],
     queryFn: async () => {
@@ -136,6 +172,20 @@ export default function DeploymentSchedulePage() {
     enabled: !!consultantId,
   });
 
+  // Load PO items to get projects linked to POs
+  const { data: poItems = [] } = useQuery({
+    queryKey: ["deployment-po-items", consultantId],
+    queryFn: async () => {
+      if (!consultantId || purchaseOrders.length === 0) return [];
+      const poIds = purchaseOrders.map(po => po.id);
+      const { data, error } = await supabase.from("purchase_order_items").select("id, po_id, po_item_ref, project_id").in("po_id", poIds);
+      if (error) throw error;
+      return data as POItem[];
+    },
+    enabled: !!consultantId && purchaseOrders.length > 0,
+  });
+
+  // Load SOs
   const { data: serviceOrders = [] } = useQuery({
     queryKey: ["deployment-sos", consultantId],
     queryFn: async () => {
@@ -146,6 +196,29 @@ export default function DeploymentSchedulePage() {
     },
     enabled: !!consultantId,
   });
+
+  // Derive project lists based on schedule type
+  const scheduleType = selectedSubmission?.schedule_type || newType;
+
+  // Projects from PO items (for baseline/actual/forecast)
+  const poProjectIds = useMemo(() => {
+    const ids = new Set<string>();
+    poItems.forEach(pi => { if (pi.project_id) ids.add(pi.project_id); });
+    return ids;
+  }, [poItems]);
+
+  const poProjects = useMemo(() => allProjects.filter(p => poProjectIds.has(p.id)), [allProjects, poProjectIds]);
+
+  // For workload: PO projects + all projects (union)
+  const workloadProjects = allProjects;
+
+  // Get the right project list based on type
+  const getProjectList = (type: string) => {
+    if (type === "workload") return workloadProjects;
+    return poProjects.length > 0 ? poProjects : allProjects; // fallback if no PO items
+  };
+
+  const projectsForType = getProjectList(scheduleType);
 
   // Load lines for selected submission
   const { data: existingLines = [] } = useQuery({
@@ -183,7 +256,6 @@ export default function DeploymentSchedulePage() {
     mutationFn: async () => {
       if (!consultantId || !periodMonth) throw new Error("Select consultant and ensure period is open");
 
-      // Find latest submission of this type to copy from
       const { data: latest } = await supabase
         .from("deployment_submissions")
         .select("id, revision_no")
@@ -243,7 +315,6 @@ export default function DeploymentSchedulePage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSubmission) throw new Error("No submission selected");
-      // Delete old lines and re-insert
       await supabase.from("deployment_lines").delete().eq("submission_id", selectedSubmission.id);
       const toInsert = lines.filter(l => l.employee_id && l.allocation_pct > 0).map(l => ({
         submission_id: selectedSubmission.id,
@@ -290,13 +361,12 @@ export default function DeploymentSchedulePage() {
     mutationFn: async () => {
       const ids = Array.from(selectedIds);
       if (ids.length === 0) throw new Error("No submissions selected");
-      const updatePayload: any = {
-        status: reviewAction,
+      const { error } = await supabase.from("deployment_submissions").update({
+        status: reviewAction as any,
         reviewed_on: new Date().toISOString(),
         reviewed_by: user?.id || null,
         reviewer_comments: reviewComment || null,
-      };
-      const { error } = await supabase.from("deployment_submissions").update(updatePayload).in("id", ids);
+      }).in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -322,21 +392,13 @@ export default function DeploymentSchedulePage() {
   };
 
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+    setSelectedIds(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   };
 
   const toggleSelectAll = () => {
     const submittedSubs = submissions.filter(s => s.status === "submitted");
-    if (selectedIds.size === submittedSubs.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(submittedSubs.map(s => s.id)));
-    }
+    if (selectedIds.size === submittedSubs.length) setSelectedIds(new Set());
+    else setSelectedIds(new Set(submittedSubs.map(s => s.id)));
   };
 
   const hasOverAllocation = (() => {
@@ -351,9 +413,96 @@ export default function DeploymentSchedulePage() {
   })();
 
   const openReview = (action: "approved" | "rejected" | "returned") => {
-    setReviewAction(action);
-    setReviewComment("");
-    setReviewDialogOpen(true);
+    setReviewAction(action); setReviewComment(""); setReviewDialogOpen(true);
+  };
+
+  // Export template
+  const handleExportTemplate = () => {
+    const headers = ["Employee Name", "Worked Project", "Billed Project", "Service Order", "Purchase Order", "Allocation %"];
+    const empNames = employees.map(e => e.employee_name);
+    const projNames = projectsForType.map(p => p.project_name);
+    const soNums = serviceOrders.map(s => s.so_number);
+    const poNums = purchaseOrders.map(p => p.po_number);
+
+    // Include existing lines as rows, or empty rows with employee names pre-filled
+    const rows: string[][] = lines.length > 0
+      ? lines.map(l => [
+          employees.find(e => e.id === l.employee_id)?.employee_name || "",
+          allProjects.find(p => p.id === l.worked_project_id)?.project_name || "",
+          allProjects.find(p => p.id === l.billed_project_id)?.project_name || "",
+          serviceOrders.find(s => s.id === l.so_id)?.so_number || "",
+          purchaseOrders.find(p => p.id === l.po_id)?.po_number || "",
+          String(l.allocation_pct),
+        ])
+      : employees.map(e => [e.employee_name, "", "", "", "", ""]);
+
+    // Add reference sheet info
+    const refRows = [
+      [], ["--- REFERENCE (delete before import) ---"],
+      ["Available Employees:", ...empNames],
+      ["Available Projects:", ...projNames],
+      ["Available SOs:", ...soNums],
+      ["Available POs:", ...poNums],
+    ];
+
+    downloadCSV(
+      `deployment-${scheduleType}-${periodMonth}.csv`,
+      headers,
+      [...rows, ...refRows.map(r => r.map(String))]
+    );
+    toast.success("Template exported");
+  };
+
+  // Import CSV
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string;
+      const rows = parseCSV(text);
+      if (rows.length < 2) { toast.error("File is empty or has no data rows"); return; }
+
+      const dataRows = rows.slice(1).filter(r => r[0] && !r[0].startsWith("---") && !r[0].startsWith("Available"));
+      const errors: string[] = [];
+      const newLines: LineRow[] = [];
+
+      dataRows.forEach((row, i) => {
+        const [empName, workedProjName, billedProjName, soNum, poNum, allocStr] = row;
+        if (!empName?.trim()) return;
+
+        const emp = employees.find(e => e.employee_name.toLowerCase() === empName.trim().toLowerCase());
+        if (!emp) { errors.push(`Row ${i + 2}: Employee "${empName}" not found`); return; }
+
+        const workedProj = workedProjName ? allProjects.find(p => p.project_name.toLowerCase() === workedProjName.trim().toLowerCase()) : null;
+        const billedProj = billedProjName ? allProjects.find(p => p.project_name.toLowerCase() === billedProjName.trim().toLowerCase()) : null;
+        const so = soNum ? serviceOrders.find(s => s.so_number.toLowerCase() === soNum.trim().toLowerCase()) : null;
+        const po = poNum ? purchaseOrders.find(p => p.po_number.toLowerCase() === poNum.trim().toLowerCase()) : null;
+
+        const alloc = parseInt(allocStr) || 0;
+        if (alloc < 0 || alloc > 100) { errors.push(`Row ${i + 2}: Invalid allocation ${allocStr}`); return; }
+
+        newLines.push({
+          month: periodMonth,
+          employee_id: emp.id,
+          worked_project_id: workedProj?.id || "",
+          billed_project_id: billedProj?.id || "",
+          so_id: so?.id || "",
+          po_id: po?.id || "",
+          allocation_pct: alloc,
+        });
+      });
+
+      if (errors.length > 0) {
+        toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}${errors.length > 3 ? "..." : ""}`);
+      }
+      if (newLines.length > 0) {
+        setLines(prev => [...prev, ...newLines]);
+        toast.success(`${newLines.length} line(s) imported`);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
   };
 
   if (!openPeriod) {
@@ -407,8 +556,13 @@ export default function DeploymentSchedulePage() {
             <div className="flex items-center gap-2 mb-4">
               <Button variant="outline" size="sm" onClick={addLine}><Plus size={14} className="mr-1.5" />Add Row</Button>
               <div className="ml-auto flex items-center gap-2">
-                <Button variant="outline" size="sm"><Download size={14} className="mr-1.5" />Export</Button>
-                <Button variant="outline" size="sm"><Upload size={14} className="mr-1.5" />Import</Button>
+                <Button variant="outline" size="sm" onClick={handleExportTemplate}>
+                  <FileSpreadsheet size={14} className="mr-1.5" />Export Template
+                </Button>
+                <input type="file" ref={importRef} accept=".csv" className="hidden" onChange={handleImportCSV} />
+                <Button variant="outline" size="sm" onClick={() => importRef.current?.click()}>
+                  <Upload size={14} className="mr-1.5" />Import CSV
+                </Button>
                 <Button variant="outline" size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Save size={14} className="mr-1.5" />}Save Draft
                 </Button>
@@ -416,6 +570,14 @@ export default function DeploymentSchedulePage() {
                   {submitMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Send size={14} className="mr-1.5" />}Submit
                 </Button>
               </div>
+            </div>
+          )}
+
+          {!isEditable && (
+            <div className="flex items-center gap-2 mb-4">
+              <Button variant="outline" size="sm" onClick={handleExportTemplate}>
+                <Download size={14} className="mr-1.5" />Export Data
+              </Button>
             </div>
           )}
 
@@ -437,7 +599,7 @@ export default function DeploymentSchedulePage() {
               </thead>
               <tbody>
                 {lines.length === 0 ? (
-                  <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">No lines yet. Click "Add Row" to start.</td></tr>
+                  <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">No lines yet. Click "Add Row" to start or import a CSV.</td></tr>
                 ) : (
                   lines.map((line, idx) => {
                     const emp = employees.find(e => e.id === line.employee_id);
@@ -462,7 +624,7 @@ export default function DeploymentSchedulePage() {
                           {isEditable ? (
                             <Select value={line.worked_project_id} onValueChange={(v) => updateLine(idx, "worked_project_id", v)}>
                               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                              <SelectContent>{allProjects.map(p => <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>)}</SelectContent>
+                              <SelectContent>{projectsForType.map(p => <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>)}</SelectContent>
                             </Select>
                           ) : <span className="text-xs">{allProjects.find(p => p.id === line.worked_project_id)?.project_name || "—"}</span>}
                         </td>
@@ -470,7 +632,7 @@ export default function DeploymentSchedulePage() {
                           {isEditable ? (
                             <Select value={line.billed_project_id} onValueChange={(v) => updateLine(idx, "billed_project_id", v)}>
                               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                              <SelectContent>{allProjects.map(p => <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>)}</SelectContent>
+                              <SelectContent>{poProjects.map(p => <SelectItem key={p.id} value={p.id}>{p.project_name}</SelectItem>)}</SelectContent>
                             </Select>
                           ) : <span className="text-xs">{allProjects.find(p => p.id === line.billed_project_id)?.project_name || "—"}</span>}
                         </td>
@@ -517,8 +679,18 @@ export default function DeploymentSchedulePage() {
             </table>
           </div>
 
-          <div className="mt-4 text-xs text-muted-foreground">
-            {lines.length} line(s) · Revision #{selectedSubmission.revision_no} · {selectedSubmission.schedule_type}
+          <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
+            <span>{lines.length} line(s)</span>
+            <span>·</span>
+            <span>Revision #{selectedSubmission.revision_no}</span>
+            <span>·</span>
+            <span className="capitalize">{selectedSubmission.schedule_type}</span>
+            {scheduleType !== "workload" && poProjects.length > 0 && (
+              <>
+                <span>·</span>
+                <span>Projects from PO items ({poProjects.length})</span>
+              </>
+            )}
           </div>
         </div>
       </AppLayout>
@@ -552,7 +724,6 @@ export default function DeploymentSchedulePage() {
             </SelectContent>
           </Select>
 
-          {/* Bulk review actions */}
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-2 ml-auto">
               <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
