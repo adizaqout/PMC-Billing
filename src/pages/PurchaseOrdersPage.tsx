@@ -7,6 +7,7 @@ import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import { usePagination } from "@/hooks/usePagination";
+import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
 import type { ImportProgress } from "@/components/ExcelToolbar";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 import { useLookupValues } from "@/hooks/useLookupValues";
 import ColumnFilter from "@/components/ColumnFilter";
+import SortableHeader from "@/components/SortableHeader";
 
 type PO = Tables<"purchase_orders"> & { consultants?: { name: string } | null; service_orders?: { so_number: string } | null; projects?: { project_name: string; project_number: string | null } | null };
 interface POForm { po_number: string; consultant_id: string; so_id: string | null; po_reference: string | null; po_start_date: string | null; po_end_date: string | null; po_value: number | null; amount: number | null; portfolio: string | null; type: string | null; status: "active" | "inactive"; comments: string | null; revision_number: number | null; project_id: string | null; }
@@ -109,7 +111,8 @@ export default function PurchaseOrdersPage() {
     if (colFilters.status && !i.status.toLowerCase().includes(colFilters.status.toLowerCase())) return false;
     return true;
   });
-  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
+  const { sorted, sort, toggleSort } = useSort(filtered, "po_number", "asc");
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("po-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
@@ -161,18 +164,18 @@ export default function PurchaseOrdersPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">PO Number<ColumnFilter value={colFilters.po_number || ""} onChange={(v) => setColFilter("po_number", v)} label="PO Number" /></th>
-                <th className="data-table-header text-center px-4 py-2.5">Rev</th>
-                <th className="data-table-header text-left px-4 py-2.5">PO Line Item</th>
-                <th className="data-table-header text-left px-4 py-2.5">Consultant<ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></th>
-                <th className="data-table-header text-left px-4 py-2.5">SO<ColumnFilter value={colFilters.so || ""} onChange={(v) => setColFilter("so", v)} label="SO" /></th>
-                <th className="data-table-header text-left px-4 py-2.5">Project No.<ColumnFilter value={colFilters.project || ""} onChange={(v) => setColFilter("project", v)} label="Project" /></th>
-                <th className="data-table-header text-left px-4 py-2.5">Project Name</th>
-                <th className="data-table-header text-center px-4 py-2.5">Start</th>
-                <th className="data-table-header text-center px-4 py-2.5">End</th>
-                <th className="data-table-header text-right px-4 py-2.5">Amount (AED)</th>
-                <th className="data-table-header text-center px-4 py-2.5">Type<ColumnFilter value={colFilters.type || ""} onChange={(v) => setColFilter("type", v)} label="Type" /></th>
-                <th className="data-table-header text-center px-4 py-2.5">Status<ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="PO Number" sortKey="po_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.po_number || ""} onChange={(v) => setColFilter("po_number", v)} label="PO Number" /></SortableHeader></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Rev" sortKey="revision_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="PO Line Item" sortKey="po_reference" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="SO" sortKey="service_orders.so_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.so || ""} onChange={(v) => setColFilter("so", v)} label="SO" /></SortableHeader></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Project No." sortKey="projects.project_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.project || ""} onChange={(v) => setColFilter("project", v)} label="Project" /></SortableHeader></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Project Name" sortKey="projects.project_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start" sortKey="po_start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End" sortKey="po_end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Amount (AED)" sortKey="po_value" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Type" sortKey="type" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.type || ""} onChange={(v) => setColFilter("type", v)} label="Type" /></SortableHeader></th>
+                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((item) => (
