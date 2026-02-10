@@ -11,8 +11,14 @@ import Dashboard from "./pages/Dashboard";
 import ConsultantsPage from "./pages/ConsultantsPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import EmployeesPage from "./pages/EmployeesPage";
+import FrameworkAgreementsPage from "./pages/FrameworkAgreementsPage";
+import ServiceOrdersPage from "./pages/ServiceOrdersPage";
+import PurchaseOrdersPage from "./pages/PurchaseOrdersPage";
+import InvoicesPage from "./pages/InvoicesPage";
+import PositionsPage from "./pages/PositionsPage";
 import DeploymentSchedulePage from "./pages/DeploymentSchedulePage";
 import PeriodControlPage from "./pages/PeriodControlPage";
+import AdminPage from "./pages/AdminPage";
 import PlaceholderPage from "./pages/PlaceholderPage";
 import NotFound from "./pages/NotFound";
 
@@ -32,16 +38,16 @@ const App = () => (
             <Route path="/consultants" element={<ProtectedRoute><ConsultantsPage /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute><ProjectsPage /></ProtectedRoute>} />
             <Route path="/employees" element={<ProtectedRoute><EmployeesPage /></ProtectedRoute>} />
+            <Route path="/framework-agreements" element={<ProtectedRoute><FrameworkAgreementsPage /></ProtectedRoute>} />
+            <Route path="/service-orders" element={<ProtectedRoute><ServiceOrdersPage /></ProtectedRoute>} />
+            <Route path="/purchase-orders" element={<ProtectedRoute><PurchaseOrdersPage /></ProtectedRoute>} />
+            <Route path="/invoices" element={<ProtectedRoute><InvoicesPage /></ProtectedRoute>} />
+            <Route path="/positions" element={<ProtectedRoute><PositionsPage /></ProtectedRoute>} />
             <Route path="/deployments" element={<ProtectedRoute><DeploymentSchedulePage /></ProtectedRoute>} />
             <Route path="/period-control" element={<ProtectedRoute><PeriodControlPage /></ProtectedRoute>} />
-            <Route path="/framework-agreements" element={<ProtectedRoute><PlaceholderPage title="Framework Agreements" subtitle="Manage framework agreements with consultants" /></ProtectedRoute>} />
-            <Route path="/service-orders" element={<ProtectedRoute><PlaceholderPage title="Service Orders" subtitle="Track service orders per consultant" /></ProtectedRoute>} />
-            <Route path="/purchase-orders" element={<ProtectedRoute><PlaceholderPage title="Purchase Orders" subtitle="Manage POs and PO line items" /></ProtectedRoute>} />
-            <Route path="/invoices" element={<ProtectedRoute><PlaceholderPage title="Invoices" subtitle="Track and validate invoices" /></ProtectedRoute>} />
-            <Route path="/positions" element={<ProtectedRoute><PlaceholderPage title="Positions" subtitle="Rate card with yearly rates linked to SOs" /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><PlaceholderPage title="Reports" subtitle="Baseline vs Actual vs Forecast and more" /></ProtectedRoute>} />
             <Route path="/ai-assistant" element={<ProtectedRoute><PlaceholderPage title="AI Assistant" subtitle="Ask questions about your data" /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><PlaceholderPage title="Admin Panel" subtitle="Users, groups, permissions, audit logs" /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>

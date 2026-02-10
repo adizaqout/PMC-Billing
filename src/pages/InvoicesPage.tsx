@@ -1,0 +1,129 @@
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import AppLayout from "@/components/AppLayout";
+import StatusBadge from "@/components/StatusBadge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+type Invoice = Tables<"invoices"> & { consultants?: { name: string } | null; purchase_orders?: { po_number: string } | null };
+
+interface InvoiceForm {
+  invoice_number: string; invoice_month: string; consultant_id: string; po_id: string | null;
+  billed_amount_no_vat: number | null; paid_amount: number | null; status: "pending" | "paid" | "cancelled"; description: string | null;
+}
+
+const emptyForm: InvoiceForm = { invoice_number: "", invoice_month: "", consultant_id: "", po_id: null, billed_amount_no_vat: null, paid_amount: null, status: "pending", description: null };
+const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(v) : "—";
+
+export default function InvoicesPage() {
+  const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Invoice | null>(null);
+  const [form, setForm] = useState<InvoiceForm>(emptyForm);
+  const queryClient = useQueryClient();
+
+  const { data: items = [], isLoading } = useQuery({
+    queryKey: ["invoices"],
+    queryFn: async () => { const { data, error } = await supabase.from("invoices").select("*, consultants(name), purchase_orders(po_number)").order("invoice_month", { ascending: false }); if (error) throw error; return data as Invoice[]; },
+  });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
+  const { data: pos = [] } = useQuery({ queryKey: ["po-list"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("id, po_number").eq("status", "active").order("po_number"); if (error) throw error; return data as { id: string; po_number: string }[]; } });
+
+  const upsertMutation = useMutation({
+    mutationFn: async (values: InvoiceForm & { id?: string }) => {
+      const payload: any = { invoice_number: values.invoice_number, invoice_month: values.invoice_month, consultant_id: values.consultant_id, po_id: values.po_id || null, billed_amount_no_vat: values.billed_amount_no_vat, paid_amount: values.paid_amount, status: values.status, description: values.description || null };
+      if (values.id) { const { error } = await supabase.from("invoices").update(payload).eq("id", values.id); if (error) throw error; }
+      else { const { error } = await supabase.from("invoices").insert(payload as TablesInsert<"invoices">); if (error) throw error; }
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); toast.success(editing ? "Updated" : "Created"); closeDialog(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+  const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("invoices").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Deleted"); }, onError: (e: Error) => toast.error(e.message) });
+
+  const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
+  const openEdit = (item: Invoice) => { setEditing(item); setForm({ invoice_number: item.invoice_number, invoice_month: item.invoice_month, consultant_id: item.consultant_id, po_id: item.po_id, billed_amount_no_vat: item.billed_amount_no_vat, paid_amount: item.paid_amount, status: item.status, description: item.description }); setDialogOpen(true); };
+  const closeDialog = () => { setDialogOpen(false); setEditing(null); };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.invoice_number.trim()) { toast.error("Invoice number is required"); return; }
+    if (!form.invoice_month.trim()) { toast.error("Invoice month is required"); return; }
+    if (!form.consultant_id) { toast.error("Consultant is required"); return; }
+    upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
+  };
+
+  const filtered = items.filter((i) => i.invoice_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+
+  return (
+    <AppLayout>
+      <div className="animate-fade-in">
+        <div className="page-header">
+          <div><h1 className="page-title">Invoices</h1><p className="page-subtitle">Track and validate invoices</p></div>
+          <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Invoice</Button>
+        </div>
+        <div className="bg-card rounded-md border">
+          <div className="px-4 py-3 border-b flex items-center gap-3">
+            <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
+            <span className="text-xs text-muted-foreground">{filtered.length} records</span>
+          </div>
+          <div className="overflow-x-auto">
+            {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No records found</div> : (
+              <table className="w-full text-sm"><thead><tr className="border-b">
+                <th className="data-table-header text-left px-4 py-2.5">Invoice No.</th>
+                <th className="data-table-header text-left px-4 py-2.5">Month</th>
+                <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
+                <th className="data-table-header text-left px-4 py-2.5">PO</th>
+                <th className="data-table-header text-right px-4 py-2.5">Billed (AED)</th>
+                <th className="data-table-header text-right px-4 py-2.5">Paid (AED)</th>
+                <th className="data-table-header text-center px-4 py-2.5">Status</th>
+                <th className="data-table-header w-10"></th>
+              </tr></thead>
+              <tbody>{filtered.map((item) => (
+                <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                  <td className="px-4 py-2.5 font-mono font-medium">{item.invoice_number}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs">{item.invoice_month}</td>
+                  <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
+                  <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.purchase_orders?.po_number || "—"}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">{fmt(item.billed_amount_no_vat)}</td>
+                  <td className="px-4 py-2.5 text-right font-mono">{fmt(item.paid_amount)}</td>
+                  <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>
+                  <td className="px-4 py-2.5 text-center">
+                    <DropdownMenu><DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => openEdit(item)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(item.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
+                  </td>
+                </tr>
+              ))}</tbody></table>
+            )}
+          </div>
+        </div>
+      </div>
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>{editing ? "Edit Invoice" : "Add Invoice"}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5"><Label>Invoice Number *</Label><Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Invoice Month * (YYYY-MM)</Label><Input value={form.invoice_month} onChange={(e) => setForm({ ...form, invoice_month: e.target.value })} placeholder="2026-02" /></div>
+              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Purchase Order</Label><Select value={form.po_id || "none"} onValueChange={(v) => setForm({ ...form, po_id: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="None" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{pos.map((p) => <SelectItem key={p.id} value={p.id}>{p.po_number}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Billed Amount (AED)</Label><Input type="number" step="0.01" value={form.billed_amount_no_vat ?? ""} onChange={(e) => setForm({ ...form, billed_amount_no_vat: e.target.value ? parseFloat(e.target.value) : null })} /></div>
+              <div className="space-y-1.5"><Label>Paid Amount (AED)</Label><Input type="number" step="0.01" value={form.paid_amount ?? ""} onChange={(e) => setForm({ ...form, paid_amount: e.target.value ? parseFloat(e.target.value) : null })} /></div>
+              <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select></div>
+              <div className="col-span-2 space-y-1.5"><Label>Description</Label><Textarea value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value || null })} rows={2} /></div>
+            </div>
+            <DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button type="submit" disabled={upsertMutation.isPending}>{upsertMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}{editing ? "Update" : "Create"}</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </AppLayout>
+  );
+}

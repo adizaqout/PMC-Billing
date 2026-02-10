@@ -272,7 +272,7 @@ export type Database = {
           id: string
           position_id: string | null
           start_date: string | null
-          status: Database["public"]["Enums"]["record_status"]
+          status: string
           updated_at: string
           updated_by: string | null
         }
@@ -286,7 +286,7 @@ export type Database = {
           id?: string
           position_id?: string | null
           start_date?: string | null
-          status?: Database["public"]["Enums"]["record_status"]
+          status?: string
           updated_at?: string
           updated_by?: string | null
         }
@@ -300,7 +300,7 @@ export type Database = {
           id?: string
           position_id?: string | null
           start_date?: string | null
-          status?: Database["public"]["Enums"]["record_status"]
+          status?: string
           updated_at?: string
           updated_by?: string | null
         }
@@ -513,6 +513,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      lookup_values: {
+        Row: {
+          category: string
+          created_at: string
+          id: string
+          is_active: boolean
+          label: string
+          sort_order: number
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label: string
+          sort_order?: number
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          label?: string
+          sort_order?: number
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
       }
       notifications: {
         Row: {

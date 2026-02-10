@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import type { Tables } from "@/integrations/supabase/types";
+import { useLookupValues } from "@/hooks/useLookupValues";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -14,19 +15,28 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 
 type Employee = Tables<"employees"> & { consultants?: { name: string } | null; positions?: { position_name: string } | null };
-type EmployeeInsert = TablesInsert<"employees">;
-type Consultant = Tables<"consultants">;
+type Consultant = { id: string; name: string };
 
-const emptyForm: Partial<EmployeeInsert> = {
-  employee_name: "", consultant_id: "", experience_years: null, status: "active",
+interface EmployeeForm {
+  employee_name: string;
+  consultant_id: string;
+  experience_years: number | null;
+  start_date: string | null;
+  end_date: string | null;
+  status: string;
+}
+
+const emptyForm: EmployeeForm = {
+  employee_name: "", consultant_id: "", experience_years: null, start_date: null, end_date: null, status: "active",
 };
 
 export default function EmployeesPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
-  const [form, setForm] = useState<Partial<EmployeeInsert>>(emptyForm);
+  const [form, setForm] = useState<EmployeeForm>(emptyForm);
   const queryClient = useQueryClient();
+  const { data: statuses = [] } = useLookupValues("employee_status");
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ["employees"],
@@ -45,17 +55,25 @@ export default function EmployeesPage() {
     queryFn: async () => {
       const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name");
       if (error) throw error;
-      return data as Pick<Consultant, "id" | "name">[];
+      return data as Consultant[];
     },
   });
 
   const upsertMutation = useMutation({
-    mutationFn: async (values: Partial<EmployeeInsert> & { id?: string }) => {
+    mutationFn: async (values: EmployeeForm & { id?: string }) => {
+      const payload = {
+        employee_name: values.employee_name,
+        consultant_id: values.consultant_id,
+        experience_years: values.experience_years,
+        start_date: values.start_date || null,
+        end_date: values.end_date || null,
+        status: values.status as any,
+      };
       if (values.id) {
-        const { error } = await supabase.from("employees").update(values).eq("id", values.id);
+        const { error } = await supabase.from("employees").update(payload).eq("id", values.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("employees").insert(values as EmployeeInsert);
+        const { error } = await supabase.from("employees").insert({ ...payload, consultant_id: values.consultant_id } as any);
         if (error) throw error;
       }
     },
@@ -82,14 +100,21 @@ export default function EmployeesPage() {
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (emp: Employee) => {
     setEditing(emp);
-    setForm({ employee_name: emp.employee_name, consultant_id: emp.consultant_id, experience_years: emp.experience_years, status: emp.status });
+    setForm({
+      employee_name: emp.employee_name,
+      consultant_id: emp.consultant_id,
+      experience_years: emp.experience_years,
+      start_date: emp.start_date,
+      end_date: emp.end_date,
+      status: emp.status,
+    });
     setDialogOpen(true);
   };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.employee_name?.trim()) { toast.error("Name is required"); return; }
+    if (!form.employee_name.trim()) { toast.error("Name is required"); return; }
     if (!form.consultant_id) { toast.error("Consultant is required"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
@@ -98,6 +123,8 @@ export default function EmployeesPage() {
     e.employee_name.toLowerCase().includes(search.toLowerCase()) ||
     (e.consultants?.name || "").toLowerCase().includes(search.toLowerCase())
   );
+
+  const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
   return (
     <AppLayout>
@@ -130,7 +157,9 @@ export default function EmployeesPage() {
                     <th className="data-table-header text-left px-4 py-2.5">Name</th>
                     <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
                     <th className="data-table-header text-left px-4 py-2.5">Position</th>
-                    <th className="data-table-header text-center px-4 py-2.5">Experience (Yrs)</th>
+                    <th className="data-table-header text-center px-4 py-2.5">Exp (Yrs)</th>
+                    <th className="data-table-header text-center px-4 py-2.5">Start Date</th>
+                    <th className="data-table-header text-center px-4 py-2.5">End Date</th>
                     <th className="data-table-header text-center px-4 py-2.5">Status</th>
                     <th className="data-table-header w-10"></th>
                   </tr>
@@ -142,6 +171,8 @@ export default function EmployeesPage() {
                       <td className="px-4 py-2.5">{emp.consultants?.name || "—"}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">{emp.positions?.position_name || "—"}</td>
                       <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.start_date)}</td>
+                      <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.end_date)}</td>
                       <td className="px-4 py-2.5 text-center"><StatusBadge status={emp.status} /></td>
                       <td className="px-4 py-2.5 text-center">
                         <DropdownMenu>
@@ -168,16 +199,14 @@ export default function EmployeesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-1.5">
                 <Label>Employee Name *</Label>
-                <Input value={form.employee_name || ""} onChange={(e) => setForm({ ...form, employee_name: e.target.value })} />
+                <Input value={form.employee_name} onChange={(e) => setForm({ ...form, employee_name: e.target.value })} />
               </div>
               <div className="col-span-2 space-y-1.5">
                 <Label>Consultant *</Label>
-                <Select value={form.consultant_id || ""} onValueChange={(v) => setForm({ ...form, consultant_id: v })}>
+                <Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}>
                   <SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger>
                   <SelectContent>
-                    {consultants.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                    ))}
+                    {consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
@@ -187,13 +216,20 @@ export default function EmployeesPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Status</Label>
-                <Select value={form.status || "active"} onValueChange={(v) => setForm({ ...form, status: v as "active" | "inactive" })}>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
+                    {statuses.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Start Date</Label>
+                <Input type="date" value={form.start_date || ""} onChange={(e) => setForm({ ...form, start_date: e.target.value || null })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>End Date</Label>
+                <Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} />
               </div>
             </div>
             <DialogFooter>
