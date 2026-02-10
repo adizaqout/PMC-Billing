@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, Settings2, ListChecks } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -55,6 +55,8 @@ function UsersTab() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
   const [roleForm, setRoleForm] = useState({ group_id: "", role: "pmc_user" as string });
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({ email: "", password: "", full_name: "", consultant_id: "", group_id: "", role: "pmc_user" });
   const queryClient = useQueryClient();
 
   const { data: profiles = [], isLoading } = useQuery({
@@ -71,6 +73,8 @@ function UsersTab() {
     queryKey: ["admin-user-roles"],
     queryFn: async () => { const { data, error } = await supabase.from("user_roles").select("*, groups(name)").order("created_at"); if (error) throw error; return data as UserRole[]; },
   });
+
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
 
   const addRoleMutation = useMutation({
     mutationFn: async (values: { user_id: string; group_id: string; role: string }) => {
@@ -96,7 +100,33 @@ function UsersTab() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
+  const createUserMutation = useMutation({
+    mutationFn: async () => {
+      if (!createForm.email || !createForm.password) throw new Error("Email and password required");
+      if (createForm.password.length < 6) throw new Error("Password must be at least 6 characters");
+      const { data, error } = await supabase.functions.invoke("create-user", {
+        body: {
+          email: createForm.email,
+          password: createForm.password,
+          full_name: createForm.full_name || createForm.email,
+          consultant_id: createForm.consultant_id || null,
+          group_id: createForm.group_id || null,
+          role: createForm.role || null,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-user-roles"] });
+      toast.success("User created successfully");
+      setCreateDialogOpen(false);
+      setCreateForm({ email: "", password: "", full_name: "", consultant_id: "", group_id: "", role: "pmc_user" });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const openAssignRole = (p: Profile) => { setSelectedProfile(p); setRoleForm({ group_id: groups[0]?.id || "", role: "pmc_user" }); setDialogOpen(true); };
 
@@ -108,6 +138,7 @@ function UsersTab() {
         <div className="px-4 py-3 border-b flex items-center gap-3">
           <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
           <span className="text-xs text-muted-foreground">{filtered.length} users</span>
+          <Button size="sm" onClick={() => setCreateDialogOpen(true)}><UserPlus size={14} className="mr-1.5" />Create User</Button>
         </div>
         <div className="overflow-x-auto">
           {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : (
@@ -149,6 +180,7 @@ function UsersTab() {
         </div>
       </div>
 
+      {/* Assign Role Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>Assign Role to {selectedProfile?.email}</DialogTitle></DialogHeader>
@@ -156,6 +188,42 @@ function UsersTab() {
             <div className="space-y-1.5"><Label>Group</Label><Select value={roleForm.group_id} onValueChange={(v) => setRoleForm({ ...roleForm, group_id: v })}><SelectTrigger><SelectValue placeholder="Select group" /></SelectTrigger><SelectContent>{groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}</SelectContent></Select></div>
             <div className="space-y-1.5"><Label>Role</Label><Select value={roleForm.role} onValueChange={(v) => setRoleForm({ ...roleForm, role: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{APP_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent></Select></div>
             <DialogFooter><Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button><Button type="submit" disabled={addRoleMutation.isPending}>{addRoleMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}Assign</Button></DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create User Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>Create New User</DialogTitle></DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); createUserMutation.mutate(); }} className="space-y-4">
+            <div className="space-y-1.5"><Label>Email *</Label><Input type="email" value={createForm.email} onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })} placeholder="user@example.com" /></div>
+            <div className="space-y-1.5"><Label>Temporary Password *</Label><Input type="password" value={createForm.password} onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })} placeholder="Min 6 characters" /></div>
+            <div className="space-y-1.5"><Label>Full Name</Label><Input value={createForm.full_name} onChange={(e) => setCreateForm({ ...createForm, full_name: e.target.value })} placeholder="John Doe" /></div>
+            <div className="space-y-1.5"><Label>Consultant</Label>
+              <Select value={createForm.consultant_id || "none"} onValueChange={(v) => setCreateForm({ ...createForm, consultant_id: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">None</SelectItem>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label>Group</Label>
+              <Select value={createForm.group_id || "none"} onValueChange={(v) => setCreateForm({ ...createForm, group_id: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                <SelectContent><SelectItem value="none">None</SelectItem>{groups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5"><Label>Role</Label>
+              <Select value={createForm.role} onValueChange={(v) => setCreateForm({ ...createForm, role: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{APP_ROLES.map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={createUserMutation.isPending}>
+                {createUserMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <UserPlus size={14} className="mr-1.5" />}Create User
+              </Button>
+            </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
