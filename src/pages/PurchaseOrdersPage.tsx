@@ -5,6 +5,8 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import TablePagination from "@/components/TablePagination";
+import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +95,7 @@ export default function PurchaseOrdersPage() {
   };
 
   const filtered = items.filter((i) => i.po_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("po-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
@@ -158,7 +161,7 @@ export default function PurchaseOrdersPage() {
                 <th className="data-table-header text-center px-4 py-2.5">Status</th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
-              <tbody>{filtered.map((item) => (
+              <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-2.5 font-mono font-medium">{item.po_number}</td>
                   <td className="px-4 py-2.5 text-center font-mono">{item.revision_number ?? 0}</td>
@@ -180,6 +183,7 @@ export default function PurchaseOrdersPage() {
               ))}</tbody></table>
             )}
           </div>
+          {filtered.length > 0 && <TablePagination totalItems={totalItems} pageSize={pageSize} currentPage={currentPage} onPageChange={setCurrentPage} onPageSizeChange={setPageSize} />}
         </div>
       </div>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

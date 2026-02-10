@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import TablePagination from "@/components/TablePagination";
+import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +78,7 @@ export default function PositionsPage() {
 
   const numSet = (key: keyof PosForm, v: string) => setForm({ ...form, [key]: v ? parseFloat(v) : null });
   const filtered = items.filter((i) => i.position_name.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("positions.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("positions-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
@@ -135,7 +138,7 @@ export default function PositionsPage() {
                 <th className="data-table-header text-center px-4 py-2.5">To</th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
-              <tbody>{filtered.map((item) => (
+              <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-2.5 font-medium">{item.position_name}</td>
                   <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
@@ -154,6 +157,7 @@ export default function PositionsPage() {
               ))}</tbody></table>
             )}
           </div>
+          {filtered.length > 0 && <TablePagination totalItems={totalItems} pageSize={pageSize} currentPage={currentPage} onPageChange={setCurrentPage} onPageSizeChange={setPageSize} />}
         </div>
       </div>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

@@ -5,6 +5,8 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import TablePagination from "@/components/TablePagination";
+import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -71,6 +73,7 @@ export default function InvoicesPage() {
   };
 
   const filtered = items.filter((i) => i.invoice_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("invoices.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", po_number: i.purchase_orders?.po_number || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "PO Numbers": allPOs.map(p => p.po_number) }); toast.success("Template downloaded"); };
@@ -126,7 +129,7 @@ export default function InvoicesPage() {
                 <th className="data-table-header text-center px-4 py-2.5">Status</th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
-              <tbody>{filtered.map((item) => (
+              <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-2.5 font-mono font-medium">{item.invoice_number}</td>
                   <td className="px-4 py-2.5 font-mono text-xs">{item.invoice_month}</td>
@@ -143,6 +146,7 @@ export default function InvoicesPage() {
               ))}</tbody></table>
             )}
           </div>
+          {filtered.length > 0 && <TablePagination totalItems={totalItems} pageSize={pageSize} currentPage={currentPage} onPageChange={setCurrentPage} onPageSizeChange={setPageSize} />}
         </div>
       </div>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
