@@ -5,6 +5,8 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import TablePagination from "@/components/TablePagination";
+import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,6 +110,7 @@ export default function ProjectsPage() {
     p.project_name.toLowerCase().includes(search.toLowerCase()) ||
     ((p as any).project_number || "").toLowerCase().includes(search.toLowerCase())
   );
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => {
     exportToExcel("projects.xlsx", columns, filtered.map(p => ({ ...p, project_number: (p as any).project_number || "" })));
@@ -189,7 +192,7 @@ export default function ProjectsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((p) => (
+                  {paginatedItems.map((p) => (
                     <tr key={p.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                       <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{(p as any).project_number || "—"}</td>
                       <td className="px-4 py-2.5 font-medium">{p.project_name}</td>
@@ -214,6 +217,7 @@ export default function ProjectsPage() {
               </table>
             )}
           </div>
+          {filtered.length > 0 && <TablePagination totalItems={totalItems} pageSize={pageSize} currentPage={currentPage} onPageChange={setCurrentPage} onPageSizeChange={setPageSize} />}
         </div>
       </div>
 

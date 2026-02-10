@@ -10,6 +10,9 @@ import {
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import StatusBadge from "@/components/StatusBadge";
 import AppLayout from "@/components/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 
 const kpis = [
   { label: "Billed YTD", value: "AED 12.4M", change: "+8.2%", color: "kpi-blue", icon: TrendingUp },
@@ -51,13 +54,25 @@ const submissions = [
 ];
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const { data: profile } = useQuery({
+    queryKey: ["my-profile", user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase.from("profiles").select("full_name").eq("user_id", user.id).maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+  const displayName = profile?.full_name || user?.email?.split("@")[0] || "User";
+
   return (
     <AppLayout>
       <div className="animate-fade-in">
         {/* Header */}
         <div className="page-header">
           <div>
-            <h1 className="page-title">Dashboard</h1>
+            <h1 className="page-title">Welcome, {displayName}</h1>
             <p className="page-subtitle">PMC Billing & Deployment Control Overview</p>
           </div>
           <div className="flex items-center gap-3">

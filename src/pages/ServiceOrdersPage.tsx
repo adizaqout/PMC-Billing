@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import TablePagination from "@/components/TablePagination";
+import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +72,7 @@ export default function ServiceOrdersPage() {
   };
 
   const filtered = items.filter((i) => i.so_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
@@ -123,7 +126,7 @@ export default function ServiceOrdersPage() {
                 <th className="data-table-header text-right px-4 py-2.5">Value (AED)</th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
-              <tbody>{filtered.map((item) => (
+              <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-2.5 font-mono font-medium">{item.so_number}</td>
                   <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>
@@ -139,6 +142,7 @@ export default function ServiceOrdersPage() {
               ))}</tbody></table>
             )}
           </div>
+          {filtered.length > 0 && <TablePagination totalItems={totalItems} pageSize={pageSize} currentPage={currentPage} onPageChange={setCurrentPage} onPageSizeChange={setPageSize} />}
         </div>
       </div>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

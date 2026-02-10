@@ -6,6 +6,8 @@ import { useLookupValues } from "@/hooks/useLookupValues";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import TablePagination from "@/components/TablePagination";
+import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -72,6 +74,7 @@ export default function EmployeesPage() {
   };
 
   const filtered = employees.filter((e) => e.employee_name.toLowerCase().includes(search.toLowerCase()) || (e.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
   const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, consultant_name: e.consultants?.name || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
@@ -127,7 +130,7 @@ export default function EmployeesPage() {
                 <th className="data-table-header text-center px-4 py-2.5">Status</th>
                 <th className="data-table-header w-10"></th>
               </tr></thead>
-              <tbody>{filtered.map((emp) => (
+              <tbody>{paginatedItems.map((emp) => (
                 <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   <td className="px-4 py-2.5 font-medium">{emp.employee_name}</td>
                   <td className="px-4 py-2.5">{emp.consultants?.name || "—"}</td>
@@ -144,6 +147,7 @@ export default function EmployeesPage() {
               ))}</tbody></table>
             )}
           </div>
+          {filtered.length > 0 && <TablePagination totalItems={totalItems} pageSize={pageSize} currentPage={currentPage} onPageChange={setCurrentPage} onPageSizeChange={setPageSize} />}
         </div>
       </div>
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

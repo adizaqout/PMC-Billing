@@ -5,6 +5,8 @@ import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import ExcelToolbar from "@/components/ExcelToolbar";
+import TablePagination from "@/components/TablePagination";
+import { usePagination } from "@/hooks/usePagination";
 import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,6 +97,7 @@ export default function ConsultantsPage() {
   };
 
   const filtered = consultants.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
+  const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns); toast.success("Template downloaded"); };
@@ -162,7 +165,7 @@ export default function ConsultantsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((c) => (
+                  {paginatedItems.map((c) => (
                     <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                       <td className="px-4 py-2.5 font-medium">{c.name}</td>
                       <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.commercial_registration_no || "—"}</td>
@@ -185,6 +188,7 @@ export default function ConsultantsPage() {
               </table>
             )}
           </div>
+          {filtered.length > 0 && <TablePagination totalItems={totalItems} pageSize={pageSize} currentPage={currentPage} onPageChange={setCurrentPage} onPageSizeChange={setPageSize} />}
         </div>
       </div>
 
