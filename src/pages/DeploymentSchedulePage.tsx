@@ -339,15 +339,20 @@ export default function DeploymentSchedulePage() {
     mutationFn: async () => {
       if (!consultantId || !periodMonth) throw new Error("Select consultant and ensure period is open");
 
+      // Check if latest submission for this type/month is in a non-revisable state
       const { data: latest } = await supabase
         .from("deployment_submissions")
-        .select("id, revision_no")
+        .select("id, revision_no, status")
         .eq("consultant_id", consultantId)
         .eq("schedule_type", newType as any)
         .eq("month", periodMonth)
         .order("revision_no", { ascending: false })
         .limit(1)
         .maybeSingle();
+
+      if (latest && ["approved", "submitted", "in_review"].includes(latest.status)) {
+        throw new Error(`Cannot create a new revision — the latest submission is "${latest.status.replace("_", " ")}". Only rejected or returned submissions can be revised.`);
+      }
 
       const newRevision = (latest?.revision_no || 0) + 1;
 
