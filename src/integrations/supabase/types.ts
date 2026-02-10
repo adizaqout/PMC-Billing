@@ -272,6 +272,7 @@ export type Database = {
           consultant_id: string
           created_at: string
           created_by: string | null
+          employee_id: string | null
           employee_name: string
           end_date: string | null
           experience_years: number | null
@@ -286,6 +287,7 @@ export type Database = {
           consultant_id: string
           created_at?: string
           created_by?: string | null
+          employee_id?: string | null
           employee_name: string
           end_date?: string | null
           experience_years?: number | null
@@ -300,6 +302,7 @@ export type Database = {
           consultant_id?: string
           created_at?: string
           created_by?: string | null
+          employee_id?: string | null
           employee_name?: string
           end_date?: string | null
           experience_years?: number | null
