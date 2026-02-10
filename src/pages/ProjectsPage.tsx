@@ -26,10 +26,20 @@ type ProjectInsert = TablesInsert<"projects">;
 
 const emptyForm: Partial<ProjectInsert> = {
   project_name: "", project_number: "", entity: "", portfolio: "", project_type: "", classification: "",
-  latest_budget: null, latest_pmc_budget: null, status: "active",
+  latest_budget: null, latest_pmc_budget: null, start_date: null, end_date: null, status: "active",
 };
 
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(v) : "—";
+const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+const excelDateToISO = (v: any): string | null => {
+  if (v == null || String(v).trim() === "") return null;
+  const s = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  const n = Number(s);
+  if (!isNaN(n) && n > 0) { const d = new Date(Math.round((n - 25569) * 86400000)); return d.toISOString().slice(0, 10); }
+  const parsed = new Date(s);
+  return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+};
 
 const columns = [
   { header: "Project Number", key: "project_number", width: 18 },
@@ -38,6 +48,8 @@ const columns = [
   { header: "Portfolio", key: "portfolio", width: 20 },
   { header: "Type", key: "project_type", width: 15 },
   { header: "Classification", key: "classification", width: 15 },
+  { header: "Start Date", key: "start_date", width: 14 },
+  { header: "End Date", key: "end_date", width: 14 },
   { header: "Budget", key: "latest_budget", width: 15 },
   { header: "PMC Budget", key: "latest_pmc_budget", width: 15 },
   { header: "Status", key: "status", width: 10 },
@@ -95,7 +107,7 @@ export default function ProjectsPage() {
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (p: Project) => {
     setEditing(p);
-    setForm({ project_name: p.project_name, project_number: (p as any).project_number || "", entity: p.entity, portfolio: p.portfolio, project_type: p.project_type, classification: p.classification, latest_budget: p.latest_budget, latest_pmc_budget: p.latest_pmc_budget, status: p.status });
+    setForm({ project_name: p.project_name, project_number: (p as any).project_number || "", entity: p.entity, portfolio: p.portfolio, project_type: p.project_type, classification: p.classification, start_date: p.start_date, end_date: p.end_date, latest_budget: p.latest_budget, latest_pmc_budget: p.latest_pmc_budget, status: p.status });
     setDialogOpen(true);
   };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
@@ -109,6 +121,7 @@ export default function ProjectsPage() {
       const numDup = projects.find(p => (p as any).project_number?.toLowerCase() === form.project_number!.toLowerCase().trim() && p.id !== editing?.id);
       if (numDup) { toast.error("A project with this number already exists"); return; }
     }
+    if (form.start_date && form.end_date && form.end_date < form.start_date) { toast.error("End date must be after start date"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
@@ -142,12 +155,13 @@ export default function ProjectsPage() {
     const total = rows.length - 1;
     const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
     for (let i = 1; i < rows.length; i++) {
-      const [projNum, projName, entity, portfolio, projType, classification, budget, pmcBudget, status] = rows[i];
+      const [projNum, projName, entity, portfolio, projType, classification, startDate, endDate, budget, pmcBudget, status] = rows[i];
       if (!projName?.trim()) { result.processed++; onProgress({ ...result }); continue; }
       const { error } = await supabase.from("projects").insert({
         project_number: projNum?.trim() || null, project_name: projName.trim(),
         entity: entity?.trim() || null, portfolio: portfolio?.trim() || null,
         project_type: projType?.trim() || null, classification: classification?.trim() || null,
+        start_date: excelDateToISO(startDate), end_date: excelDateToISO(endDate),
         latest_budget: budget ? parseFloat(String(budget)) : null,
         latest_pmc_budget: pmcBudget ? parseFloat(String(pmcBudget)) : null,
         status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
@@ -195,6 +209,8 @@ export default function ProjectsPage() {
                     <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Project Name" sortKey="project_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.project_name || ""} onChange={(v) => setColFilter("project_name", v)} label="Project Name" /></SortableHeader></th>
                     <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Entity" sortKey="entity" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.entity || ""} onChange={(v) => setColFilter("entity", v)} label="Entity" /></SortableHeader></th>
                     <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Portfolio" sortKey="portfolio" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.portfolio || ""} onChange={(v) => setColFilter("portfolio", v)} label="Portfolio" /></SortableHeader></th>
+                    <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                    <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
                     <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Budget (AED)" sortKey="latest_budget" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
                     <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="PMC Budget" sortKey="latest_pmc_budget" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
                     <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Type" sortKey="project_type" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.type || ""} onChange={(v) => setColFilter("type", v)} label="Type" /></SortableHeader></th>
@@ -209,6 +225,8 @@ export default function ProjectsPage() {
                       <td className="px-4 py-2.5 font-medium">{p.project_name}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">{p.entity || "—"}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">{p.portfolio || "—"}</td>
+                      <td className="px-4 py-2.5 text-center text-xs">{fmtDate(p.start_date)}</td>
+                      <td className="px-4 py-2.5 text-center text-xs">{fmtDate(p.end_date)}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{fmt(p.latest_budget)}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{fmt(p.latest_pmc_budget)}</td>
                       <td className="px-4 py-2.5 text-center text-xs">{p.project_type || "—"}</td>
@@ -260,6 +278,14 @@ export default function ProjectsPage() {
               <div className="space-y-1.5">
                 <Label>Classification</Label>
                 <Input value={form.classification || ""} onChange={(e) => setForm({ ...form, classification: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Start Date</Label>
+                <Input type="date" value={form.start_date || ""} onChange={(e) => setForm({ ...form, start_date: e.target.value || null })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>End Date</Label>
+                <Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} min={form.start_date || undefined} />
               </div>
               <div className="space-y-1.5">
                 <Label>Budget (AED)</Label>
