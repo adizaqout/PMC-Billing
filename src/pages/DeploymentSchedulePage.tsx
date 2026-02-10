@@ -98,6 +98,17 @@ export default function DeploymentSchedulePage() {
   ];
   const { visibleColumns: subVisibleCols, setVisibleColumns: setSubVisibleCols } = useColumnVisibility(subTableCols);
 
+  // Detail view state
+  const [detailSearch, setDetailSearch] = useState("");
+  const [detailColFilters, setDetailColFilters] = useState<Record<string, string>>({});
+  const setDetailColFilter = (key: string, value: string) => setDetailColFilters(prev => ({ ...prev, [key]: value }));
+  const detailTableCols: ColumnDef[] = [
+    { key: "month", label: "Month" }, { key: "emp_id", label: "Emp ID" }, { key: "emp_name", label: "Employee Name" },
+    { key: "pos_id", label: "Position ID" }, { key: "pos_name", label: "Position Name" },
+    { key: "rate_year", label: "Rate Year" }, { key: "rate", label: "Rate" }, { key: "man_months", label: "Man-Months" },
+  ];
+  const { visibleColumns: detailVisibleCols, setVisibleColumns: setDetailVisibleCols } = useColumnVisibility(detailTableCols);
+
   const { data: userRole } = useQuery({
     queryKey: ["user-role", user?.id],
     queryFn: async () => {
@@ -326,13 +337,27 @@ export default function DeploymentSchedulePage() {
   }, [poItems]);
 
   // Load lines for selected submission
+  // Fetch ALL lines for selected submission (paginate past Supabase 1000-row limit)
   const { data: existingLines = [] } = useQuery({
     queryKey: ["deployment-lines", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
-      const { data, error } = await supabase.from("deployment_lines").select("*").eq("submission_id", selectedSubmission.id);
-      if (error) throw error;
-      return data as DeploymentLine[];
+      const allLines: DeploymentLine[] = [];
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("deployment_lines")
+          .select("*")
+          .eq("submission_id", selectedSubmission.id)
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        allLines.push(...(data as DeploymentLine[]));
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      return allLines;
     },
     enabled: !!selectedSubmission,
   });
@@ -885,11 +910,25 @@ export default function DeploymentSchedulePage() {
 
   const handleImportComplete = () => {
     queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
-    // Reload rows from DB
+    // Reload all rows from DB (paginate past 1000-row limit)
     if (selectedSubmission) {
-      supabase.from("deployment_lines").select("*").eq("submission_id", selectedSubmission.id).then(({ data }) => {
-        if (data) setRows(buildUIRows(data));
-      });
+      (async () => {
+        const allLines: DeploymentLine[] = [];
+        const PAGE_SIZE = 1000;
+        let from = 0;
+        while (true) {
+          const { data } = await supabase
+            .from("deployment_lines")
+            .select("*")
+            .eq("submission_id", selectedSubmission.id)
+            .range(from, from + PAGE_SIZE - 1);
+          if (!data || data.length === 0) break;
+          allLines.push(...(data as DeploymentLine[]));
+          if (data.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+        }
+        setRows(buildUIRows(allLines));
+      })();
     }
   };
 
@@ -908,6 +947,44 @@ export default function DeploymentSchedulePage() {
   });
   const { sorted: sortedSubs, sort: subSort, toggleSort: toggleSubSort } = useSort(filteredSubs, "month", "desc");
   const { paginatedItems: paginatedSubs, pageSize: subPageSize, setPageSize: setSubPageSize, currentPage: subCurrentPage, setCurrentPage: setSubCurrentPage, totalItems: subTotalItems } = usePagination(sortedSubs);
+
+  // ---- Detail view filtering & pagination (must be before any early return) ----
+  const filteredDetailRows = useMemo(() => {
+    return rows.filter(row => {
+      if (detailSearch) {
+        const q = detailSearch.toLowerCase();
+        const emp = employees.find(e => e.id === row.employee_id);
+        const pos = positions.find(p => p.id === row.position_id);
+        const match = (row.month || "").includes(q) ||
+          ((emp as any)?.employee_id || "").toLowerCase().includes(q) ||
+          (emp?.employee_name || "").toLowerCase().includes(q) ||
+          (pos?.position_id || "").toLowerCase().includes(q) ||
+          (pos?.position_name || "").toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      if (detailColFilters.month && !(row.month || "").toLowerCase().includes(detailColFilters.month.toLowerCase())) return false;
+      if (detailColFilters.emp_id) {
+        const emp = employees.find(e => e.id === row.employee_id);
+        if (!((emp as any)?.employee_id || "").toLowerCase().includes(detailColFilters.emp_id.toLowerCase())) return false;
+      }
+      if (detailColFilters.emp_name) {
+        const emp = employees.find(e => e.id === row.employee_id);
+        if (!(emp?.employee_name || "").toLowerCase().includes(detailColFilters.emp_name.toLowerCase())) return false;
+      }
+      if (detailColFilters.pos_id) {
+        const pos = positions.find(p => p.id === row.position_id);
+        if (!(pos?.position_id || "").toLowerCase().includes(detailColFilters.pos_id.toLowerCase())) return false;
+      }
+      if (detailColFilters.pos_name) {
+        const pos = positions.find(p => p.id === row.position_id);
+        if (!(pos?.position_name || "").toLowerCase().includes(detailColFilters.pos_name.toLowerCase())) return false;
+      }
+      return true;
+    });
+  }, [rows, detailSearch, detailColFilters, employees, positions]);
+
+  const { sorted: sortedDetailRows, sort: detailSort, toggleSort: toggleDetailSort } = useSort(filteredDetailRows, "month", "asc");
+  const { paginatedItems: paginatedDetailRows, pageSize: detailPageSize, setPageSize: setDetailPageSize, currentPage: detailCurrentPage, setCurrentPage: setDetailCurrentPage, totalItems: detailTotalItems } = usePagination(sortedDetailRows, 20);
 
   // ---- Render ----
 
@@ -971,6 +1048,7 @@ export default function DeploymentSchedulePage() {
             <div className="flex items-center gap-2 mb-4">
               <Button variant="outline" size="sm" onClick={addRow}><Plus size={14} className="mr-1.5" />Add Row</Button>
               <div className="ml-auto flex items-center gap-2">
+                <ColumnVisibilityToggle columns={detailTableCols} visibleColumns={detailVisibleCols} onChange={setDetailVisibleCols} />
                 <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
                 <Button variant="outline" size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Save size={14} className="mr-1.5" />}Save Draft
@@ -984,23 +1062,29 @@ export default function DeploymentSchedulePage() {
 
           {!isEditable && (
             <div className="flex items-center gap-2 mb-4">
+              <ColumnVisibilityToggle columns={detailTableCols} visibleColumns={detailVisibleCols} onChange={setDetailVisibleCols} />
               <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} />
             </div>
           )}
 
           {/* Lines table */}
-          <div className="bg-card rounded-md border overflow-x-auto">
+          <div className="bg-card rounded-md border">
+            <div className="px-4 py-3 border-b flex items-center gap-3">
+              <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search rows..." value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
+              <span className="text-xs text-muted-foreground">{filteredDetailRows.length} of {rows.length} rows</span>
+            </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="border-b">
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]">Month</th>
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]">Emp ID</th>
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[160px]">Employee Name</th>
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]">Position ID</th>
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[140px]">Position Name</th>
-                  <th className="data-table-header text-center px-3 py-2.5 min-w-[90px]">Rate Year</th>
-                  <th className="data-table-header text-center px-3 py-2.5 min-w-[80px]">Rate</th>
-                  <th className="data-table-header text-center px-3 py-2.5 min-w-[100px]">Man-Months</th>
+                  {detailVisibleCols.has("month") && <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]"><SortableHeader label="Month" sortKey="month" currentKey={detailSort.key} direction={detailSort.direction} onSort={toggleDetailSort}><ColumnFilter value={detailColFilters.month || ""} onChange={(v) => setDetailColFilter("month", v)} label="Month" /></SortableHeader></th>}
+                  {detailVisibleCols.has("emp_id") && <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]"><SortableHeader label="Emp ID" sortKey="employee_id" currentKey={detailSort.key} direction={detailSort.direction} onSort={toggleDetailSort}><ColumnFilter value={detailColFilters.emp_id || ""} onChange={(v) => setDetailColFilter("emp_id", v)} label="Emp ID" /></SortableHeader></th>}
+                  {detailVisibleCols.has("emp_name") && <th className="data-table-header text-left px-3 py-2.5 min-w-[160px]"><SortableHeader label="Employee Name" sortKey="employee_id" currentKey={detailSort.key} direction={detailSort.direction} onSort={toggleDetailSort}><ColumnFilter value={detailColFilters.emp_name || ""} onChange={(v) => setDetailColFilter("emp_name", v)} label="Employee" /></SortableHeader></th>}
+                  {detailVisibleCols.has("pos_id") && <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]"><SortableHeader label="Position ID" sortKey="position_id" currentKey={detailSort.key} direction={detailSort.direction} onSort={toggleDetailSort}><ColumnFilter value={detailColFilters.pos_id || ""} onChange={(v) => setDetailColFilter("pos_id", v)} label="Pos ID" /></SortableHeader></th>}
+                  {detailVisibleCols.has("pos_name") && <th className="data-table-header text-left px-3 py-2.5 min-w-[140px]"><SortableHeader label="Position Name" sortKey="position_id" currentKey={detailSort.key} direction={detailSort.direction} onSort={toggleDetailSort}><ColumnFilter value={detailColFilters.pos_name || ""} onChange={(v) => setDetailColFilter("pos_name", v)} label="Position" /></SortableHeader></th>}
+                  {detailVisibleCols.has("rate_year") && <th className="data-table-header text-center px-3 py-2.5 min-w-[90px]"><SortableHeader label="Rate Year" sortKey="rate_year" currentKey={detailSort.key} direction={detailSort.direction} onSort={toggleDetailSort} /></th>}
+                  {detailVisibleCols.has("rate") && <th className="data-table-header text-center px-3 py-2.5 min-w-[80px]">Rate</th>}
+                  {detailVisibleCols.has("man_months") && <th className="data-table-header text-center px-3 py-2.5 min-w-[100px]"><SortableHeader label="Man-Months" sortKey="man_months" currentKey={detailSort.key} direction={detailSort.direction} onSort={toggleDetailSort} /></th>}
                   {projectColumns.map(p => (
                     <th key={p.id} className="data-table-header text-center px-2 py-2.5 min-w-[100px]">
                       <TooltipProvider>
@@ -1019,10 +1103,11 @@ export default function DeploymentSchedulePage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.length === 0 ? (
-                  <tr><td colSpan={9 + projectColumns.length + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">No rows yet. Click "Add Row" or import from Excel.</td></tr>
+                {paginatedDetailRows.length === 0 ? (
+                  <tr><td colSpan={detailVisibleCols.size + projectColumns.length + 1 + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">{rows.length === 0 ? 'No rows yet. Click "Add Row" or import from Excel.' : "No rows match the current filters."}</td></tr>
                 ) : (
-                  rows.map((row, idx) => {
+                  paginatedDetailRows.map((row) => {
+                    const realIdx = rows.findIndex(r => r._key === row._key);
                     const emp = employees.find(e => e.id === row.employee_id);
                     const pos = positions.find(p => p.id === row.position_id);
                     const rate = getRateForRow(row);
@@ -1030,86 +1115,93 @@ export default function DeploymentSchedulePage() {
 
                     return (
                       <tr key={row._key} className="border-b last:border-0 hover:bg-muted/50">
-                        {/* Month */}
-                        <td className="px-3 py-1.5">
-                          {isEditable ? (
-                            <Select value={row.month || defaultMonth || ""} onValueChange={(v) => updateRow(idx, "month", v)}>
-                              <SelectTrigger className="h-8 text-xs w-[140px]">
-                                <SelectValue placeholder="Select month">{formatMonthLabel(row.month || defaultMonth || "")}</SelectValue>
-                              </SelectTrigger>
-                              <SelectContent>
-                                {monthOptions.map(m => (
-                                  <SelectItem key={m} value={m}>{formatMonthLabel(m)}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <div className="h-8 px-2 text-xs border rounded-md bg-muted flex items-center font-mono text-muted-foreground">
-                              {formatMonthLabel(row.month || defaultMonth)}
-                            </div>
-                          )}
-                        </td>
-                        {/* Employee ID */}
-                        <td className="px-3 py-1.5">
-                          <span className="text-xs font-mono text-muted-foreground">{(emp as any)?.employee_id || "—"}</span>
-                        </td>
-                        {/* Employee Name */}
-                        <td className="px-3 py-1.5">
-                          {isEditable ? (
-                            <Select value={row.employee_id} onValueChange={(v) => updateRow(idx, "employee_id", v)}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                              <SelectContent>{employees.map(e => <SelectItem key={e.id} value={e.id}>{e.employee_name}</SelectItem>)}</SelectContent>
-                            </Select>
-                          ) : <span className="text-xs">{emp?.employee_name || "—"}</span>}
-                        </td>
-                        {/* Position ID */}
-                        <td className="px-3 py-1.5">
-                          <span className="text-xs font-mono text-muted-foreground">{pos?.position_id || "—"}</span>
-                        </td>
-                        {/* Position Name */}
-                        <td className="px-3 py-1.5">
-                          {isEditable ? (
-                             <Select value={row.position_id} onValueChange={(v) => updateRow(idx, "position_id", v)}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                              <SelectContent>{positions.map(p => <SelectItem key={p.id} value={p.id}>{p.position_id ? `${p.position_id} - ${p.position_name}` : p.position_name}</SelectItem>)}</SelectContent>
-                            </Select>
-                          ) : <span className="text-xs">{pos?.position_name || "—"}</span>}
-                        </td>
-                        {/* Rate Year */}
-                        <td className="px-3 py-1.5">
-                          {isEditable ? (
-                            <Select value={String(row.rate_year)} onValueChange={(v) => updateRow(idx, "rate_year", parseInt(v))}>
-                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {[1, 2, 3, 4, 5].map(y => <SelectItem key={y} value={String(y)}>Year {y}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                          ) : <span className="text-xs text-center block">Year {row.rate_year}</span>}
-                        </td>
-                        {/* Rate (derived, read-only) */}
-                        <td className="px-3 py-1.5 text-center">
-                          <span className="text-xs font-mono text-muted-foreground">
-                            {rate != null ? rate.toLocaleString() : "—"}
-                          </span>
-                        </td>
-                        {/* Man-Months */}
-                        <td className="px-3 py-1.5">
-                          {isEditable ? (
-                            <Input
-                              type="number"
-                              step="0.01"
-                              min={0}
-                              max={1}
-                              value={row.man_months || ""}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value);
-                                updateRow(idx, "man_months", isNaN(val) ? 0 : Math.min(1, Math.max(0, val)));
-                              }}
-                              className="h-8 text-xs text-center w-20"
-                            />
-                          ) : <span className="text-xs font-mono text-center block">{row.man_months}</span>}
-                        </td>
-                        {/* Project allocation columns */}
+                        {detailVisibleCols.has("month") && (
+                          <td className="px-3 py-1.5">
+                            {isEditable ? (
+                              <Select value={row.month || defaultMonth || ""} onValueChange={(v) => updateRow(realIdx, "month", v)}>
+                                <SelectTrigger className="h-8 text-xs w-[140px]">
+                                  <SelectValue placeholder="Select month">{formatMonthLabel(row.month || defaultMonth || "")}</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {monthOptions.map(m => (
+                                    <SelectItem key={m} value={m}>{formatMonthLabel(m)}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="h-8 px-2 text-xs border rounded-md bg-muted flex items-center font-mono text-muted-foreground">
+                                {formatMonthLabel(row.month || defaultMonth)}
+                              </div>
+                            )}
+                          </td>
+                        )}
+                        {detailVisibleCols.has("emp_id") && (
+                          <td className="px-3 py-1.5">
+                            <span className="text-xs font-mono text-muted-foreground">{(emp as any)?.employee_id || "—"}</span>
+                          </td>
+                        )}
+                        {detailVisibleCols.has("emp_name") && (
+                          <td className="px-3 py-1.5">
+                            {isEditable ? (
+                              <Select value={row.employee_id} onValueChange={(v) => updateRow(realIdx, "employee_id", v)}>
+                                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                <SelectContent>{employees.map(e => <SelectItem key={e.id} value={e.id}>{e.employee_name}</SelectItem>)}</SelectContent>
+                              </Select>
+                            ) : <span className="text-xs">{emp?.employee_name || "—"}</span>}
+                          </td>
+                        )}
+                        {detailVisibleCols.has("pos_id") && (
+                          <td className="px-3 py-1.5">
+                            <span className="text-xs font-mono text-muted-foreground">{pos?.position_id || "—"}</span>
+                          </td>
+                        )}
+                        {detailVisibleCols.has("pos_name") && (
+                          <td className="px-3 py-1.5">
+                            {isEditable ? (
+                               <Select value={row.position_id} onValueChange={(v) => updateRow(realIdx, "position_id", v)}>
+                                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
+                                <SelectContent>{positions.map(p => <SelectItem key={p.id} value={p.id}>{p.position_id ? `${p.position_id} - ${p.position_name}` : p.position_name}</SelectItem>)}</SelectContent>
+                              </Select>
+                            ) : <span className="text-xs">{pos?.position_name || "—"}</span>}
+                          </td>
+                        )}
+                        {detailVisibleCols.has("rate_year") && (
+                          <td className="px-3 py-1.5">
+                            {isEditable ? (
+                              <Select value={String(row.rate_year)} onValueChange={(v) => updateRow(realIdx, "rate_year", parseInt(v))}>
+                                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {[1, 2, 3, 4, 5].map(y => <SelectItem key={y} value={String(y)}>Year {y}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                            ) : <span className="text-xs text-center block">Year {row.rate_year}</span>}
+                          </td>
+                        )}
+                        {detailVisibleCols.has("rate") && (
+                          <td className="px-3 py-1.5 text-center">
+                            <span className="text-xs font-mono text-muted-foreground">
+                              {rate != null ? rate.toLocaleString() : "—"}
+                            </span>
+                          </td>
+                        )}
+                        {detailVisibleCols.has("man_months") && (
+                          <td className="px-3 py-1.5">
+                            {isEditable ? (
+                              <Input
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                max={1}
+                                value={row.man_months || ""}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value);
+                                  updateRow(realIdx, "man_months", isNaN(val) ? 0 : Math.min(1, Math.max(0, val)));
+                                }}
+                                className="h-8 text-xs text-center w-20"
+                              />
+                            ) : <span className="text-xs font-mono text-center block">{row.man_months}</span>}
+                          </td>
+                        )}
                         {projectColumns.map(p => (
                           <td key={p.id} className="px-2 py-1.5">
                             {isEditable ? (
@@ -1118,13 +1210,12 @@ export default function DeploymentSchedulePage() {
                                 min={0}
                                 max={100}
                                 value={row.allocations[p.id] || ""}
-                                onChange={(e) => updateAllocation(idx, p.id, parseInt(e.target.value) || 0)}
+                                onChange={(e) => updateAllocation(realIdx, p.id, parseInt(e.target.value) || 0)}
                                 className="h-8 text-xs text-center w-16"
                               />
                             ) : <span className="text-xs font-mono text-center block">{row.allocations[p.id] || ""}</span>}
                           </td>
                         ))}
-                        {/* Sum */}
                         <td className="px-2 py-1.5 text-center">
                           <span className={`text-xs font-mono font-semibold ${allocSum > 0 && allocSum !== 100 ? "text-destructive" : "text-muted-foreground"}`}>
                             {allocSum > 0 ? `${allocSum}%` : ""}
@@ -1132,7 +1223,7 @@ export default function DeploymentSchedulePage() {
                         </td>
                         {isEditable && (
                           <td className="px-2 py-1.5">
-                            <button onClick={() => removeRow(idx)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
+                            <button onClick={() => removeRow(realIdx)} className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive">
                               <Trash2 size={14} />
                             </button>
                           </td>
@@ -1143,10 +1234,12 @@ export default function DeploymentSchedulePage() {
                 )}
               </tbody>
             </table>
+            </div>
+            {filteredDetailRows.length > 0 && <TablePagination totalItems={detailTotalItems} pageSize={detailPageSize} currentPage={detailCurrentPage} onPageChange={setDetailCurrentPage} onPageSizeChange={setDetailPageSize} />}
           </div>
 
           <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-            <span>{rows.length} row(s)</span>
+            <span>{rows.length} total row(s)</span>
             <span>·</span>
             <span>Revision #{selectedSubmission.revision_no}</span>
             <span>·</span>
