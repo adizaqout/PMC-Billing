@@ -362,21 +362,22 @@ export default function DeploymentSchedulePage() {
     enabled: !!selectedSubmission,
   });
 
-  // Convert DB lines to UI rows (group by employee_id — each employee has multiple lines for different projects)
-  // For null employee_id (baseline), group by notes field if available (contains original emp code + month)
+  // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
     if (lines.length === 0) return [];
     const grouped: Record<string, DeploymentLine[]> = {};
     let nullCounter = 0;
     lines.forEach(l => {
       let key: string;
+      const notesStr = (l as any).notes as string | null;
+      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
+      const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
       if (l.employee_id) {
-        // For matched employees, group by employee_id + month info from notes
-        const monthFromNotes = (l as any).notes?.match(/month:([^|]+)/)?.[1];
+        // Group matched employees by employee_id + month
         key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
-      } else if ((l as any).notes) {
-        // For unmatched baseline employees, group by notes (contains emp code + month)
-        key = (l as any).notes;
+      } else if (empCodeFromNotes && monthFromNotes) {
+        // Group unmatched baseline employees by their original code + month
+        key = `${empCodeFromNotes}|${monthFromNotes}`;
       } else {
         key = `__null_${++nullCounter}`;
       }
@@ -386,6 +387,8 @@ export default function DeploymentSchedulePage() {
     return Object.entries(grouped).map(([empKey, grpLines]) => {
       const first = grpLines[0];
       const empId = first.employee_id || "";
+      const notesStr = (first as any).notes as string | null;
+      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
       const allocations: Record<string, number> = {};
       grpLines.forEach(l => {
         const projId = l.worked_project_id || l.billed_project_id;
@@ -393,7 +396,7 @@ export default function DeploymentSchedulePage() {
       });
       return {
         _key: newRowKey(),
-        month: selectedSubmission?.month || first.submission_id,
+        month: monthFromNotes || selectedSubmission?.month || first.submission_id,
         employee_id: empId,
         position_id: employees.find(e => e.id === empId)?.position_id || first.po_item_id || "",
         rate_year: (first as any).rate_year || 1,
@@ -701,12 +704,25 @@ export default function DeploymentSchedulePage() {
   const allocationErrors = useMemo(() => {
     const errors: string[] = [];
     const isBaseline = scheduleType === "baseline";
+    
+    // Check for duplicate employee per month
+    const empMonthMap = new Map<string, number>();
+    
     rows.forEach((row, idx) => {
       if (!row.employee_id && !isBaseline) return;
+      
+      // Duplicate employee per month check
+      if (row.employee_id) {
+        const empMonthKey = `${row.employee_id}|${row.month}`;
+        if (empMonthMap.has(empMonthKey)) {
+          const emp = employees.find(e => e.id === row.employee_id);
+          errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): duplicate entry for month ${row.month}`);
+        }
+        empMonthMap.set(empMonthKey, idx);
+      }
+      
       const sum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
-      // For baseline rows without an employee, skip the 100% allocation check
-      // since each row is an independent position-project mapping
-      if (sum > 0 && sum !== 100 && !(isBaseline && !row.employee_id)) {
+      if (sum > 0 && sum !== 100) {
         const emp = employees.find(e => e.id === row.employee_id);
         errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): allocation sums to ${sum}%, must be 100%`);
       }
@@ -797,15 +813,28 @@ export default function DeploymentSchedulePage() {
     };
     onProgress({ ...progress });
 
+    // Clear existing lines before importing
+    const { error: deleteError } = await supabase
+      .from("deployment_lines")
+      .delete()
+      .eq("submission_id", selectedSubmission.id);
+    if (deleteError) {
+      progress.errors.push({ row: 0, message: `Failed to clear existing data: ${deleteError.message}` });
+      onProgress({ ...progress });
+      return progress;
+    }
+
     // Parse all rows into DB-ready records
-    const BATCH_SIZE = 500;
+    const BATCH_SIZE = 200;
     let pendingInserts: any[] = [];
+    let pendingRowNums: number[] = [];
 
     const flushBatch = async () => {
       if (pendingInserts.length === 0) return;
       const { error } = await supabase.from("deployment_lines").insert(pendingInserts);
       if (error) throw error;
       pendingInserts = [];
+      pendingRowNums = [];
     };
 
     for (let i = 0; i < dataRows.length; i++) {
@@ -826,10 +855,17 @@ export default function DeploymentSchedulePage() {
       }
       const monthNum = Number(rowMonth);
       if (!isNaN(monthNum) && monthNum > 10000) {
+        // Excel serial number
         const d = new Date(Math.round((monthNum - 25569) * 86400 * 1000));
         rowMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
       } else if (/^\d{4}-\d{2}-\d{2}/.test(rowMonth)) {
         rowMonth = rowMonth.slice(0, 7);
+      } else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(rowMonth)) {
+        // Handle M/D/YY or M/D/YYYY format
+        const parts = rowMonth.split("/");
+        let year = parseInt(parts[2]);
+        if (year < 100) year += 2000;
+        rowMonth = `${year}-${parts[0].padStart(2, "0")}`;
       }
 
       // Employee
@@ -852,7 +888,9 @@ export default function DeploymentSchedulePage() {
       const posIdCode = get("position id");
       const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
 
-      const rateYear = parseInt(get("rate year")) || 1;
+      // Parse rate year: handle "Year 1", "Year 2", etc. and plain numbers
+      const rateYearRaw = get("rate year");
+      const rateYear = parseInt(rateYearRaw.replace(/[^0-9]/g, "")) || 1;
       if (rateYear < 1 || rateYear > 5) { progress.errors.push({ row: rowNum, message: "Invalid rate year" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
 
       const manMonths = parseFloat(get("man-months") || get("man_months") || get("manmonths")) || 0;
@@ -903,21 +941,29 @@ export default function DeploymentSchedulePage() {
         });
       }
 
-      progress.created++;
+      pendingRowNums.push(rowNum);
       progress.processed++;
 
       // Flush batch when full
       if (pendingInserts.length >= BATCH_SIZE) {
-        try { await flushBatch(); } catch (err) {
-          progress.errors.push({ row: rowNum, message: `DB batch insert failed: ${err instanceof Error ? err.message : "Unknown error"}` });
+        try {
+          await flushBatch();
+          progress.created += pendingRowNums.length || Math.floor(BATCH_SIZE / 8);
+        } catch (err) {
+          progress.errors.push({ row: rowNum, message: `DB batch insert failed (rows may be lost): ${err instanceof Error ? err.message : "Unknown error"}` });
         }
+        pendingRowNums = [];
       }
 
       if (i % 100 === 0) onProgress({ ...progress });
     }
 
     // Flush remaining
-    try { await flushBatch(); } catch (err) {
+    const remainingCount = pendingRowNums.length;
+    try {
+      await flushBatch();
+      progress.created += remainingCount;
+    } catch (err) {
       progress.errors.push({ row: 0, message: `Final batch insert failed: ${err instanceof Error ? err.message : "Unknown error"}` });
     }
 
