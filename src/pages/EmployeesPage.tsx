@@ -22,8 +22,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Employee = Tables<"employees"> & { consultants?: { name: string } | null; positions?: { position_name: string; position_id?: string } | null };
+type Employee = Tables<"employees"> & { consultants?: { name: string } | null; positions?: { position_name: string; position_id: string } | null };
 type Consultant = { id: string; name: string };
+type Position = { id: string; position_id: string; position_name: string; consultant_id: string };
 
 interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }
 const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", experience_years: null, start_date: null, end_date: null, status: "active" };
@@ -48,7 +49,8 @@ const excelCols = [
   { header: "Employee ID", key: "employee_id", width: 18 },
   { header: "Employee Name", key: "employee_name", width: 25 },
   { header: "Consultant", key: "consultant_name", width: 25 },
-  { header: "Position", key: "position_name", width: 20 },
+  { header: "Position ID", key: "position_id_code", width: 16 },
+  { header: "Position Name", key: "position_name", width: 20 },
   { header: "Exp (Years)", key: "experience_years", width: 12 },
   { header: "Start Date", key: "start_date", width: 14 },
   { header: "End Date", key: "end_date", width: 14 },
@@ -68,9 +70,10 @@ export default function EmployeesPage() {
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ["employees"],
-    queryFn: async () => { const { data, error } = await supabase.from("employees").select("*, consultants(name), positions(position_name)").order("employee_name"); if (error) throw error; return data as Employee[]; },
+    queryFn: async () => { const { data, error } = await supabase.from("employees").select("*, consultants(name), positions(position_id, position_name)").order("employee_name"); if (error) throw error; return data as Employee[]; },
   });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as Consultant[]; } });
+  const { data: allPositions = [] } = useQuery({ queryKey: ["positions-list"], queryFn: async () => { const { data, error } = await supabase.from("positions").select("id, position_id, position_name, consultant_id").order("position_name"); if (error) throw error; return data as Position[]; } });
 
   const upsertMutation = useMutation({
     mutationFn: async (values: EmployeeForm & { id?: string }) => {
@@ -118,21 +121,26 @@ export default function EmployeesPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.name || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
-  const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.name), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
+  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
+  const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
   ): Promise<ImportProgress> => {
     const total = rows.length - 1;
     const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
     for (let i = 1; i < rows.length; i++) {
-      const [empId, name, consultantName, , exp, startDate, endDate, status] = rows[i];
+      const [empId, name, consultantName, positionIdCode, , exp, startDate, endDate, status] = rows[i];
       if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
       const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
+      // Resolve position by position_id code
+      const posIdStr = positionIdCode != null ? String(positionIdCode).trim() : "";
+      const pos = posIdStr ? allPositions.find(p => p.position_id.toLowerCase() === posIdStr.toLowerCase() && p.consultant_id === consultant.id) : null;
+      if (posIdStr && !pos) { result.errors.push({ row: i + 1, message: `Position ID "${posIdStr}" not found for this consultant` }); result.processed++; onProgress({ ...result }); continue; }
       const { error } = await supabase.from("employees").insert({
         employee_id: empId != null ? String(empId).trim() || null : null,
         employee_name: String(name).trim(), consultant_id: consultant.id,
+        position_id: pos?.id || null,
         experience_years: exp ? parseInt(String(exp)) : null,
         start_date: parseImportDate(startDate), end_date: parseImportDate(endDate),
         status: status ? String(status).trim().toLowerCase() : "active",
@@ -142,7 +150,7 @@ export default function EmployeesPage() {
       onProgress({ ...result });
     }
     return result;
-  }, [consultants]);
+  }, [consultants, allPositions]);
   const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["employees"] }); }, [queryClient]);
 
   return (
@@ -166,7 +174,8 @@ export default function EmployeesPage() {
                 <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Emp ID" sortKey="employee_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.employee_id || ""} onChange={(v) => setColFilter("employee_id", v)} label="Emp ID" /></SortableHeader></th>
                 <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="employee_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></SortableHeader></th>
                 <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position" sortKey="positions.position_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></SortableHeader></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position ID" sortKey="positions.position_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position Name" sortKey="positions.position_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></SortableHeader></th>
                 <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Exp (Yrs)" sortKey="experience_years" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
                 <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start Date" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
                 <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End Date" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
@@ -178,6 +187,7 @@ export default function EmployeesPage() {
                   <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{(emp as any).employee_id || "—"}</td>
                   <td className="px-4 py-2.5 font-medium">{emp.employee_name}</td>
                   <td className="px-4 py-2.5">{emp.consultants?.name || "—"}</td>
+                  <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{emp.positions?.position_id || "—"}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{emp.positions?.position_name || "—"}</td>
                   <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>
                   <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.start_date)}</td>
