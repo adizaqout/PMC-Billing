@@ -562,7 +562,18 @@ function LookupsTab() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader><DialogTitle>{editing ? "Edit Lookup Value" : "Add Lookup Value"}</DialogTitle></DialogHeader>
           <form onSubmit={(e) => { e.preventDefault(); if (!form.category.trim() || !form.value.trim() || !form.label.trim()) { toast.error("All fields are required"); return; } upsertMutation.mutate(editing ? { ...form, id: editing.id } : form); }} className="space-y-4">
-            <div className="space-y-1.5"><Label>Category *</Label><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="e.g. employee_status" /></div>
+            <div className="space-y-1.5"><Label>Category *</Label>
+              <Select value={form.category || "__new__"} onValueChange={(v) => setForm({ ...form, category: v === "__new__" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {categories.map((c) => <SelectItem key={c} value={c}>{c.replace(/_/g, " ")}</SelectItem>)}
+                  <SelectItem value="__new__">+ New category...</SelectItem>
+                </SelectContent>
+              </Select>
+              {(form.category === "" || !categories.includes(form.category)) && (
+                <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Type new category name" className="mt-1.5" />
+              )}
+            </div>
             <div className="space-y-1.5"><Label>Value *</Label><Input value={form.value} onChange={(e) => setForm({ ...form, value: e.target.value })} placeholder="e.g. mobilized" /></div>
             <div className="space-y-1.5"><Label>Label *</Label><Input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="e.g. Mobilized" /></div>
             <div className="flex gap-4">
