@@ -1,26 +1,102 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Plus, Download, Upload, Search, MoreHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
-const mockEmployees = [
-  { id: "E001", name: "Ahmed Al Mansouri", consultant: "WSP", position: "Senior Project Manager", experience: 15, status: "Active" },
-  { id: "E002", name: "Sarah Johnson", consultant: "WSP", position: "Cost Engineer", experience: 8, status: "Active" },
-  { id: "E003", name: "Mohammed Khan", consultant: "AECOM", position: "Planning Engineer", experience: 12, status: "Active" },
-  { id: "E004", name: "Lisa Chen", consultant: "AECOM", position: "QA/QC Manager", experience: 10, status: "Active" },
-  { id: "E005", name: "James Wilson", consultant: "Mace", position: "Project Director", experience: 20, status: "Active" },
-  { id: "E006", name: "Fatima Al Hashemi", consultant: "Mace", position: "Document Controller", experience: 5, status: "Inactive" },
-  { id: "E007", name: "David Martinez", consultant: "Faithful+Gould", position: "Senior Cost Manager", experience: 14, status: "Active" },
-  { id: "E008", name: "Aisha Khalid", consultant: "Faithful+Gould", position: "Contracts Manager", experience: 9, status: "Active" },
-];
+type Employee = Tables<"employees"> & { consultants?: { name: string } | null; positions?: { position_name: string } | null };
+type EmployeeInsert = TablesInsert<"employees">;
+type Consultant = Tables<"consultants">;
+
+const emptyForm: Partial<EmployeeInsert> = {
+  employee_name: "", consultant_id: "", experience_years: null, status: "active",
+};
 
 export default function EmployeesPage() {
   const [search, setSearch] = useState("");
-  const filtered = mockEmployees.filter((e) =>
-    e.name.toLowerCase().includes(search.toLowerCase()) ||
-    e.consultant.toLowerCase().includes(search.toLowerCase())
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Employee | null>(null);
+  const [form, setForm] = useState<Partial<EmployeeInsert>>(emptyForm);
+  const queryClient = useQueryClient();
+
+  const { data: employees = [], isLoading } = useQuery({
+    queryKey: ["employees"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("employees")
+        .select("*, consultants(name), positions(position_name)")
+        .order("employee_name");
+      if (error) throw error;
+      return data as Employee[];
+    },
+  });
+
+  const { data: consultants = [] } = useQuery({
+    queryKey: ["consultants-list"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name");
+      if (error) throw error;
+      return data as Pick<Consultant, "id" | "name">[];
+    },
+  });
+
+  const upsertMutation = useMutation({
+    mutationFn: async (values: Partial<EmployeeInsert> & { id?: string }) => {
+      if (values.id) {
+        const { error } = await supabase.from("employees").update(values).eq("id", values.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("employees").insert(values as EmployeeInsert);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      toast.success(editing ? "Employee updated" : "Employee created");
+      closeDialog();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("employees").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      toast.success("Employee deleted");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
+  const openEdit = (emp: Employee) => {
+    setEditing(emp);
+    setForm({ employee_name: emp.employee_name, consultant_id: emp.consultant_id, experience_years: emp.experience_years, status: emp.status });
+    setDialogOpen(true);
+  };
+  const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.employee_name?.trim()) { toast.error("Name is required"); return; }
+    if (!form.consultant_id) { toast.error("Consultant is required"); return; }
+    upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
+  };
+
+  const filtered = employees.filter((e) =>
+    e.employee_name.toLowerCase().includes(search.toLowerCase()) ||
+    (e.consultants?.name || "").toLowerCase().includes(search.toLowerCase())
   );
 
   return (
@@ -31,11 +107,7 @@ export default function EmployeesPage() {
             <h1 className="page-title">Employees</h1>
             <p className="page-subtitle">Manage PMC consultant employees</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm"><Download size={14} className="mr-1.5" />Export</Button>
-            <Button variant="outline" size="sm"><Upload size={14} className="mr-1.5" />Import</Button>
-            <Button size="sm"><Plus size={14} className="mr-1.5" />Add Employee</Button>
-          </div>
+          <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Employee</Button>
         </div>
 
         <div className="bg-card rounded-md border">
@@ -47,37 +119,93 @@ export default function EmployeesPage() {
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="data-table-header text-left px-4 py-2.5">ID</th>
-                  <th className="data-table-header text-left px-4 py-2.5">Name</th>
-                  <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
-                  <th className="data-table-header text-left px-4 py-2.5">Position</th>
-                  <th className="data-table-header text-center px-4 py-2.5">Experience (Yrs)</th>
-                  <th className="data-table-header text-center px-4 py-2.5">Status</th>
-                  <th className="data-table-header w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((e) => (
-                  <tr key={e.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer">
-                    <td className="px-4 py-2.5 font-mono text-xs">{e.id}</td>
-                    <td className="px-4 py-2.5 font-medium">{e.name}</td>
-                    <td className="px-4 py-2.5">{e.consultant}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{e.position}</td>
-                    <td className="px-4 py-2.5 text-center font-mono">{e.experience}</td>
-                    <td className="px-4 py-2.5 text-center"><StatusBadge status={e.status} /></td>
-                    <td className="px-4 py-2.5 text-center">
-                      <button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button>
-                    </td>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-12 text-sm text-muted-foreground">No employees found</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="data-table-header text-left px-4 py-2.5">Name</th>
+                    <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
+                    <th className="data-table-header text-left px-4 py-2.5">Position</th>
+                    <th className="data-table-header text-center px-4 py-2.5">Experience (Yrs)</th>
+                    <th className="data-table-header text-center px-4 py-2.5">Status</th>
+                    <th className="data-table-header w-10"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map((emp) => (
+                    <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                      <td className="px-4 py-2.5 font-medium">{emp.employee_name}</td>
+                      <td className="px-4 py-2.5">{emp.consultants?.name || "—"}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{emp.positions?.position_name || "—"}</td>
+                      <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>
+                      <td className="px-4 py-2.5 text-center"><StatusBadge status={emp.status} /></td>
+                      <td className="px-4 py-2.5 text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEdit(emp)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(emp.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>{editing ? "Edit Employee" : "Add Employee"}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 space-y-1.5">
+                <Label>Employee Name *</Label>
+                <Input value={form.employee_name || ""} onChange={(e) => setForm({ ...form, employee_name: e.target.value })} />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Consultant *</Label>
+                <Select value={form.consultant_id || ""} onValueChange={(v) => setForm({ ...form, consultant_id: v })}>
+                  <SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger>
+                  <SelectContent>
+                    {consultants.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Experience (Years)</Label>
+                <Input type="number" value={form.experience_years ?? ""} onChange={(e) => setForm({ ...form, experience_years: e.target.value ? parseInt(e.target.value) : null })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={form.status || "active"} onValueChange={(v) => setForm({ ...form, status: v as "active" | "inactive" })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
+              <Button type="submit" disabled={upsertMutation.isPending}>
+                {upsertMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
+                {editing ? "Update" : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

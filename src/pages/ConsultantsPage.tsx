@@ -1,23 +1,95 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
-import { Plus, Download, Upload, Search, MoreHorizontal } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
-const mockConsultants = [
-  { id: "C001", name: "WSP", crNo: "CR-2018-4521", taxNo: "TAX-100234", status: "Active", agreements: 2, employees: 45 },
-  { id: "C002", name: "AECOM", crNo: "CR-2017-8812", taxNo: "TAX-100567", status: "Active", agreements: 3, employees: 62 },
-  { id: "C003", name: "Mace", crNo: "CR-2019-1123", taxNo: "TAX-100891", status: "Active", agreements: 1, employees: 28 },
-  { id: "C004", name: "Faithful+Gould", crNo: "CR-2016-3345", taxNo: "TAX-100112", status: "Active", agreements: 2, employees: 35 },
-  { id: "C005", name: "Hill International", crNo: "CR-2020-5567", taxNo: "TAX-100445", status: "Inactive", agreements: 1, employees: 12 },
-];
+type Consultant = Tables<"consultants">;
+type ConsultantInsert = TablesInsert<"consultants">;
+
+const emptyForm: Partial<ConsultantInsert> = {
+  name: "",
+  commercial_registration_no: "",
+  tax_registration_no: "",
+  contact_email: "",
+  contact_phone: "",
+  address: "",
+  status: "active",
+};
 
 export default function ConsultantsPage() {
   const [search, setSearch] = useState("");
-  const filtered = mockConsultants.filter((c) =>
-    c.name.toLowerCase().includes(search.toLowerCase())
-  );
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<Consultant | null>(null);
+  const [form, setForm] = useState<Partial<ConsultantInsert>>(emptyForm);
+  const queryClient = useQueryClient();
+
+  const { data: consultants = [], isLoading } = useQuery({
+    queryKey: ["consultants"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("consultants")
+        .select("*")
+        .order("name");
+      if (error) throw error;
+      return data as Consultant[];
+    },
+  });
+
+  const upsertMutation = useMutation({
+    mutationFn: async (values: Partial<ConsultantInsert> & { id?: string }) => {
+      if (values.id) {
+        const { error } = await supabase.from("consultants").update(values).eq("id", values.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("consultants").insert(values as ConsultantInsert);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["consultants"] });
+      toast.success(editing ? "Consultant updated" : "Consultant created");
+      closeDialog();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("consultants").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["consultants"] });
+      toast.success("Consultant deleted");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
+  const openEdit = (c: Consultant) => {
+    setEditing(c);
+    setForm({ name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status });
+    setDialogOpen(true);
+  };
+  const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.name?.trim()) { toast.error("Name is required"); return; }
+    upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
+  };
+
+  const filtered = consultants.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
 
   return (
     <AppLayout>
@@ -27,60 +99,112 @@ export default function ConsultantsPage() {
             <h1 className="page-title">Consultants</h1>
             <p className="page-subtitle">Manage PMC consultant companies</p>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm"><Download size={14} className="mr-1.5" />Export</Button>
-            <Button variant="outline" size="sm"><Upload size={14} className="mr-1.5" />Import</Button>
-            <Button size="sm"><Plus size={14} className="mr-1.5" />Add Consultant</Button>
-          </div>
+          <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Consultant</Button>
         </div>
 
         <div className="bg-card rounded-md border">
           <div className="px-4 py-3 border-b flex items-center gap-3">
             <div className="relative flex-1 max-w-sm">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search consultants..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-8 text-sm"
-              />
+              <Input placeholder="Search consultants..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
             </div>
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="data-table-header text-left px-4 py-2.5">ID</th>
-                  <th className="data-table-header text-left px-4 py-2.5">Name</th>
-                  <th className="data-table-header text-left px-4 py-2.5">CR No.</th>
-                  <th className="data-table-header text-left px-4 py-2.5">Tax No.</th>
-                  <th className="data-table-header text-center px-4 py-2.5">Status</th>
-                  <th className="data-table-header text-center px-4 py-2.5">Agreements</th>
-                  <th className="data-table-header text-center px-4 py-2.5">Employees</th>
-                  <th className="data-table-header text-center px-4 py-2.5 w-10"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((c) => (
-                  <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors cursor-pointer">
-                    <td className="px-4 py-2.5 font-mono text-xs">{c.id}</td>
-                    <td className="px-4 py-2.5 font-medium">{c.name}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.crNo}</td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.taxNo}</td>
-                    <td className="px-4 py-2.5 text-center"><StatusBadge status={c.status} /></td>
-                    <td className="px-4 py-2.5 text-center font-mono">{c.agreements}</td>
-                    <td className="px-4 py-2.5 text-center font-mono">{c.employees}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      <button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button>
-                    </td>
+            {isLoading ? (
+              <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div>
+            ) : filtered.length === 0 ? (
+              <div className="text-center py-12 text-sm text-muted-foreground">No consultants found</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="data-table-header text-left px-4 py-2.5">Name</th>
+                    <th className="data-table-header text-left px-4 py-2.5">CR No.</th>
+                    <th className="data-table-header text-left px-4 py-2.5">Tax No.</th>
+                    <th className="data-table-header text-left px-4 py-2.5">Email</th>
+                    <th className="data-table-header text-left px-4 py-2.5">Phone</th>
+                    <th className="data-table-header text-center px-4 py-2.5">Status</th>
+                    <th className="data-table-header w-10"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filtered.map((c) => (
+                    <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                      <td className="px-4 py-2.5 font-medium">{c.name}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.commercial_registration_no || "—"}</td>
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.tax_registration_no || "—"}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{c.contact_email || "—"}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground">{c.contact_phone || "—"}</td>
+                      <td className="px-4 py-2.5 text-center"><StatusBadge status={c.status} /></td>
+                      <td className="px-4 py-2.5 text-center">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEdit(c)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(c.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </div>
       </div>
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader><DialogTitle>{editing ? "Edit Consultant" : "Add Consultant"}</DialogTitle></DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="col-span-2 space-y-1.5">
+                <Label>Name *</Label>
+                <Input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>CR No.</Label>
+                <Input value={form.commercial_registration_no || ""} onChange={(e) => setForm({ ...form, commercial_registration_no: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Tax No.</Label>
+                <Input value={form.tax_registration_no || ""} onChange={(e) => setForm({ ...form, tax_registration_no: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Email</Label>
+                <Input type="email" value={form.contact_email || ""} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone</Label>
+                <Input value={form.contact_phone || ""} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
+              </div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Address</Label>
+                <Input value={form.address || ""} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Status</Label>
+                <Select value={form.status || "active"} onValueChange={(v) => setForm({ ...form, status: v as "active" | "inactive" })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
+              <Button type="submit" disabled={upsertMutation.isPending}>
+                {upsertMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
+                {editing ? "Update" : "Create"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
