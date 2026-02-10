@@ -604,8 +604,11 @@ export default function DeploymentSchedulePage() {
   // ---- Excel ----
   const getExcelColumns = (): ExcelColumnDef[] => {
     const base: ExcelColumnDef[] = [
+      { header: "Month", key: "month", width: 12 },
+      { header: "Employee ID", key: "employee_id_code", width: 16 },
       { header: "Employee Name", key: "employee_name", width: 25 },
-      { header: "Position", key: "position_name", width: 20 },
+      { header: "Position ID", key: "position_id_code", width: 16 },
+      { header: "Position Name", key: "position_name", width: 20 },
       { header: "Rate Year (1-5)", key: "rate_year", width: 14 },
       { header: "Man-Months (max 1.0)", key: "man_months", width: 18 },
     ];
@@ -622,7 +625,10 @@ export default function DeploymentSchedulePage() {
       const emp = employees.find(e => e.id === row.employee_id);
       const pos = positions.find(p => p.id === row.position_id);
       const rec: Record<string, any> = {
+        month: row.month || defaultMonth,
+        employee_id_code: (emp as any)?.employee_id || "",
         employee_name: emp?.employee_name || "",
+        position_id_code: pos?.position_id || "",
         position_name: pos?.position_name || "",
         rate_year: row.rate_year,
         man_months: row.man_months,
@@ -639,8 +645,8 @@ export default function DeploymentSchedulePage() {
   const handleTemplate = () => {
     const cols = getExcelColumns();
     const refData: Record<string, string[]> = {
-      "Employees": employees.map(e => e.employee_name),
-      "Positions": positions.map(p => p.position_name),
+      "Employee IDs": employees.map(e => `${(e as any).employee_id || ""} — ${e.employee_name}`),
+      "Position IDs": positions.map(p => `${p.position_id} — ${p.position_name}`),
       "Projects": projectColumns.map(p => projLabel(p)),
     };
     downloadTemplate(`deployment-template-${scheduleType}.xlsx`, cols, refData);
@@ -663,26 +669,38 @@ export default function DeploymentSchedulePage() {
           return idx >= 0 ? String(row[idx] || "").trim() : "";
         };
 
-        const empName = get("employee");
-        if (!empName) return;
+        // Month
+        const monthRaw = get("month");
+        let rowMonth = monthRaw;
+        if (!rowMonth) {
+          errors.push(`Row ${i + 2}: Month is missing`);
+          return;
+        }
+        // Handle Excel serial date for month
+        const monthNum = Number(rowMonth);
+        if (!isNaN(monthNum) && monthNum > 10000) {
+          const d = new Date(Math.round((monthNum - 25569) * 86400 * 1000));
+          rowMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+        } else if (/^\d{4}-\d{2}-\d{2}/.test(rowMonth)) {
+          rowMonth = rowMonth.slice(0, 7);
+        }
 
-        const emp = employees.find(e => e.employee_name.toLowerCase() === empName.toLowerCase());
-        if (!emp) { errors.push(`Row ${i + 2}: Employee "${empName}" not found`); return; }
+        // Employee ID lookup
+        const empIdCode = get("employee id");
+        if (!empIdCode) { errors.push(`Row ${i + 2}: Employee ID is missing`); return; }
 
-        const posName = get("position");
-        const pos = posName ? positions.find(p => p.position_name.toLowerCase() === posName.toLowerCase()) : null;
+        const emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
+        if (!emp) { errors.push(`Row ${i + 2}: Employee ID "${empIdCode}" not found`); return; }
+
+        // Position ID lookup
+        const posIdCode = get("position id");
+        const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
 
         const rateYear = parseInt(get("rate year")) || 1;
         if (rateYear < 1 || rateYear > 5) { errors.push(`Row ${i + 2}: Invalid rate year`); return; }
 
         const manMonths = parseFloat(get("man-months") || get("man_months") || get("manmonths")) || 0;
         if (manMonths > 1) { errors.push(`Row ${i + 2}: Man-months exceeds 1.0`); return; }
-
-        const soNum = get("service order");
-        const so = soNum ? serviceOrders.find(s => s.so_number.toLowerCase() === soNum.toLowerCase()) : null;
-
-        const poNum = get("purchase order");
-        const po = poNum ? purchaseOrders.find(p => p.po_number.toLowerCase() === poNum.toLowerCase()) : null;
 
         // Parse project allocation columns (headers starting with %)
         const allocations: Record<string, number> = {};
@@ -703,13 +721,13 @@ export default function DeploymentSchedulePage() {
 
         newRows.push({
           _key: newRowKey(),
-          month: periodMonth,
+          month: rowMonth,
           employee_id: emp.id,
           position_id: pos?.id || emp.position_id || "",
           rate_year: rateYear,
           man_months: manMonths,
-          so_id: so?.id || "",
-          po_id: po?.id || "",
+          so_id: "",
+          po_id: "",
           allocations,
         });
       });
@@ -811,8 +829,10 @@ export default function DeploymentSchedulePage() {
               <thead>
                 <tr className="border-b">
                   <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]">Month</th>
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[180px]">Employee</th>
-                  <th className="data-table-header text-left px-3 py-2.5 min-w-[160px]">Position</th>
+                  <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]">Emp ID</th>
+                  <th className="data-table-header text-left px-3 py-2.5 min-w-[160px]">Employee Name</th>
+                  <th className="data-table-header text-left px-3 py-2.5 min-w-[100px]">Position ID</th>
+                  <th className="data-table-header text-left px-3 py-2.5 min-w-[140px]">Position Name</th>
                   <th className="data-table-header text-center px-3 py-2.5 min-w-[90px]">Rate Year</th>
                   <th className="data-table-header text-center px-3 py-2.5 min-w-[80px]">Rate</th>
                   <th className="data-table-header text-center px-3 py-2.5 min-w-[100px]">Man-Months</th>
@@ -835,7 +855,7 @@ export default function DeploymentSchedulePage() {
               </thead>
               <tbody>
                 {rows.length === 0 ? (
-                  <tr><td colSpan={7 + projectColumns.length + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">No rows yet. Click "Add Row" or import from Excel.</td></tr>
+                  <tr><td colSpan={9 + projectColumns.length + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">No rows yet. Click "Add Row" or import from Excel.</td></tr>
                 ) : (
                   rows.map((row, idx) => {
                     const emp = employees.find(e => e.id === row.employee_id);
@@ -862,7 +882,11 @@ export default function DeploymentSchedulePage() {
                             </div>
                           )}
                         </td>
-                        {/* Employee */}
+                        {/* Employee ID */}
+                        <td className="px-3 py-1.5">
+                          <span className="text-xs font-mono text-muted-foreground">{(emp as any)?.employee_id || "—"}</span>
+                        </td>
+                        {/* Employee Name */}
                         <td className="px-3 py-1.5">
                           {isEditable ? (
                             <Select value={row.employee_id} onValueChange={(v) => updateRow(idx, "employee_id", v)}>
@@ -871,14 +895,18 @@ export default function DeploymentSchedulePage() {
                             </Select>
                           ) : <span className="text-xs">{emp?.employee_name || "—"}</span>}
                         </td>
-                        {/* Position */}
+                        {/* Position ID */}
+                        <td className="px-3 py-1.5">
+                          <span className="text-xs font-mono text-muted-foreground">{pos?.position_id || "—"}</span>
+                        </td>
+                        {/* Position Name */}
                         <td className="px-3 py-1.5">
                           {isEditable ? (
                              <Select value={row.position_id} onValueChange={(v) => updateRow(idx, "position_id", v)}>
                               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
                               <SelectContent>{positions.map(p => <SelectItem key={p.id} value={p.id}>{p.position_id ? `${p.position_id} - ${p.position_name}` : p.position_name}</SelectItem>)}</SelectContent>
                             </Select>
-                          ) : <span className="text-xs">{pos ? (pos.position_id ? `${pos.position_id} - ${pos.position_name}` : pos.position_name) : "—"}</span>}
+                          ) : <span className="text-xs">{pos?.position_name || "—"}</span>}
                         </td>
                         {/* Rate Year */}
                         <td className="px-3 py-1.5">
