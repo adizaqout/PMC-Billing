@@ -18,34 +18,45 @@ export default function ColumnFilter({ value, onChange, label }: ColumnFilterPro
   }, [open]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <span className="inline-flex items-center">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            className={`ml-1 p-0.5 rounded hover:bg-accent inline-flex items-center ${value ? "text-primary" : "text-muted-foreground opacity-50 hover:opacity-100"}`}
+            title={`Filter ${label}`}
+          >
+            <Search size={10} />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-2" align="start" sideOffset={4}>
+          <div className="relative">
+            <Input
+              ref={inputRef}
+              placeholder={`Filter ${label}...`}
+              value={value}
+              onChange={(e) => onChange(e.target.value)}
+              className="h-7 text-xs pr-6"
+            />
+            {value && (
+              <button
+                onClick={() => { onChange(""); setOpen(false); }}
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X size={12} />
+              </button>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+      {value && (
         <button
-          className={`ml-1 p-0.5 rounded hover:bg-accent inline-flex items-center ${value ? "text-primary" : "text-muted-foreground opacity-50 hover:opacity-100"}`}
-          title={`Filter ${label}`}
+          onClick={(e) => { e.stopPropagation(); onChange(""); }}
+          className="ml-0.5 p-0.5 rounded hover:bg-accent text-primary hover:text-destructive inline-flex items-center"
+          title={`Clear ${label} filter`}
         >
-          <Search size={10} />
+          <X size={10} />
         </button>
-      </PopoverTrigger>
-      <PopoverContent className="w-48 p-2" align="start" sideOffset={4}>
-        <div className="relative">
-          <Input
-            ref={inputRef}
-            placeholder={`Filter ${label}...`}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
-            className="h-7 text-xs pr-6"
-          />
-          {value && (
-            <button
-              onClick={() => { onChange(""); setOpen(false); }}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X size={12} />
-            </button>
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
+      )}
+    </span>
   );
 }
