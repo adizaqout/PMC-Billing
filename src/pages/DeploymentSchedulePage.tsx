@@ -394,11 +394,13 @@ export default function DeploymentSchedulePage() {
         const projId = l.worked_project_id || l.billed_project_id;
         if (projId) allocations[projId] = Number(l.allocation_pct);
       });
+      // Extract position from notes for rows without matched employees
+      const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
       return {
         _key: newRowKey(),
         month: monthFromNotes || selectedSubmission?.month || first.submission_id,
         employee_id: empId,
-        position_id: employees.find(e => e.id === empId)?.position_id || first.po_item_id || "",
+        position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
         rate_year: (first as any).rate_year || 1,
         man_months: (first as any).man_months ?? 0,
         so_id: first.so_id || "",
@@ -844,10 +846,16 @@ export default function DeploymentSchedulePage() {
 
     const flushBatch = async () => {
       if (pendingInserts.length === 0) return;
-      const { error } = await supabase.from("deployment_lines").insert(pendingInserts);
-      if (error) throw error;
+      const batch = [...pendingInserts];
+      const rowCount = pendingRowNums.length;
       pendingInserts = [];
       pendingRowNums = [];
+      const { error } = await supabase.from("deployment_lines").insert(batch);
+      if (error) {
+        // Rows lost — adjust count won't include them
+        throw error;
+      }
+      progress.created += rowCount;
     };
     let placeholderSerial = 0;
 
@@ -927,14 +935,14 @@ export default function DeploymentSchedulePage() {
         }
       });
 
-      // For baseline, store employee code + month in notes for proper row grouping
-      // Assign placeholder IDs for rows without employee codes
+      // For baseline, store employee code + month + position in notes for proper row grouping & display
       let effectiveEmpCode = empIdCode;
       if (!empIdCode && isBaseline) {
         placeholderSerial++;
         effectiveEmpCode = `PH-${placeholderSerial}`;
       }
-      const groupNote = isBaseline ? `emp:${effectiveEmpCode}|month:${rowMonth}` : null;
+      const posId = pos?.id || "";
+      const groupNote = isBaseline ? `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}` : null;
 
       // Build DB records directly
       if (projEntries.length === 0) {
@@ -968,21 +976,17 @@ export default function DeploymentSchedulePage() {
       if (pendingInserts.length >= BATCH_SIZE) {
         try {
           await flushBatch();
-          progress.created += pendingRowNums.length || Math.floor(BATCH_SIZE / 8);
         } catch (err) {
           progress.errors.push({ row: rowNum, message: `DB batch insert failed (rows may be lost): ${err instanceof Error ? err.message : "Unknown error"}` });
         }
-        pendingRowNums = [];
       }
 
       if (i % 100 === 0) onProgress({ ...progress });
     }
 
     // Flush remaining
-    const remainingCount = pendingRowNums.length;
     try {
       await flushBatch();
-      progress.created += remainingCount;
     } catch (err) {
       progress.errors.push({ row: 0, message: `Final batch insert failed: ${err instanceof Error ? err.message : "Unknown error"}` });
     }
