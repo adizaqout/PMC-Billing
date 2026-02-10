@@ -746,10 +746,12 @@ export default function DeploymentSchedulePage() {
         empMonthMap.set(empMonthKey, idx);
       }
       
-      const sum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
-      // Skip 100% allocation check for placeholder rows (no employee) in baseline/forecast
+      const rawSum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
+      const sum = Math.round(rawSum * 100) / 100; // fix floating point
+      // Only enforce 100% allocation for baseline/forecast with real employees
       const isPlaceholder = !row.employee_id && allowEmptyEmployee;
-      if (sum > 0 && sum !== 100 && !isPlaceholder) {
+      const skipAllocationCheck = isPlaceholder || scheduleType === "actual" || scheduleType === "workload";
+      if (sum > 0 && Math.abs(sum - 100) > 0.5 && !skipAllocationCheck) {
         const emp = employees.find(e => e.id === row.employee_id);
         errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): allocation sums to ${sum}%, must be 100%`);
       }
