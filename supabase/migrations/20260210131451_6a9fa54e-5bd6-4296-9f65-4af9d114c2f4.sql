@@ -1,0 +1,1 @@
+ALTER TABLE public.employees ADD COLUMN employee_id text;

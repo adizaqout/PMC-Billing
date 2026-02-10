@@ -25,10 +25,11 @@ import { toast } from "sonner";
 type Employee = Tables<"employees"> & { consultants?: { name: string } | null; positions?: { position_name: string; position_id?: string } | null };
 type Consultant = { id: string; name: string };
 
-interface EmployeeForm { employee_name: string; consultant_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }
-const emptyForm: EmployeeForm = { employee_name: "", consultant_id: "", experience_years: null, start_date: null, end_date: null, status: "active" };
+interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }
+const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", experience_years: null, start_date: null, end_date: null, status: "active" };
 
 const excelCols = [
+  { header: "Employee ID", key: "employee_id", width: 18 },
   { header: "Employee Name", key: "employee_name", width: 25 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Position", key: "position_name", width: 20 },
@@ -57,9 +58,9 @@ export default function EmployeesPage() {
 
   const upsertMutation = useMutation({
     mutationFn: async (values: EmployeeForm & { id?: string }) => {
-      const payload = { employee_name: values.employee_name, consultant_id: values.consultant_id, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any };
+      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any };
       if (values.id) { const { error } = await supabase.from("employees").update(payload).eq("id", values.id); if (error) throw error; }
-      else { const { error } = await supabase.from("employees").insert({ ...payload, consultant_id: values.consultant_id } as any); if (error) throw error; }
+      else { const { error } = await supabase.from("employees").insert({ ...payload } as any); if (error) throw error; }
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["employees"] }); toast.success(editing ? "Employee updated" : "Employee created"); closeDialog(); },
     onError: (e: Error) => toast.error(e.message),
@@ -67,7 +68,7 @@ export default function EmployeesPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["employees"] }); toast.success("Employee deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_name: emp.employee_name, consultant_id: emp.consultant_id, experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status }); setDialogOpen(true); };
+  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -82,7 +83,7 @@ export default function EmployeesPage() {
 
   const filtered = employees.filter((e) => {
     const s = search.toLowerCase();
-    if (s && !e.employee_name.toLowerCase().includes(s) && !(e.consultants?.name || "").toLowerCase().includes(s)) return false;
+    if (s && !e.employee_name.toLowerCase().includes(s) && !(e.consultants?.name || "").toLowerCase().includes(s) && !((e as any).employee_id || "").toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
       const v = val.toLowerCase();
@@ -97,7 +98,7 @@ export default function EmployeesPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, consultant_name: e.consultants?.name || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.name || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.name), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
@@ -105,15 +106,16 @@ export default function EmployeesPage() {
     const total = rows.length - 1;
     const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
     for (let i = 1; i < rows.length; i++) {
-      const [name, consultantName, , exp, startDate, endDate, status] = rows[i];
+      const [empId, name, consultantName, , exp, startDate, endDate, status] = rows[i];
       if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
       const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       const { error } = await supabase.from("employees").insert({
-        employee_name: name.trim(), consultant_id: consultant.id,
+        employee_id: empId != null ? String(empId).trim() || null : null,
+        employee_name: String(name).trim(), consultant_id: consultant.id,
         experience_years: exp ? parseInt(String(exp)) : null,
-        start_date: startDate?.trim() || null, end_date: endDate?.trim() || null,
-        status: status?.trim()?.toLowerCase() || "active",
+        start_date: startDate ? String(startDate).trim() || null : null, end_date: endDate ? String(endDate).trim() || null : null,
+        status: status ? String(status).trim().toLowerCase() : "active",
       } as any);
       if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
       result.processed++;
@@ -141,6 +143,7 @@ export default function EmployeesPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No employees found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
+                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Emp ID" sortKey="employee_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.employee_id || ""} onChange={(v) => setColFilter("employee_id", v)} label="Emp ID" /></SortableHeader></th>
                 <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="employee_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></SortableHeader></th>
                 <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>
                 <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position" sortKey="positions.position_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></SortableHeader></th>
@@ -152,6 +155,7 @@ export default function EmployeesPage() {
               </tr></thead>
               <tbody>{paginatedItems.map((emp) => (
                 <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                  <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{(emp as any).employee_id || "—"}</td>
                   <td className="px-4 py-2.5 font-medium">{emp.employee_name}</td>
                   <td className="px-4 py-2.5">{emp.consultants?.name || "—"}</td>
                   <td className="px-4 py-2.5 text-muted-foreground">{emp.positions?.position_name || "—"}</td>
@@ -175,7 +179,8 @@ export default function EmployeesPage() {
           <DialogHeader><DialogTitle>{editing ? "Edit Employee" : "Add Employee"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5"><Label>Employee Name *</Label><Input value={form.employee_name} onChange={(e) => setForm({ ...form, employee_name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Employee ID</Label><Input value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} placeholder="e.g. EMP-001" /></div>
+              <div className="space-y-1.5"><Label>Employee Name *</Label><Input value={form.employee_name} onChange={(e) => setForm({ ...form, employee_name: e.target.value })} /></div>
               <div className="col-span-2 space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Experience (Years)</Label><Input type="number" value={form.experience_years ?? ""} onChange={(e) => setForm({ ...form, experience_years: e.target.value ? parseInt(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statuses.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select></div>
