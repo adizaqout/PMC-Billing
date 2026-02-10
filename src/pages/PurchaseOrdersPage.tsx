@@ -83,11 +83,11 @@ export default function PurchaseOrdersPage() {
       i.id !== editing?.id
     );
     if (dup) { toast.error("A PO with this Number + Revision + Line Item already exists"); return; }
-    // Validate only one project per same PO number
+    // Validate all line items under the same PO number share the same project
     if (form.project_id) {
       const samePO = items.filter(i => i.po_number.toLowerCase() === form.po_number.toLowerCase().trim() && i.id !== editing?.id);
-      const existingProject = samePO.find(i => (i as any).project_id && (i as any).project_id !== form.project_id);
-      if (existingProject) { toast.error("Only one project is allowed per PO number. This PO already has a different project assigned."); return; }
+      const conflicting = samePO.find(i => (i as any).project_id && (i as any).project_id !== form.project_id);
+      if (conflicting) { toast.error("All line items under the same PO number must have the same project."); return; }
     }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
