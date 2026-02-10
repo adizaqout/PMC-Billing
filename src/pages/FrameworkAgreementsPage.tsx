@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
+import ExcelToolbar from "@/components/ExcelToolbar";
+import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,15 +18,16 @@ import { toast } from "sonner";
 type FA = Tables<"framework_agreements"> & { consultants?: { name: string } | null };
 type FAInsert = TablesInsert<"framework_agreements">;
 
-interface FAForm {
-  framework_agreement_no: string;
-  consultant_id: string;
-  start_date: string | null;
-  end_date: string | null;
-  status: "active" | "inactive";
-}
-
+interface FAForm { framework_agreement_no: string; consultant_id: string; start_date: string | null; end_date: string | null; status: "active" | "inactive"; }
 const emptyForm: FAForm = { framework_agreement_no: "", consultant_id: "", start_date: null, end_date: null, status: "active" };
+
+const cols = [
+  { header: "Agreement No.", key: "framework_agreement_no", width: 22 },
+  { header: "Consultant", key: "consultant_name", width: 25 },
+  { header: "Start Date", key: "start_date", width: 14 },
+  { header: "End Date", key: "end_date", width: 14 },
+  { header: "Status", key: "status", width: 10 },
+];
 
 export default function FrameworkAgreementsPage() {
   const [search, setSearch] = useState("");
@@ -35,43 +38,20 @@ export default function FrameworkAgreementsPage() {
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["framework_agreements"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("framework_agreements").select("*, consultants(name)").order("framework_agreement_no");
-      if (error) throw error;
-      return data as FA[];
-    },
+    queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("*, consultants(name)").order("framework_agreement_no"); if (error) throw error; return data as FA[]; },
   });
-
-  const { data: consultants = [] } = useQuery({
-    queryKey: ["consultants-list"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name");
-      if (error) throw error;
-      return data as { id: string; name: string }[];
-    },
-  });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
 
   const upsertMutation = useMutation({
     mutationFn: async (values: FAForm & { id?: string }) => {
-      const payload: any = { ...values, start_date: values.start_date || null, end_date: values.end_date || null };
-      delete payload.id;
-      if (values.id) {
-        const { error } = await supabase.from("framework_agreements").update(payload).eq("id", values.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("framework_agreements").insert(payload as FAInsert);
-        if (error) throw error;
-      }
+      const payload: any = { ...values, start_date: values.start_date || null, end_date: values.end_date || null }; delete payload.id;
+      if (values.id) { const { error } = await supabase.from("framework_agreements").update(payload).eq("id", values.id); if (error) throw error; }
+      else { const { error } = await supabase.from("framework_agreements").insert(payload as FAInsert); if (error) throw error; }
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["framework_agreements"] }); toast.success(editing ? "Updated" : "Created"); closeDialog(); },
     onError: (e: Error) => toast.error(e.message),
   });
-
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("framework_agreements").delete().eq("id", id); if (error) throw error; },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["framework_agreements"] }); toast.success("Deleted"); },
-    onError: (e: Error) => toast.error(e.message),
-  });
+  const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("framework_agreements").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["framework_agreements"] }); toast.success("Deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (item: FA) => { setEditing(item); setForm({ framework_agreement_no: item.framework_agreement_no, consultant_id: item.consultant_id, start_date: item.start_date, end_date: item.end_date, status: item.status }); setDialogOpen(true); };
@@ -90,12 +70,40 @@ export default function FrameworkAgreementsPage() {
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
   const filtered = items.filter((i) => i.framework_agreement_no.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
 
+  const handleExport = () => { exportToExcel("framework-agreements.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "" }))); toast.success("Exported"); };
+  const handleTemplate = () => { downloadTemplate("fa-template.xlsx", cols, { Consultants: consultants.map(c => c.name) }); toast.success("Template downloaded"); };
+  const handleImport = async (file: File) => {
+    try {
+      const rows = await parseExcelFile(file);
+      if (rows.length < 2) { toast.error("File is empty"); return; }
+      const errors: string[] = []; let created = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const [faNo, consultantName, startDate, endDate, status] = rows[i];
+        if (!faNo?.trim()) continue;
+        const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+        if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
+        const { error } = await supabase.from("framework_agreements").insert({
+          framework_agreement_no: faNo.trim(), consultant_id: consultant.id,
+          start_date: startDate?.trim() || null, end_date: endDate?.trim() || null,
+          status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        } as FAInsert);
+        if (error) errors.push(`Row ${i + 1}: ${error.message}`); else created++;
+      }
+      queryClient.invalidateQueries({ queryKey: ["framework_agreements"] });
+      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
+      if (created) toast.success(`${created} record(s) imported`);
+    } catch { toast.error("Failed to parse file"); }
+  };
+
   return (
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
           <div><h1 className="page-title">Framework Agreements</h1><p className="page-subtitle">Manage framework agreements with consultants</p></div>
-          <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Agreement</Button>
+          <div className="flex items-center gap-2">
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Agreement</Button>
+          </div>
         </div>
         <div className="bg-card rounded-md border">
           <div className="px-4 py-3 border-b flex items-center gap-3">
@@ -121,10 +129,7 @@ export default function FrameworkAgreementsPage() {
                   <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>
                   <td className="px-4 py-2.5 text-center">
                     <DropdownMenu><DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(item)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(item.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem>
-                    </DropdownMenuContent></DropdownMenu>
+                    <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => openEdit(item)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(item.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
                   </td>
                 </tr>
               ))}</tbody></table>
@@ -138,14 +143,10 @@ export default function FrameworkAgreementsPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-1.5"><Label>Agreement No. *</Label><Input value={form.framework_agreement_no} onChange={(e) => setForm({ ...form, framework_agreement_no: e.target.value })} /></div>
-              <div className="col-span-2 space-y-1.5"><Label>Consultant *</Label>
-                <Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select>
-              </div>
+              <div className="col-span-2 space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.start_date || ""} onChange={(e) => setForm({ ...form, start_date: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} min={form.start_date || undefined} /></div>
-              <div className="space-y-1.5"><Label>Status</Label>
-                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select>
-              </div>
+              <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button type="submit" disabled={upsertMutation.isPending}>{upsertMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}{editing ? "Update" : "Create"}</Button></DialogFooter>
           </form>

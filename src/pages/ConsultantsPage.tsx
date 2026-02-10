@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
+import ExcelToolbar from "@/components/ExcelToolbar";
+import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,14 +19,18 @@ type Consultant = Tables<"consultants">;
 type ConsultantInsert = TablesInsert<"consultants">;
 
 const emptyForm: Partial<ConsultantInsert> = {
-  name: "",
-  commercial_registration_no: "",
-  tax_registration_no: "",
-  contact_email: "",
-  contact_phone: "",
-  address: "",
-  status: "active",
+  name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active",
 };
+
+const columns = [
+  { header: "Name", key: "name", width: 30 },
+  { header: "CR No.", key: "commercial_registration_no", width: 20 },
+  { header: "Tax No.", key: "tax_registration_no", width: 20 },
+  { header: "Email", key: "contact_email", width: 25 },
+  { header: "Phone", key: "contact_phone", width: 18 },
+  { header: "Address", key: "address", width: 30 },
+  { header: "Status", key: "status", width: 10 },
+];
 
 export default function ConsultantsPage() {
   const [search, setSearch] = useState("");
@@ -36,10 +42,7 @@ export default function ConsultantsPage() {
   const { data: consultants = [], isLoading } = useQuery({
     queryKey: ["consultants"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("consultants")
-        .select("*")
-        .order("name");
+      const { data, error } = await supabase.from("consultants").select("*").order("name");
       if (error) throw error;
       return data as Consultant[];
     },
@@ -93,6 +96,31 @@ export default function ConsultantsPage() {
 
   const filtered = consultants.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
 
+  const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
+  const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns); toast.success("Template downloaded"); };
+  const handleImport = async (file: File) => {
+    try {
+      const rows = await parseExcelFile(file);
+      if (rows.length < 2) { toast.error("File is empty"); return; }
+      const errors: string[] = [];
+      let created = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const [name, crNo, taxNo, email, phone, address, status] = rows[i];
+        if (!name?.trim()) continue;
+        const { error } = await supabase.from("consultants").insert({
+          name: name.trim(), commercial_registration_no: crNo?.trim() || null, tax_registration_no: taxNo?.trim() || null,
+          contact_email: email?.trim() || null, contact_phone: phone?.trim() || null, address: address?.trim() || null,
+          status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        });
+        if (error) errors.push(`Row ${i + 1}: ${error.message}`);
+        else created++;
+      }
+      queryClient.invalidateQueries({ queryKey: ["consultants"] });
+      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
+      if (created) toast.success(`${created} consultant(s) imported`);
+    } catch { toast.error("Failed to parse file"); }
+  };
+
   return (
     <AppLayout>
       <div className="animate-fade-in">
@@ -101,7 +129,10 @@ export default function ConsultantsPage() {
             <h1 className="page-title">Consultants</h1>
             <p className="page-subtitle">Manage PMC consultant companies</p>
           </div>
-          <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Consultant</Button>
+          <div className="flex items-center gap-2">
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Consultant</Button>
+          </div>
         </div>
 
         <div className="bg-card rounded-md border">
@@ -162,38 +193,17 @@ export default function ConsultantsPage() {
           <DialogHeader><DialogTitle>{editing ? "Edit Consultant" : "Add Consultant"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5">
-                <Label>Name *</Label>
-                <Input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>CR No.</Label>
-                <Input value={form.commercial_registration_no || ""} onChange={(e) => setForm({ ...form, commercial_registration_no: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Tax No.</Label>
-                <Input value={form.tax_registration_no || ""} onChange={(e) => setForm({ ...form, tax_registration_no: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Email</Label>
-                <Input type="email" value={form.contact_email || ""} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Phone</Label>
-                <Input value={form.contact_phone || ""} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Address</Label>
-                <Input value={form.address || ""} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-              </div>
+              <div className="col-span-2 space-y-1.5"><Label>Name *</Label><Input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>CR No.</Label><Input value={form.commercial_registration_no || ""} onChange={(e) => setForm({ ...form, commercial_registration_no: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Tax No.</Label><Input value={form.tax_registration_no || ""} onChange={(e) => setForm({ ...form, tax_registration_no: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.contact_email || ""} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Phone</Label><Input value={form.contact_phone || ""} onChange={(e) => setForm({ ...form, contact_phone: e.target.value })} /></div>
+              <div className="col-span-2 space-y-1.5"><Label>Address</Label><Input value={form.address || ""} onChange={(e) => setForm({ ...form, address: e.target.value })} /></div>
               <div className="space-y-1.5">
                 <Label>Status</Label>
                 <Select value={form.status || "active"} onValueChange={(v) => setForm({ ...form, status: v as "active" | "inactive" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                  </SelectContent>
+                  <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
                 </Select>
               </div>
             </div>
