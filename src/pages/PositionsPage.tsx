@@ -25,9 +25,24 @@ const emptyForm: PosForm = { position_id: "", position_name: "", consultant_id: 
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-const cols = [
+const exportCols = [
   { header: "Position ID", key: "position_id", width: 14 },
   { header: "System ID", key: "system_id", width: 18 },
+  { header: "Position Name", key: "position_name", width: 25 },
+  { header: "Consultant", key: "consultant_name", width: 25 },
+  { header: "Service Order", key: "so_number", width: 18 },
+  { header: "Exp (Yrs)", key: "total_years_of_exp", width: 10 },
+  { header: "Year 1 Rate", key: "year_1_rate", width: 14 },
+  { header: "Year 2 Rate", key: "year_2_rate", width: 14 },
+  { header: "Year 3 Rate", key: "year_3_rate", width: 14 },
+  { header: "Year 4 Rate", key: "year_4_rate", width: 14 },
+  { header: "Year 5 Rate", key: "year_5_rate", width: 14 },
+  { header: "Effective From", key: "effective_from", width: 14 },
+  { header: "Effective To", key: "effective_to", width: 14 },
+  { header: "Notes", key: "notes", width: 25 },
+];
+const importCols = [
+  { header: "Position ID", key: "position_id", width: 14 },
   { header: "Position Name", key: "position_name", width: 25 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Service Order", key: "so_number", width: 18 },
@@ -102,8 +117,8 @@ export default function PositionsPage() {
   });
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(filtered);
 
-  const handleExport = () => { exportToExcel("positions.xlsx", cols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
-  const handleTemplate = () => { downloadTemplate("positions-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
+  const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
+  const handleTemplate = () => { downloadTemplate("positions-template.xlsx", importCols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
   const handleImportWithProgress = useCallback(async (
     rows: string[][],
@@ -113,7 +128,7 @@ export default function PositionsPage() {
     const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
 
     for (let i = 1; i < rows.length; i++) {
-      const [posId, , name, consultantName, soNum, exp, y1, y2, y3, y4, y5, from, to, notes] = rows[i];
+      const [posId, name, consultantName, soNum, exp, y1, y2, y3, y4, y5, from, to, notes] = rows[i];
       if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
       const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
