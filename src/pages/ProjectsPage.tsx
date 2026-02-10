@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
@@ -55,12 +56,26 @@ const columns = [
   { header: "Status", key: "status", width: 10 },
 ];
 
+const projTableCols: ColumnDef[] = [
+  { key: "project_number", label: "Project No." },
+  { key: "project_name", label: "Project Name" },
+  { key: "entity", label: "Entity" },
+  { key: "portfolio", label: "Portfolio" },
+  { key: "start_date", label: "Start Date" },
+  { key: "end_date", label: "End Date" },
+  { key: "budget", label: "Budget" },
+  { key: "pmc_budget", label: "PMC Budget" },
+  { key: "type", label: "Type" },
+  { key: "status", label: "Status" },
+];
+
 export default function ProjectsPage() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [form, setForm] = useState<Partial<ProjectInsert>>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const { visibleColumns, setVisibleColumns } = useColumnVisibility(projTableCols);
   const queryClient = useQueryClient();
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
@@ -204,6 +219,7 @@ export default function ProjectsPage() {
           </div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ColumnVisibilityToggle columns={projTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Project</Button>
           </div>
         </div>
@@ -225,32 +241,32 @@ export default function ProjectsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Project No." sortKey="project_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.project_number || ""} onChange={(v) => setColFilter("project_number", v)} label="Project No." /></SortableHeader></th>
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Project Name" sortKey="project_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.project_name || ""} onChange={(v) => setColFilter("project_name", v)} label="Project Name" /></SortableHeader></th>
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Entity" sortKey="entity" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.entity || ""} onChange={(v) => setColFilter("entity", v)} label="Entity" /></SortableHeader></th>
-                    <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Portfolio" sortKey="portfolio" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.portfolio || ""} onChange={(v) => setColFilter("portfolio", v)} label="Portfolio" /></SortableHeader></th>
-                    <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                    <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                    <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Budget (AED)" sortKey="latest_budget" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                    <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="PMC Budget" sortKey="latest_pmc_budget" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                    <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Type" sortKey="project_type" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.type || ""} onChange={(v) => setColFilter("type", v)} label="Type" /></SortableHeader></th>
-                    <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>
+                    {visibleColumns.has("project_number") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Project No." sortKey="project_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.project_number || ""} onChange={(v) => setColFilter("project_number", v)} label="Project No." /></SortableHeader></th>}
+                    {visibleColumns.has("project_name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Project Name" sortKey="project_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.project_name || ""} onChange={(v) => setColFilter("project_name", v)} label="Project Name" /></SortableHeader></th>}
+                    {visibleColumns.has("entity") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Entity" sortKey="entity" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.entity || ""} onChange={(v) => setColFilter("entity", v)} label="Entity" /></SortableHeader></th>}
+                    {visibleColumns.has("portfolio") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Portfolio" sortKey="portfolio" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.portfolio || ""} onChange={(v) => setColFilter("portfolio", v)} label="Portfolio" /></SortableHeader></th>}
+                    {visibleColumns.has("start_date") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                    {visibleColumns.has("end_date") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                    {visibleColumns.has("budget") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Budget (AED)" sortKey="latest_budget" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                    {visibleColumns.has("pmc_budget") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="PMC Budget" sortKey="latest_pmc_budget" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                    {visibleColumns.has("type") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Type" sortKey="project_type" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.type || ""} onChange={(v) => setColFilter("type", v)} label="Type" /></SortableHeader></th>}
+                    {visibleColumns.has("status") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>}
                     <th className="data-table-header w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedItems.map((p) => (
                     <tr key={p.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{(p as any).project_number || "—"}</td>
-                      <td className="px-4 py-2.5 font-medium">{p.project_name}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{p.entity || "—"}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground">{p.portfolio || "—"}</td>
-                      <td className="px-4 py-2.5 text-center text-xs">{fmtDate(p.start_date)}</td>
-                      <td className="px-4 py-2.5 text-center text-xs">{fmtDate(p.end_date)}</td>
-                      <td className="px-4 py-2.5 text-right font-mono">{fmt(p.latest_budget)}</td>
-                      <td className="px-4 py-2.5 text-right font-mono">{fmt(p.latest_pmc_budget)}</td>
-                      <td className="px-4 py-2.5 text-center text-xs">{p.project_type || "—"}</td>
-                      <td className="px-4 py-2.5 text-center"><StatusBadge status={p.status} /></td>
+                      {visibleColumns.has("project_number") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{(p as any).project_number || "—"}</td>}
+                      {visibleColumns.has("project_name") && <td className="px-4 py-2.5 font-medium">{p.project_name}</td>}
+                      {visibleColumns.has("entity") && <td className="px-4 py-2.5 text-muted-foreground">{p.entity || "—"}</td>}
+                      {visibleColumns.has("portfolio") && <td className="px-4 py-2.5 text-muted-foreground">{p.portfolio || "—"}</td>}
+                      {visibleColumns.has("start_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(p.start_date)}</td>}
+                      {visibleColumns.has("end_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(p.end_date)}</td>}
+                      {visibleColumns.has("budget") && <td className="px-4 py-2.5 text-right font-mono">{fmt(p.latest_budget)}</td>}
+                      {visibleColumns.has("pmc_budget") && <td className="px-4 py-2.5 text-right font-mono">{fmt(p.latest_pmc_budget)}</td>}
+                      {visibleColumns.has("type") && <td className="px-4 py-2.5 text-center text-xs">{p.project_type || "—"}</td>}
+                      {visibleColumns.has("status") && <td className="px-4 py-2.5 text-center"><StatusBadge status={p.status} /></td>}
                       <td className="px-4 py-2.5 text-center">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>

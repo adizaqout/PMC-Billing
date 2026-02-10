@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import { usePagination } from "@/hooks/usePagination";
@@ -51,6 +52,13 @@ export default function PurchaseOrdersPage() {
   const [editing, setEditing] = useState<PO | null>(null);
   const [form, setForm] = useState<POForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const poTableCols: ColumnDef[] = [
+    { key: "po_number", label: "PO Number" }, { key: "rev", label: "Rev" }, { key: "line", label: "PO Line Item" },
+    { key: "consultant", label: "Consultant" }, { key: "so", label: "SO" }, { key: "proj_no", label: "Project No." },
+    { key: "proj_name", label: "Project Name" }, { key: "start", label: "Start" }, { key: "end", label: "End" },
+    { key: "amount", label: "Amount" }, { key: "type", label: "Type" }, { key: "status", label: "Status" },
+  ];
+  const { visibleColumns, setVisibleColumns } = useColumnVisibility(poTableCols);
   const queryClient = useQueryClient();
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
@@ -153,6 +161,7 @@ export default function PurchaseOrdersPage() {
           <div><h1 className="page-title">Purchase Orders</h1><p className="page-subtitle">Manage POs and PO line items</p></div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ColumnVisibilityToggle columns={poTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add PO</Button>
           </div>
         </div>

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
@@ -61,6 +62,13 @@ export default function InvoicesPage() {
   const [editing, setEditing] = useState<Invoice | null>(null);
   const [form, setForm] = useState<InvoiceForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const invTableCols: ColumnDef[] = [
+    { key: "inv_no", label: "Invoice No." }, { key: "month", label: "Month" }, { key: "consultant", label: "Consultant" },
+    { key: "po", label: "PO" }, { key: "rev", label: "Rev" }, { key: "line", label: "Line" },
+    { key: "po_value", label: "PO Value" }, { key: "billed", label: "Billed" }, { key: "billed_to_date", label: "Billed To Date" },
+    { key: "paid", label: "Paid" }, { key: "status", label: "Status" },
+  ];
+  const { visibleColumns, setVisibleColumns } = useColumnVisibility(invTableCols);
   const queryClient = useQueryClient();
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
@@ -279,6 +287,7 @@ export default function InvoicesPage() {
           <div><h1 className="page-title">Invoices</h1><p className="page-subtitle">Track and validate invoices</p></div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ColumnVisibilityToggle columns={invTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Invoice</Button>
           </div>
         </div>

@@ -5,6 +5,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { useLookupValues } from "@/hooks/useLookupValues";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import TablePagination from "@/components/TablePagination";
 import ColumnFilter from "@/components/ColumnFilter";
@@ -63,6 +64,12 @@ export default function EmployeesPage() {
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const empTableCols: ColumnDef[] = [
+    { key: "emp_id", label: "Emp ID" }, { key: "name", label: "Name" }, { key: "consultant", label: "Consultant" },
+    { key: "pos_id", label: "Position ID" }, { key: "pos_name", label: "Position Name" }, { key: "exp", label: "Exp (Yrs)" },
+    { key: "start", label: "Start Date" }, { key: "end", label: "End Date" }, { key: "status", label: "Status" },
+  ];
+  const { visibleColumns, setVisibleColumns } = useColumnVisibility(empTableCols);
   const queryClient = useQueryClient();
   const { data: statuses = [] } = useLookupValues("employee_status");
 
@@ -160,6 +167,7 @@ export default function EmployeesPage() {
           <div><h1 className="page-title">Employees</h1><p className="page-subtitle">Manage PMC consultant employees</p></div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ColumnVisibilityToggle columns={empTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Employee</Button>
           </div>
         </div>
