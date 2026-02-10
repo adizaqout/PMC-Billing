@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban, CalendarRange } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import StatusBadge from "@/components/StatusBadge";
@@ -41,10 +41,12 @@ export default function AdminPage() {
             <TabsTrigger value="users"><Users size={14} className="mr-1.5" />Users</TabsTrigger>
             <TabsTrigger value="groups"><Shield size={14} className="mr-1.5" />Groups & Permissions</TabsTrigger>
             <TabsTrigger value="lookups"><ListChecks size={14} className="mr-1.5" />Lookup Values</TabsTrigger>
+            <TabsTrigger value="period-constraints"><CalendarRange size={14} className="mr-1.5" />Period Constraints</TabsTrigger>
           </TabsList>
           <TabsContent value="users"><UsersTab /></TabsContent>
           <TabsContent value="groups"><GroupsTab /></TabsContent>
           <TabsContent value="lookups"><LookupsTab /></TabsContent>
+          <TabsContent value="period-constraints"><PeriodConstraintsTab /></TabsContent>
         </Tabs>
       </div>
     </AppLayout>
@@ -569,6 +571,236 @@ function LookupsTab() {
           </form>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+// =============== PERIOD CONSTRAINTS TAB ===============
+interface PeriodConstraint {
+  id: string;
+  consultant_id: string;
+  schedule_type: string;
+  min_month: string | null;
+  max_month: string | null;
+}
+
+function PeriodConstraintsTab() {
+  const queryClient = useQueryClient();
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editing, setEditing] = useState<PeriodConstraint | null>(null);
+  const [form, setForm] = useState({ consultant_id: "", schedule_type: "forecast", min_month: "", max_month: "" });
+  const [deleteTarget, setDeleteTarget] = useState<PeriodConstraint | null>(null);
+
+  const { data: consultants = [] } = useQuery({
+    queryKey: ["consultants-list"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name");
+      if (error) throw error;
+      return data as { id: string; name: string }[];
+    },
+  });
+
+  const { data: constraints = [], isLoading } = useQuery({
+    queryKey: ["period-constraints"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("consultant_period_constraints").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data as PeriodConstraint[];
+    },
+  });
+
+  const upsertMutation = useMutation({
+    mutationFn: async (values: any) => {
+      if (editing) {
+        const { error } = await supabase.from("consultant_period_constraints").update({
+          min_month: values.min_month || null,
+          max_month: values.max_month || null,
+        } as any).eq("id", editing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("consultant_period_constraints").insert({
+          consultant_id: values.consultant_id,
+          schedule_type: values.schedule_type,
+          min_month: values.min_month || null,
+          max_month: values.max_month || null,
+          created_by: null,
+        } as any);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["period-constraints"] });
+      toast.success(editing ? "Constraint updated" : "Constraint added");
+      setDialogOpen(false);
+      setEditing(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("consultant_period_constraints").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["period-constraints"] });
+      toast.success("Constraint removed");
+      setDeleteTarget(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ consultant_id: consultants[0]?.id || "", schedule_type: "forecast", min_month: "", max_month: "" });
+    setDialogOpen(true);
+  };
+
+  const openEdit = (c: PeriodConstraint) => {
+    setEditing(c);
+    setForm({ consultant_id: c.consultant_id, schedule_type: c.schedule_type, min_month: c.min_month || "", max_month: c.max_month || "" });
+    setDialogOpen(true);
+  };
+
+  const formatMonth = (m: string | null) => {
+    if (!m) return "—";
+    const [y, mo] = m.split("-").map(Number);
+    const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${names[mo - 1]} ${y}`;
+  };
+
+  // Generate month options for select (3 years back to 5 years ahead)
+  const monthSelectOptions = (() => {
+    const opts: string[] = [];
+    const now = new Date();
+    for (let y = now.getFullYear() - 3; y <= now.getFullYear() + 5; y++) {
+      for (let m = 1; m <= 12; m++) {
+        opts.push(`${y}-${String(m).padStart(2, "0")}`);
+      }
+    }
+    return opts;
+  })();
+
+  return (
+    <>
+      <div className="bg-card rounded-md border mt-4">
+        <div className="px-4 py-3 border-b flex items-center justify-between">
+          <div>
+            <span className="text-sm font-medium">Consultant Period Constraints</span>
+            <span className="text-xs text-muted-foreground ml-2">Control min/max month selection for forecast & baseline per consultant</span>
+          </div>
+          <Button size="sm" onClick={openAdd}><Plus size={14} className="mr-1.5" />Add Constraint</Button>
+        </div>
+        <div className="overflow-x-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div>
+          ) : constraints.length === 0 ? (
+            <div className="text-center py-12 text-sm text-muted-foreground">No constraints configured. Default framework agreement dates will be used.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="data-table-header text-left px-4 py-2.5">Consultant</th>
+                  <th className="data-table-header text-left px-4 py-2.5">Schedule Type</th>
+                  <th className="data-table-header text-center px-4 py-2.5">Min Month</th>
+                  <th className="data-table-header text-center px-4 py-2.5">Max Month</th>
+                  <th className="data-table-header w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {constraints.map((c) => (
+                  <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50">
+                    <td className="px-4 py-2.5">{consultants.find(con => con.id === c.consultant_id)?.name || "—"}</td>
+                    <td className="px-4 py-2.5 capitalize">{c.schedule_type}</td>
+                    <td className="px-4 py-2.5 text-center font-mono text-xs">{formatMonth(c.min_month)}</td>
+                    <td className="px-4 py-2.5 text-center font-mono text-xs">{formatMonth(c.max_month)}</td>
+                    <td className="px-4 py-2.5 text-center">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEdit(c)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(c)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Add/Edit Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader><DialogTitle>{editing ? "Edit Constraint" : "Add Period Constraint"}</DialogTitle></DialogHeader>
+          <form onSubmit={(e) => { e.preventDefault(); if (!editing && !form.consultant_id) { toast.error("Select a consultant"); return; } upsertMutation.mutate(form); }} className="space-y-4">
+            {!editing && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Consultant *</Label>
+                  <Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v })}>
+                    <SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger>
+                    <SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Schedule Type *</Label>
+                  <Select value={form.schedule_type} onValueChange={(v) => setForm({ ...form, schedule_type: v })}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="forecast">Forecast</SelectItem>
+                      <SelectItem value="baseline">Baseline</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+            <div className="space-y-1.5">
+              <Label>Min Month</Label>
+              <Select value={form.min_month || "none"} onValueChange={(v) => setForm({ ...form, min_month: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="No minimum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No minimum</SelectItem>
+                  {monthSelectOptions.map(m => <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Max Month</Label>
+              <Select value={form.max_month || "none"} onValueChange={(v) => setForm({ ...form, max_month: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="No maximum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No maximum</SelectItem>
+                  {monthSelectOptions.map(m => <SelectItem key={m} value={m}>{formatMonth(m)}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={upsertMutation.isPending}>
+                {upsertMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
+                {editing ? "Update" : "Add"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete constraint?</AlertDialogTitle>
+            <AlertDialogDescription>This will remove the period constraint. The default framework agreement dates will be used instead.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}>Delete</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

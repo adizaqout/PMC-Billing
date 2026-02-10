@@ -217,6 +217,18 @@ export default function DeploymentSchedulePage() {
     enabled: !!consultantId,
   });
 
+  // Fetch admin-defined period constraints for this consultant
+  const { data: adminConstraints = [] } = useQuery({
+    queryKey: ["consultant-period-constraints", consultantId],
+    queryFn: async () => {
+      if (!consultantId) return [];
+      const { data, error } = await supabase.from("consultant_period_constraints").select("*").eq("consultant_id", consultantId);
+      if (error) throw error;
+      return data as { id: string; consultant_id: string; schedule_type: string; min_month: string | null; max_month: string | null }[];
+    },
+    enabled: !!consultantId,
+  });
+
   const scheduleType = selectedSubmission?.schedule_type || newType;
 
   // Compute earliest framework start month (YYYY-MM) for month constraints
@@ -228,23 +240,38 @@ export default function DeploymentSchedulePage() {
     return earliest.slice(0, 7); // YYYY-MM
   }, [frameworkAgreements]);
 
-  // Month min/max based on schedule type
+  // Month min/max based on schedule type, with admin overrides
   const getMonthConstraints = (type: string) => {
     const fwStart = frameworkStartMonth || undefined;
+    const adminRule = adminConstraints.find(c => c.schedule_type === type);
+
     switch (type) {
       case "actual":
       case "workload":
         return { min: fwStart, max: periodMonth || undefined };
-      case "forecast":
-        // forecast > period, so min is next month after period
+      case "forecast": {
+        // Default: min is next month after period, no max
+        let min: string | undefined;
         if (periodMonth) {
           const [y, m] = periodMonth.split("-").map(Number);
-          const next = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
-          return { min: next, max: undefined };
+          min = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
+        } else {
+          min = fwStart;
         }
-        return { min: fwStart, max: undefined };
-      case "baseline":
-        return { min: fwStart, max: undefined };
+        let max: string | undefined;
+        // Admin overrides
+        if (adminRule?.min_month) min = adminRule.min_month;
+        if (adminRule?.max_month) max = adminRule.max_month;
+        return { min, max };
+      }
+      case "baseline": {
+        let min = fwStart;
+        let max: string | undefined;
+        // Admin overrides
+        if (adminRule?.min_month) min = adminRule.min_month;
+        if (adminRule?.max_month) max = adminRule.max_month;
+        return { min, max };
+      }
       default:
         return { min: fwStart, max: undefined };
     }
@@ -527,7 +554,7 @@ export default function DeploymentSchedulePage() {
     }
     // actual / workload — default to period month
     return periodMonth || constraints.min || "";
-  }, [scheduleType, periodMonth, frameworkStartMonth]);
+  }, [scheduleType, periodMonth, frameworkStartMonth, adminConstraints]);
 
   // Generate month options for the dropdown based on constraints
   const monthOptions = useMemo(() => {
@@ -558,7 +585,7 @@ export default function DeploymentSchedulePage() {
       }
     }
     return options;
-  }, [scheduleType, periodMonth, frameworkStartMonth]);
+  }, [scheduleType, periodMonth, frameworkStartMonth, adminConstraints]);
 
   const formatMonthLabel = (m: string) => {
     if (!m) return "";

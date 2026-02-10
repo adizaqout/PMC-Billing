@@ -47,6 +47,47 @@ export type Database = {
         }
         Relationships: []
       }
+      consultant_period_constraints: {
+        Row: {
+          consultant_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          max_month: string | null
+          min_month: string | null
+          schedule_type: string
+          updated_at: string
+        }
+        Insert: {
+          consultant_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          max_month?: string | null
+          min_month?: string | null
+          schedule_type: string
+          updated_at?: string
+        }
+        Update: {
+          consultant_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          max_month?: string | null
+          min_month?: string | null
+          schedule_type?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consultant_period_constraints_consultant_id_fkey"
+            columns: ["consultant_id"]
+            isOneToOne: false
+            referencedRelation: "consultants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       consultants: {
         Row: {
           address: string | null
