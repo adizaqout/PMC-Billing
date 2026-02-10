@@ -101,10 +101,19 @@ export default function ServiceOrdersPage() {
       const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       const fw = fwNo ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === fwNo.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
+      const excelDateToISO = (v: any): string | null => {
+        if (v == null || String(v).trim() === "") return null;
+        const s = String(v).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        const n = Number(s);
+        if (!isNaN(n) && n > 0) { const d = new Date(Math.round((n - 25569) * 86400000)); return d.toISOString().slice(0, 10); }
+        const parsed = new Date(s);
+        return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+      };
       const safeTrim = (v: any) => v == null ? null : String(v).trim() || null;
       const { error } = await supabase.from("service_orders").insert({
         so_number: soNum.trim(), consultant_id: consultant.id, framework_id: fw?.id || null,
-        so_start_date: safeTrim(startDate), so_end_date: safeTrim(endDate),
+        so_start_date: excelDateToISO(startDate), so_end_date: excelDateToISO(endDate),
         so_value: value ? parseFloat(String(value)) : null, comments: safeTrim(comments),
       } as TablesInsert<"service_orders">);
       if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
