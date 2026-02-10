@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Download, Upload, Save, Send, Plus, Trash2, Eye, Loader2, CheckCircle2, XCircle, RotateCcw, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -41,7 +42,7 @@ type Submission = Tables<"deployment_submissions"> & { consultants?: { name: str
 type DeploymentLine = Tables<"deployment_lines">;
 type Period = Tables<"period_control">;
 type Employee = Tables<"employees"> & { positions?: { position_name: string } | null };
-type Project = { id: string; project_name: string };
+type Project = { id: string; project_name: string; project_number: string | null };
 type PurchaseOrder = { id: string; po_number: string; consultant_id: string; so_id: string | null };
 type POItem = { id: string; po_id: string; po_item_ref: string | null; project_id: string | null };
 type ServiceOrder = { id: string; so_number: string; consultant_id: string; framework_id: string | null; so_start_date: string | null; so_end_date: string | null };
@@ -57,7 +58,9 @@ interface LineRow {
   allocation_pct: number;
 }
 
-// CSV helpers
+// Excel/CSV helpers
+const projLabel = (p: Project) => p.project_number ? `${p.project_number} - ${p.project_name}` : p.project_name;
+
 function downloadCSV(filename: string, headers: string[], rows: string[][]) {
   const csv = [headers.join(","), ...rows.map(r => r.map(c => `"${(c || "").replace(/"/g, '""')}"`).join(","))].join("\n");
   const blob = new Blob([csv], { type: "text/csv" });
@@ -182,7 +185,7 @@ export default function DeploymentSchedulePage() {
   const { data: allProjects = [] } = useQuery({
     queryKey: ["deployment-projects"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("projects").select("id, project_name").eq("status", "active").order("project_name");
+      const { data, error } = await supabase.from("projects").select("id, project_name, project_number").eq("status", "active").order("project_name");
       if (error) throw error;
       return data as Project[];
     },

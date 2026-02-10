@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
+import ExcelToolbar from "@/components/ExcelToolbar";
+import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,11 +19,23 @@ type Project = Tables<"projects">;
 type ProjectInsert = TablesInsert<"projects">;
 
 const emptyForm: Partial<ProjectInsert> = {
-  project_name: "", entity: "", portfolio: "", project_type: "", classification: "",
+  project_name: "", project_number: "", entity: "", portfolio: "", project_type: "", classification: "",
   latest_budget: null, latest_pmc_budget: null, status: "active",
 };
 
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en", { maximumFractionDigits: 0 }).format(v) : "—";
+
+const columns = [
+  { header: "Project Number", key: "project_number", width: 18 },
+  { header: "Project Name", key: "project_name", width: 30 },
+  { header: "Entity", key: "entity", width: 20 },
+  { header: "Portfolio", key: "portfolio", width: 20 },
+  { header: "Type", key: "project_type", width: 15 },
+  { header: "Classification", key: "classification", width: 15 },
+  { header: "Budget", key: "latest_budget", width: 15 },
+  { header: "PMC Budget", key: "latest_pmc_budget", width: 15 },
+  { header: "Status", key: "status", width: 10 },
+];
 
 export default function ProjectsPage() {
   const [search, setSearch] = useState("");
@@ -72,7 +86,7 @@ export default function ProjectsPage() {
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (p: Project) => {
     setEditing(p);
-    setForm({ project_name: p.project_name, entity: p.entity, portfolio: p.portfolio, project_type: p.project_type, classification: p.classification, latest_budget: p.latest_budget, latest_pmc_budget: p.latest_pmc_budget, status: p.status });
+    setForm({ project_name: p.project_name, project_number: (p as any).project_number || "", entity: p.entity, portfolio: p.portfolio, project_type: p.project_type, classification: p.classification, latest_budget: p.latest_budget, latest_pmc_budget: p.latest_pmc_budget, status: p.status });
     setDialogOpen(true);
   };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
@@ -82,11 +96,55 @@ export default function ProjectsPage() {
     if (!form.project_name?.trim()) { toast.error("Project name is required"); return; }
     const dup = projects.find(p => p.project_name.toLowerCase() === form.project_name!.toLowerCase().trim() && p.id !== editing?.id);
     if (dup) { toast.error("A project with this name already exists"); return; }
+    if (form.project_number) {
+      const numDup = projects.find(p => (p as any).project_number?.toLowerCase() === form.project_number!.toLowerCase().trim() && p.id !== editing?.id);
+      if (numDup) { toast.error("A project with this number already exists"); return; }
+    }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
   const numVal = (v: string) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-  const filtered = projects.filter((p) => p.project_name.toLowerCase().includes(search.toLowerCase()));
+  const filtered = projects.filter((p) => 
+    p.project_name.toLowerCase().includes(search.toLowerCase()) ||
+    ((p as any).project_number || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const handleExport = () => {
+    exportToExcel("projects.xlsx", columns, filtered.map(p => ({ ...p, project_number: (p as any).project_number || "" })));
+    toast.success("Exported");
+  };
+  const handleTemplate = () => {
+    downloadTemplate("projects-template.xlsx", columns);
+    toast.success("Template downloaded");
+  };
+  const handleImport = async (file: File) => {
+    try {
+      const rows = await parseExcelFile(file);
+      if (rows.length < 2) { toast.error("File is empty"); return; }
+      const errors: string[] = [];
+      let created = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const [projNum, projName, entity, portfolio, projType, classification, budget, pmcBudget, status] = rows[i];
+        if (!projName?.trim()) continue;
+        const { error } = await supabase.from("projects").insert({
+          project_number: projNum?.trim() || null,
+          project_name: projName.trim(),
+          entity: entity?.trim() || null,
+          portfolio: portfolio?.trim() || null,
+          project_type: projType?.trim() || null,
+          classification: classification?.trim() || null,
+          latest_budget: budget ? parseFloat(String(budget)) : null,
+          latest_pmc_budget: pmcBudget ? parseFloat(String(pmcBudget)) : null,
+          status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        } as any);
+        if (error) errors.push(`Row ${i + 1}: ${error.message}`);
+        else created++;
+      }
+      queryClient.invalidateQueries({ queryKey: ["projects"] });
+      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
+      if (created) toast.success(`${created} project(s) imported`);
+    } catch { toast.error("Failed to parse file"); }
+  };
 
   return (
     <AppLayout>
@@ -96,7 +154,10 @@ export default function ProjectsPage() {
             <h1 className="page-title">Projects</h1>
             <p className="page-subtitle">Manage project master data</p>
           </div>
-          <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Project</Button>
+          <div className="flex items-center gap-2">
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Project</Button>
+          </div>
         </div>
 
         <div className="bg-card rounded-md border">
@@ -116,6 +177,7 @@ export default function ProjectsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
+                    <th className="data-table-header text-left px-4 py-2.5">Project No.</th>
                     <th className="data-table-header text-left px-4 py-2.5">Project Name</th>
                     <th className="data-table-header text-left px-4 py-2.5">Entity</th>
                     <th className="data-table-header text-left px-4 py-2.5">Portfolio</th>
@@ -129,6 +191,7 @@ export default function ProjectsPage() {
                 <tbody>
                   {filtered.map((p) => (
                     <tr key={p.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
+                      <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{(p as any).project_number || "—"}</td>
                       <td className="px-4 py-2.5 font-medium">{p.project_name}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">{p.entity || "—"}</td>
                       <td className="px-4 py-2.5 text-muted-foreground">{p.portfolio || "—"}</td>
@@ -159,7 +222,11 @@ export default function ProjectsPage() {
           <DialogHeader><DialogTitle>{editing ? "Edit Project" : "Add Project"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5">
+              <div className="space-y-1.5">
+                <Label>Project Number</Label>
+                <Input value={form.project_number || ""} onChange={(e) => setForm({ ...form, project_number: e.target.value })} placeholder="e.g. PRJ-001" />
+              </div>
+              <div className="space-y-1.5">
                 <Label>Project Name *</Label>
                 <Input value={form.project_name || ""} onChange={(e) => setForm({ ...form, project_name: e.target.value })} />
               </div>

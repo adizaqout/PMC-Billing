@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/StatusBadge";
+import ExcelToolbar from "@/components/ExcelToolbar";
+import { exportToExcel, downloadTemplate, parseExcelFile } from "@/lib/excel-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,14 +17,20 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 
 type Invoice = Tables<"invoices"> & { consultants?: { name: string } | null; purchase_orders?: { po_number: string } | null };
-
-interface InvoiceForm {
-  invoice_number: string; invoice_month: string; consultant_id: string; po_id: string | null;
-  billed_amount_no_vat: number | null; paid_amount: number | null; status: "pending" | "paid" | "cancelled"; description: string | null;
-}
-
+interface InvoiceForm { invoice_number: string; invoice_month: string; consultant_id: string; po_id: string | null; billed_amount_no_vat: number | null; paid_amount: number | null; status: "pending" | "paid" | "cancelled"; description: string | null; }
 const emptyForm: InvoiceForm = { invoice_number: "", invoice_month: "", consultant_id: "", po_id: null, billed_amount_no_vat: null, paid_amount: null, status: "pending", description: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(v) : "—";
+
+const cols = [
+  { header: "Invoice Number", key: "invoice_number", width: 18 },
+  { header: "Month", key: "invoice_month", width: 12 },
+  { header: "Consultant", key: "consultant_name", width: 25 },
+  { header: "PO Number", key: "po_number", width: 18 },
+  { header: "Billed Amount", key: "billed_amount_no_vat", width: 15 },
+  { header: "Paid Amount", key: "paid_amount", width: 15 },
+  { header: "Status", key: "status", width: 10 },
+  { header: "Description", key: "description", width: 30 },
+];
 
 export default function InvoicesPage() {
   const [search, setSearch] = useState("");
@@ -31,14 +39,9 @@ export default function InvoicesPage() {
   const [form, setForm] = useState<InvoiceForm>(emptyForm);
   const queryClient = useQueryClient();
 
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ["invoices"],
-    queryFn: async () => { const { data, error } = await supabase.from("invoices").select("*, consultants(name), purchase_orders(po_number)").order("invoice_month", { ascending: false }); if (error) throw error; return data as Invoice[]; },
-  });
+  const { data: items = [], isLoading } = useQuery({ queryKey: ["invoices"], queryFn: async () => { const { data, error } = await supabase.from("invoices").select("*, consultants(name), purchase_orders(po_number)").order("invoice_month", { ascending: false }); if (error) throw error; return data as Invoice[]; } });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
   const { data: allPOs = [] } = useQuery({ queryKey: ["po-all"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("id, po_number, consultant_id").eq("status", "active").order("po_number"); if (error) throw error; return data as { id: string; po_number: string; consultant_id: string }[]; } });
-
-  // Filter POs by selected consultant
   const filteredPOs = form.consultant_id ? allPOs.filter(p => p.consultant_id === form.consultant_id) : [];
 
   const upsertMutation = useMutation({
@@ -55,10 +58,7 @@ export default function InvoicesPage() {
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (item: Invoice) => { setEditing(item); setForm({ invoice_number: item.invoice_number, invoice_month: item.invoice_month, consultant_id: item.consultant_id, po_id: item.po_id, billed_amount_no_vat: item.billed_amount_no_vat, paid_amount: item.paid_amount, status: item.status, description: item.description }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
-
-  const handleConsultantChange = (v: string) => {
-    setForm({ ...form, consultant_id: v, po_id: null });
-  };
+  const handleConsultantChange = (v: string) => { setForm({ ...form, consultant_id: v, po_id: null }); };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,12 +72,42 @@ export default function InvoicesPage() {
 
   const filtered = items.filter((i) => i.invoice_number.toLowerCase().includes(search.toLowerCase()) || (i.consultants?.name || "").toLowerCase().includes(search.toLowerCase()));
 
+  const handleExport = () => { exportToExcel("invoices.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", po_number: i.purchase_orders?.po_number || "" }))); toast.success("Exported"); };
+  const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.name), "PO Numbers": allPOs.map(p => p.po_number) }); toast.success("Template downloaded"); };
+  const handleImport = async (file: File) => {
+    try {
+      const rows = await parseExcelFile(file);
+      if (rows.length < 2) { toast.error("File is empty"); return; }
+      const errors: string[] = []; let created = 0;
+      for (let i = 1; i < rows.length; i++) {
+        const [invNum, month, consultantName, poNum, billed, paid, status, desc] = rows[i];
+        if (!invNum?.trim()) continue;
+        const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+        if (!consultant) { errors.push(`Row ${i + 1}: Consultant "${consultantName}" not found`); continue; }
+        const po = poNum ? allPOs.find(p => p.po_number.toLowerCase() === poNum.trim().toLowerCase() && p.consultant_id === consultant.id) : null;
+        const { error } = await supabase.from("invoices").insert({
+          invoice_number: invNum.trim(), invoice_month: month?.trim() || "", consultant_id: consultant.id, po_id: po?.id || null,
+          billed_amount_no_vat: billed ? parseFloat(String(billed)) : null, paid_amount: paid ? parseFloat(String(paid)) : null,
+          status: (["paid", "cancelled"].includes(status?.trim()?.toLowerCase() || "") ? status.trim().toLowerCase() : "pending") as any,
+          description: desc?.trim() || null,
+        } as TablesInsert<"invoices">);
+        if (error) errors.push(`Row ${i + 1}: ${error.message}`); else created++;
+      }
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      if (errors.length) toast.error(`${errors.length} error(s): ${errors.slice(0, 3).join("; ")}`);
+      if (created) toast.success(`${created} record(s) imported`);
+    } catch { toast.error("Failed to parse file"); }
+  };
+
   return (
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
           <div><h1 className="page-title">Invoices</h1><p className="page-subtitle">Track and validate invoices</p></div>
-          <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Invoice</Button>
+          <div className="flex items-center gap-2">
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={handleImport} />
+            <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Invoice</Button>
+          </div>
         </div>
         <div className="bg-card rounded-md border">
           <div className="px-4 py-3 border-b flex items-center gap-3">
@@ -123,12 +153,7 @@ export default function InvoicesPage() {
               <div className="space-y-1.5"><Label>Invoice Number *</Label><Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Invoice Month * (YYYY-MM)</Label><Input value={form.invoice_month} onChange={(e) => setForm({ ...form, invoice_month: e.target.value })} placeholder="2026-02" /></div>
               <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-              <div className="space-y-1.5"><Label>Purchase Order</Label>
-                <Select value={form.po_id || "none"} onValueChange={(v) => setForm({ ...form, po_id: v === "none" ? null : v })} disabled={!form.consultant_id}>
-                  <SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger>
-                  <SelectContent><SelectItem value="none">None</SelectItem>{filteredPOs.map((p) => <SelectItem key={p.id} value={p.id}>{p.po_number}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+              <div className="space-y-1.5"><Label>Purchase Order</Label><Select value={form.po_id || "none"} onValueChange={(v) => setForm({ ...form, po_id: v === "none" ? null : v })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredPOs.map((p) => <SelectItem key={p.id} value={p.id}>{p.po_number}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Billed Amount (AED)</Label><Input type="number" step="0.01" value={form.billed_amount_no_vat ?? ""} onChange={(e) => setForm({ ...form, billed_amount_no_vat: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Paid Amount (AED)</Label><Input type="number" step="0.01" value={form.paid_amount ?? ""} onChange={(e) => setForm({ ...form, paid_amount: e.target.value ? parseFloat(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select></div>

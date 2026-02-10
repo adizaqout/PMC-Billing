@@ -744,6 +744,7 @@ export type Database = {
           previous_pmc_actual: number | null
           previous_pmc_budget: number | null
           project_name: string
+          project_number: string | null
           project_type: string | null
           start_date: string | null
           status: Database["public"]["Enums"]["record_status"]
@@ -764,6 +765,7 @@ export type Database = {
           previous_pmc_actual?: number | null
           previous_pmc_budget?: number | null
           project_name: string
+          project_number?: string | null
           project_type?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["record_status"]
@@ -784,6 +786,7 @@ export type Database = {
           previous_pmc_actual?: number | null
           previous_pmc_budget?: number | null
           project_name?: string
+          project_number?: string | null
           project_type?: string | null
           start_date?: string | null
           status?: Database["public"]["Enums"]["record_status"]
