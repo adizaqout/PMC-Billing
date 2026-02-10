@@ -6,6 +6,12 @@ import { useAuth } from "@/contexts/AuthContext";
 import AppLayout from "@/components/AppLayout";
 import { Button } from "@/components/ui/button";
 import StatusBadge from "@/components/StatusBadge";
+import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
+import ColumnFilter from "@/components/ColumnFilter";
+import SortableHeader from "@/components/SortableHeader";
+import TablePagination from "@/components/TablePagination";
+import { useSort } from "@/hooks/useSort";
+import { usePagination } from "@/hooks/usePagination";
 import {
   Select,
   SelectContent,
@@ -23,7 +29,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { Save, Send, Plus, Trash2, Eye, Loader2, CheckCircle2, XCircle, RotateCcw, AlertTriangle } from "lucide-react";
+import { Save, Send, Plus, Trash2, Eye, Loader2, CheckCircle2, XCircle, RotateCcw, AlertTriangle, Search } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { exportToExcel, downloadTemplate, parseExcelFile, type ExcelColumnDef } from "@/lib/excel-utils";
 import ExcelToolbar from "@/components/ExcelToolbar";
@@ -83,6 +89,14 @@ export default function DeploymentSchedulePage() {
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected" | "returned">("approved");
   const [reviewComment, setReviewComment] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
+  const [subSearch, setSubSearch] = useState("");
+  const [subColFilters, setSubColFilters] = useState<Record<string, string>>({});
+  const setSubColFilter = (key: string, value: string) => setSubColFilters(prev => ({ ...prev, [key]: value }));
+  const subTableCols: ColumnDef[] = [
+    { key: "month", label: "Month" }, { key: "type", label: "Type" }, { key: "rev", label: "Rev #" },
+    { key: "status", label: "Status" }, { key: "submitted", label: "Submitted" }, { key: "reviewed", label: "Reviewed" },
+  ];
+  const { visibleColumns: subVisibleCols, setVisibleColumns: setSubVisibleCols } = useColumnVisibility(subTableCols);
 
   const { data: userRole } = useQuery({
     queryKey: ["user-role", user?.id],
@@ -1072,6 +1086,19 @@ export default function DeploymentSchedulePage() {
   // ============ LIST VIEW ============
   const submittedSubs = submissions.filter(s => s.status === "submitted");
 
+  const filteredSubs = submissions.filter((s) => {
+    if (subSearch) {
+      const q = subSearch.toLowerCase();
+      if (!s.month.includes(q) && !s.schedule_type.includes(q) && !s.status.includes(q)) return false;
+    }
+    if (subColFilters.month && !s.month.toLowerCase().includes(subColFilters.month.toLowerCase())) return false;
+    if (subColFilters.type && !s.schedule_type.toLowerCase().includes(subColFilters.type.toLowerCase())) return false;
+    if (subColFilters.status && !s.status.toLowerCase().includes(subColFilters.status.toLowerCase())) return false;
+    return true;
+  });
+  const { sorted: sortedSubs, sort: subSort, toggleSort: toggleSubSort } = useSort(filteredSubs, "month", "desc");
+  const { paginatedItems: paginatedSubs, pageSize: subPageSize, setPageSize: setSubPageSize, currentPage: subCurrentPage, setCurrentPage: setSubCurrentPage, totalItems: subTotalItems } = usePagination(sortedSubs);
+
   return (
     <AppLayout>
       <div className="animate-fade-in">
@@ -1081,6 +1108,7 @@ export default function DeploymentSchedulePage() {
             <p className="page-subtitle">All submissions · Period: {periodMonth}</p>
           </div>
           <div className="flex items-center gap-2">
+            <ColumnVisibilityToggle columns={subTableCols} visibleColumns={subVisibleCols} onChange={setSubVisibleCols} />
             <Button size="sm" onClick={() => setNewDialogOpen(true)}>
               <Plus size={14} className="mr-1.5" />New Submission
             </Button>
@@ -1107,7 +1135,12 @@ export default function DeploymentSchedulePage() {
         </div>
 
         {/* Submissions table */}
-        <div className="bg-card rounded-md border overflow-x-auto">
+        <div className="bg-card rounded-md border">
+          <div className="px-4 py-3 border-b flex items-center gap-3">
+            <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search submissions..." value={subSearch} onChange={(e) => setSubSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
+            <span className="text-xs text-muted-foreground">{filteredSubs.length} records</span>
+          </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b">
@@ -1119,32 +1152,32 @@ export default function DeploymentSchedulePage() {
                     />
                   )}
                 </th>
-                <th className="data-table-header text-left px-3 py-2.5">Month</th>
-                <th className="data-table-header text-left px-3 py-2.5">Type</th>
-                <th className="data-table-header text-center px-3 py-2.5">Rev #</th>
-                <th className="data-table-header text-left px-3 py-2.5">Status</th>
-                <th className="data-table-header text-left px-3 py-2.5">Submitted</th>
-                <th className="data-table-header text-left px-3 py-2.5">Reviewed</th>
+                {subVisibleCols.has("month") && <th className="data-table-header text-left px-3 py-2.5"><SortableHeader label="Month" sortKey="month" currentKey={subSort.key} direction={subSort.direction} onSort={toggleSubSort}><ColumnFilter value={subColFilters.month || ""} onChange={(v) => setSubColFilter("month", v)} label="Month" /></SortableHeader></th>}
+                {subVisibleCols.has("type") && <th className="data-table-header text-left px-3 py-2.5"><SortableHeader label="Type" sortKey="schedule_type" currentKey={subSort.key} direction={subSort.direction} onSort={toggleSubSort}><ColumnFilter value={subColFilters.type || ""} onChange={(v) => setSubColFilter("type", v)} label="Type" /></SortableHeader></th>}
+                {subVisibleCols.has("rev") && <th className="data-table-header text-center px-3 py-2.5"><SortableHeader label="Rev #" sortKey="revision_no" currentKey={subSort.key} direction={subSort.direction} onSort={toggleSubSort} /></th>}
+                {subVisibleCols.has("status") && <th className="data-table-header text-left px-3 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={subSort.key} direction={subSort.direction} onSort={toggleSubSort}><ColumnFilter value={subColFilters.status || ""} onChange={(v) => setSubColFilter("status", v)} label="Status" /></SortableHeader></th>}
+                {subVisibleCols.has("submitted") && <th className="data-table-header text-left px-3 py-2.5"><SortableHeader label="Submitted" sortKey="submitted_on" currentKey={subSort.key} direction={subSort.direction} onSort={toggleSubSort} /></th>}
+                {subVisibleCols.has("reviewed") && <th className="data-table-header text-left px-3 py-2.5"><SortableHeader label="Reviewed" sortKey="reviewed_on" currentKey={subSort.key} direction={subSort.direction} onSort={toggleSubSort} /></th>}
                 <th className="data-table-header w-10"></th>
               </tr>
             </thead>
             <tbody>
-              {submissions.length === 0 ? (
-                <tr><td colSpan={8} className="text-center py-12 text-muted-foreground">No submissions found</td></tr>
+              {paginatedSubs.length === 0 ? (
+                <tr><td colSpan={9} className="text-center py-12 text-muted-foreground">No submissions found</td></tr>
               ) : (
-                submissions.map(sub => (
+                paginatedSubs.map(sub => (
                   <tr key={sub.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                     <td className="px-3 py-2.5">
                       {sub.status === "submitted" && (
                         <Checkbox checked={selectedIds.has(sub.id)} onCheckedChange={() => toggleSelect(sub.id)} />
                       )}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-xs">{sub.month}</td>
-                    <td className="px-3 py-2.5 capitalize">{sub.schedule_type}</td>
-                    <td className="px-3 py-2.5 text-center font-mono">#{sub.revision_no}</td>
-                    <td className="px-3 py-2.5"><StatusBadge status={sub.status} /></td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{sub.submitted_on ? new Date(sub.submitted_on).toLocaleDateString() : "—"}</td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{sub.reviewed_on ? new Date(sub.reviewed_on).toLocaleDateString() : "—"}</td>
+                    {subVisibleCols.has("month") && <td className="px-3 py-2.5 font-mono text-xs">{sub.month}</td>}
+                    {subVisibleCols.has("type") && <td className="px-3 py-2.5 capitalize">{sub.schedule_type}</td>}
+                    {subVisibleCols.has("rev") && <td className="px-3 py-2.5 text-center font-mono">#{sub.revision_no}</td>}
+                    {subVisibleCols.has("status") && <td className="px-3 py-2.5"><StatusBadge status={sub.status} /></td>}
+                    {subVisibleCols.has("submitted") && <td className="px-3 py-2.5 text-xs text-muted-foreground">{sub.submitted_on ? new Date(sub.submitted_on).toLocaleDateString() : "—"}</td>}
+                    {subVisibleCols.has("reviewed") && <td className="px-3 py-2.5 text-xs text-muted-foreground">{sub.reviewed_on ? new Date(sub.reviewed_on).toLocaleDateString() : "—"}</td>}
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
                         <Button size="sm" variant="ghost" onClick={() => { setSelectedSubmission(sub); setView("detail"); }}>
@@ -1162,6 +1195,8 @@ export default function DeploymentSchedulePage() {
               )}
             </tbody>
           </table>
+          </div>
+          {filteredSubs.length > 0 && <TablePagination totalItems={subTotalItems} pageSize={subPageSize} currentPage={subCurrentPage} onPageChange={setSubCurrentPage} onPageSizeChange={setSubPageSize} />}
         </div>
       </div>
 

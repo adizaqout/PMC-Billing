@@ -179,28 +179,28 @@ export default function EmployeesPage() {
           <div className="overflow-x-auto">
             {isLoading ? <div className="flex items-center justify-center py-12"><Loader2 className="animate-spin text-muted-foreground" size={24} /></div> : filtered.length === 0 ? <div className="text-center py-12 text-sm text-muted-foreground">No employees found</div> : (
               <table className="w-full text-sm"><thead><tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Emp ID" sortKey="employee_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.employee_id || ""} onChange={(v) => setColFilter("employee_id", v)} label="Emp ID" /></SortableHeader></th>
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="employee_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></SortableHeader></th>
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position ID" sortKey="positions.position_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position Name" sortKey="positions.position_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></SortableHeader></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Exp (Yrs)" sortKey="experience_years" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start Date" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End Date" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>
-                <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>
+                {visibleColumns.has("emp_id") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Emp ID" sortKey="employee_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.employee_id || ""} onChange={(v) => setColFilter("employee_id", v)} label="Emp ID" /></SortableHeader></th>}
+                {visibleColumns.has("name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="employee_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></SortableHeader></th>}
+                {visibleColumns.has("consultant") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>}
+                {visibleColumns.has("pos_id") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position ID" sortKey="positions.position_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("pos_name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position Name" sortKey="positions.position_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></SortableHeader></th>}
+                {visibleColumns.has("exp") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Exp (Yrs)" sortKey="experience_years" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("start") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start Date" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("end") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End Date" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("status") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>}
                 <th className="data-table-header w-10"></th>
               </tr></thead>
               <tbody>{paginatedItems.map((emp) => (
                 <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                  <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{(emp as any).employee_id || "—"}</td>
-                  <td className="px-4 py-2.5 font-medium">{emp.employee_name}</td>
-                  <td className="px-4 py-2.5">{emp.consultants?.name || "—"}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{emp.positions?.position_id || "—"}</td>
-                  <td className="px-4 py-2.5 text-muted-foreground">{emp.positions?.position_name || "—"}</td>
-                  <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>
-                  <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.start_date)}</td>
-                  <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.end_date)}</td>
-                  <td className="px-4 py-2.5 text-center"><StatusBadge status={emp.status} /></td>
+                  {visibleColumns.has("emp_id") && <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{(emp as any).employee_id || "—"}</td>}
+                  {visibleColumns.has("name") && <td className="px-4 py-2.5 font-medium">{emp.employee_name}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{emp.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("pos_id") && <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{emp.positions?.position_id || "—"}</td>}
+                  {visibleColumns.has("pos_name") && <td className="px-4 py-2.5 text-muted-foreground">{emp.positions?.position_name || "—"}</td>}
+                  {visibleColumns.has("exp") && <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>}
+                  {visibleColumns.has("start") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.start_date)}</td>}
+                  {visibleColumns.has("end") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.end_date)}</td>}
+                  {visibleColumns.has("status") && <td className="px-4 py-2.5 text-center"><StatusBadge status={emp.status} /></td>}
                   <td className="px-4 py-2.5 text-center">
                     <DropdownMenu><DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
                     <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => openEdit(emp)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem><DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(emp.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu>
