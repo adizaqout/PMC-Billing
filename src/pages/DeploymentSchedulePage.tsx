@@ -849,6 +849,7 @@ export default function DeploymentSchedulePage() {
       pendingInserts = [];
       pendingRowNums = [];
     };
+    let placeholderSerial = 0;
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
@@ -927,7 +928,13 @@ export default function DeploymentSchedulePage() {
       });
 
       // For baseline, store employee code + month in notes for proper row grouping
-      const groupNote = isBaseline ? `emp:${empIdCode || "none"}|month:${rowMonth}` : null;
+      // Assign placeholder IDs for rows without employee codes
+      let effectiveEmpCode = empIdCode;
+      if (!empIdCode && isBaseline) {
+        placeholderSerial++;
+        effectiveEmpCode = `PH-${placeholderSerial}`;
+      }
+      const groupNote = isBaseline ? `emp:${effectiveEmpCode}|month:${rowMonth}` : null;
 
       // Build DB records directly
       if (projEntries.length === 0) {
