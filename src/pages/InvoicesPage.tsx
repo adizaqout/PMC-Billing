@@ -265,7 +265,6 @@ export default function InvoicesPage() {
       consultant_name: i.consultants?.name || "",
       po_number: i.purchase_orders?.po_number || "",
       po_revision: i.purchase_orders?.revision_number ?? "",
-      po_line: i.purchase_orders?.po_reference || "",
       po_value: getPoRevTotal(i) ?? "",
       billed_to_date: getBilledToDate(i) ?? "",
     })));
