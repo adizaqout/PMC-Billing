@@ -100,8 +100,7 @@ export default function Dashboard() {
   const { user, roles } = useAuth();
   const [tab, setTab] = useState("overview");
   const [filters, setFilters] = useState<AnalyticsFilters>(defaultAnalyticsFilters);
-  const [showPreviousRevisions, setShowPreviousRevisions] = useState(false);
-  const { analytics, isLoading } = useAnalyticsModel(filters, showPreviousRevisions);
+  const { analytics, isLoading } = useAnalyticsModel(filters, false);
 
   const saveGadgetMutation = useMutation({
     mutationFn: async ({ gadgetId, enabled, positionY }: { gadgetId: string; enabled: boolean; positionY: number }) => {
