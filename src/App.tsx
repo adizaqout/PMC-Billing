@@ -19,7 +19,7 @@ import PositionsPage from "./pages/PositionsPage";
 import DeploymentSchedulePage from "./pages/DeploymentSchedulePage";
 import PeriodControlPage from "./pages/PeriodControlPage";
 import AdminPage from "./pages/AdminPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
+import ReportsPage from "./pages/ReportsPage";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import NotFound from "./pages/NotFound";
 
@@ -47,7 +47,7 @@ const App = () => (
             <Route path="/deployments" element={<ProtectedRoute module="deployments"><DeploymentSchedulePage /></ProtectedRoute>} />
             <Route path="/period-control" element={<ProtectedRoute module="period_control"><PeriodControlPage /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute module="reports"><PlaceholderPage title="Reports" subtitle="Baseline vs Actual vs Forecast and more" /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute module="reports"><ReportsPage /></ProtectedRoute>} />
             <Route path="/ai-assistant" element={<ProtectedRoute module="ai_assistant"><AIAssistantPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
