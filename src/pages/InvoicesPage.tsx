@@ -381,9 +381,7 @@ export default function InvoicesPage() {
               {form._po_key && selectedPO && (
                 <>
                   <div className="space-y-1.5"><Label>PO Value (AED)</Label><Input value={fmt(form._po_key ? (poRevTotalMap[form._po_key] ?? null) : null)} disabled className="bg-muted" /></div>
-                  {billedToDate != null && (
-                    <div className="space-y-1.5"><Label>Billed To Date (AED)</Label><Input value={fmt(billedToDate)} disabled className="bg-muted font-semibold" /></div>
-                  )}
+                  <div className="space-y-1.5"><Label>Billed To Date (AED)</Label><Input value={fmt(billedToDate)} disabled className="bg-muted font-semibold" /></div>
                 </>
               )}
               <div className="space-y-1.5"><Label>Billed Amount (AED)</Label><Input type="number" step="0.01" value={form.billed_amount_no_vat ?? ""} onChange={(e) => setForm({ ...form, billed_amount_no_vat: e.target.value ? parseFloat(e.target.value) : null })} /></div>
