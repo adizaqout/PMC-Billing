@@ -105,7 +105,6 @@ export default function Dashboard() {
 
   const saveGadgetMutation = useMutation({
     mutationFn: async ({ gadgetId, enabled, positionY }: { gadgetId: string; enabled: boolean; positionY: number }) => {
-      const existing = analytics?.dashboardGadgets.find((gadget) => gadget.id === gadgetId && gadget.isEnabled);
       const payload = {
         user_id: user?.id,
         gadget_id: gadgetId,
@@ -116,8 +115,14 @@ export default function Dashboard() {
 
       if (!user?.id) throw new Error("Authentication required");
 
+      const existing = analytics?.dashboardGadgets.find((gadget) => gadget.id === gadgetId && gadget.isEnabled);
+
       if (existing) {
-        const { error } = await supabase.from("user_dashboard_gadgets").update(payload).eq("id", existing.id);
+        const { error } = await supabase
+          .from("user_dashboard_gadgets")
+          .update(payload)
+          .eq("user_id", user.id)
+          .eq("gadget_id", gadgetId);
         if (error) throw error;
         return;
       }
