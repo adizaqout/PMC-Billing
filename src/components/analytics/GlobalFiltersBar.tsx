@@ -19,6 +19,10 @@ interface GlobalFiltersBarProps {
   positionOptions: FilterOption[];
   showScenario?: boolean;
   showSubmissionStatus?: boolean;
+  visibleFilters?: Array<"month" | "consultant" | "project" | "so" | "po" | "position" | "submissionStatus" | "scenario">;
+  consultantLabel?: string;
+  title?: string;
+  description?: string;
 }
 
 function FilterSelect({
@@ -33,7 +37,7 @@ function FilterSelect({
   onValueChange: (value: string) => void;
 }) {
   return (
-    <div className="space-y-1.5 min-w-[150px]">
+    <div className="min-w-[150px] space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
       <Select value={value} onValueChange={onValueChange}>
         <SelectTrigger className="h-9 bg-background">
@@ -62,40 +66,52 @@ export default function GlobalFiltersBar({
   positionOptions,
   showScenario = true,
   showSubmissionStatus = true,
+  visibleFilters = ["month", "consultant", "project", "so", "po", "position", "submissionStatus", "scenario"],
+  consultantLabel = "Company",
+  title = "Global Filters",
+  description = "All visuals respect period, permission, and company visibility rules.",
 }: GlobalFiltersBarProps) {
   const setFilter = <K extends keyof AnalyticsFilters>(key: K, value: AnalyticsFilters[K]) => {
     onChange({ ...filters, [key]: value });
   };
 
+  const showFilter = (key: NonNullable<GlobalFiltersBarProps["visibleFilters"]>[number]) => visibleFilters.includes(key);
+
   return (
-    <div className="rounded-md border bg-card p-4 mb-6 space-y-4">
+    <div className="mb-6 space-y-4 rounded-md border bg-card p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold">Global Filters</h2>
-          <p className="text-xs text-muted-foreground">All visuals respect period, permission, and company visibility rules.</p>
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="text-xs text-muted-foreground">{description}</p>
         </div>
-        <Button variant="outline" size="sm" onClick={() => onChange({
-          month: ALL_FILTER_VALUE,
-          consultantId: ALL_FILTER_VALUE,
-          projectId: ALL_FILTER_VALUE,
-          soId: ALL_FILTER_VALUE,
-          poId: ALL_FILTER_VALUE,
-          positionId: ALL_FILTER_VALUE,
-          submissionStatus: ALL_FILTER_VALUE,
-          scenario: ALL_FILTER_VALUE,
-        })}>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() =>
+            onChange({
+              month: ALL_FILTER_VALUE,
+              consultantId: ALL_FILTER_VALUE,
+              projectId: ALL_FILTER_VALUE,
+              soId: ALL_FILTER_VALUE,
+              poId: ALL_FILTER_VALUE,
+              positionId: ALL_FILTER_VALUE,
+              submissionStatus: ALL_FILTER_VALUE,
+              scenario: ALL_FILTER_VALUE,
+            })
+          }
+        >
           Reset
         </Button>
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <FilterSelect label="Month" value={filters.month} options={monthOptions} onValueChange={(value) => setFilter("month", value)} />
-        <FilterSelect label="Company" value={filters.consultantId} options={consultantOptions} onValueChange={(value) => setFilter("consultantId", value)} />
-        <FilterSelect label="Project" value={filters.projectId} options={projectOptions} onValueChange={(value) => setFilter("projectId", value)} />
-        <FilterSelect label="SO" value={filters.soId} options={soOptions} onValueChange={(value) => setFilter("soId", value)} />
-        <FilterSelect label="PO" value={filters.poId} options={poOptions} onValueChange={(value) => setFilter("poId", value)} />
-        <FilterSelect label="Position Group" value={filters.positionId} options={positionOptions} onValueChange={(value) => setFilter("positionId", value)} />
-        {showSubmissionStatus && (
+        {showFilter("month") && <FilterSelect label="Month" value={filters.month} options={monthOptions} onValueChange={(value) => setFilter("month", value)} />}
+        {showFilter("consultant") && <FilterSelect label={consultantLabel} value={filters.consultantId} options={consultantOptions} onValueChange={(value) => setFilter("consultantId", value)} />}
+        {showFilter("project") && <FilterSelect label="Project" value={filters.projectId} options={projectOptions} onValueChange={(value) => setFilter("projectId", value)} />}
+        {showFilter("so") && <FilterSelect label="SO" value={filters.soId} options={soOptions} onValueChange={(value) => setFilter("soId", value)} />}
+        {showFilter("po") && <FilterSelect label="PO" value={filters.poId} options={poOptions} onValueChange={(value) => setFilter("poId", value)} />}
+        {showFilter("position") && <FilterSelect label="Position Group" value={filters.positionId} options={positionOptions} onValueChange={(value) => setFilter("positionId", value)} />}
+        {showFilter("submissionStatus") && showSubmissionStatus && (
           <FilterSelect
             label="Submission Status"
             value={filters.submissionStatus}
@@ -111,7 +127,7 @@ export default function GlobalFiltersBar({
             onValueChange={(value) => setFilter("submissionStatus", value)}
           />
         )}
-        {showScenario && (
+        {showFilter("scenario") && showScenario && (
           <FilterSelect
             label="Scenario"
             value={filters.scenario}

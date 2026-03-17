@@ -40,7 +40,7 @@ const navSections: NavSection[] = [
   {
     title: "Overview",
     items: [
-      { label: "Dashboard", icon: LayoutDashboard, path: "/" },
+      { label: "Overview", icon: LayoutDashboard, path: "/" },
     ],
   },
   {

@@ -14,6 +14,8 @@ type Group = Pick<Tables<"groups">, "id" | "name">;
 type ReportCatalog = Pick<Tables<"report_catalog">, "id" | "report_name" | "report_key" | "module_key" | "is_active">;
 type ReportVisibility = Tables<"group_report_visibility">;
 type FeatureToggle = Tables<"group_feature_toggles">;
+type DashboardGadget = Pick<Tables<"dashboard_gadgets">, "id" | "title" | "gadget_key" | "is_active">;
+type DashboardGadgetVisibility = Tables<"group_dashboard_gadget_visibility">;
 
 const FEATURE_KEY = "ai_assistant";
 const SETTING_KEY = "risk_thresholds";
@@ -24,12 +26,14 @@ export default function AnalyticsControlsTab() {
   const { data, isLoading } = useQuery({
     queryKey: ["admin-analytics-controls"],
     queryFn: async () => {
-      const [groupsRes, reportsRes, visibilityRes, featuresRes, settingsRes] = await Promise.all([
+      const [groupsRes, reportsRes, visibilityRes, featuresRes, settingsRes, gadgetsRes, gadgetVisibilityRes] = await Promise.all([
         supabase.from("groups").select("id, name").order("name"),
         supabase.from("report_catalog").select("id, report_name, report_key, module_key, is_active").order("sort_order"),
         supabase.from("group_report_visibility").select("*"),
         supabase.from("group_feature_toggles").select("*"),
         supabase.from("app_settings").select("*").eq("setting_key", SETTING_KEY).maybeSingle(),
+        supabase.from("dashboard_gadgets").select("id, title, gadget_key, is_active").eq("is_active", true).order("sort_order"),
+        supabase.from("group_dashboard_gadget_visibility").select("*"),
       ]);
 
       if (groupsRes.error) throw groupsRes.error;
@@ -37,6 +41,8 @@ export default function AnalyticsControlsTab() {
       if (visibilityRes.error) throw visibilityRes.error;
       if (featuresRes.error) throw featuresRes.error;
       if (settingsRes.error) throw settingsRes.error;
+      if (gadgetsRes.error) throw gadgetsRes.error;
+      if (gadgetVisibilityRes.error) throw gadgetVisibilityRes.error;
 
       return {
         groups: (groupsRes.data || []) as Group[],
@@ -44,13 +50,15 @@ export default function AnalyticsControlsTab() {
         visibility: (visibilityRes.data || []) as ReportVisibility[],
         features: (featuresRes.data || []) as FeatureToggle[],
         thresholds: settingsRes.data,
+        gadgets: (gadgetsRes.data || []) as DashboardGadget[],
+        gadgetVisibility: (gadgetVisibilityRes.data || []) as DashboardGadgetVisibility[],
       };
     },
   });
 
   const thresholds = useMemo(() => {
     const value = data?.thresholds?.setting_value;
-    const parsed = typeof value === "object" && value ? value as { amber_pct?: number; red_pct?: number } : {};
+    const parsed = typeof value === "object" && value ? (value as { amber_pct?: number; red_pct?: number }) : {};
     return {
       amber_pct: Number(parsed.amber_pct ?? 10),
       red_pct: Number(parsed.red_pct ?? 0),
@@ -71,6 +79,25 @@ export default function AnalyticsControlsTab() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-analytics-controls"] });
       toast.success("Report visibility updated");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const gadgetVisibilityMutation = useMutation({
+    mutationFn: async ({ groupId, gadgetId, isVisible }: { groupId: string; gadgetId: string; isVisible: boolean }) => {
+      const existing = data?.gadgetVisibility.find((row) => row.group_id === groupId && row.gadget_id === gadgetId);
+      if (existing) {
+        const { error } = await supabase.from("group_dashboard_gadget_visibility").update({ is_visible: isVisible }).eq("id", existing.id);
+        if (error) throw error;
+        return;
+      }
+      const { error } = await supabase.from("group_dashboard_gadget_visibility").insert({ group_id: groupId, gadget_id: gadgetId, is_visible: isVisible } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-analytics-controls"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics-data"] });
+      toast.success("Gadget visibility updated");
     },
     onError: (error: Error) => toast.error(error.message),
   });
@@ -116,44 +143,78 @@ export default function AnalyticsControlsTab() {
   }
 
   return (
-    <div className="grid gap-6 mt-4 xl:grid-cols-[1.25fr_0.9fr]">
-      <Card>
-        <CardHeader>
-          <CardTitle>Report visibility by group</CardTitle>
-          <CardDescription>Control which report modules each group can see without changing core permissions.</CardDescription>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b">
-                <th className="data-table-header text-left px-4 py-2.5">Group</th>
-                {data.reports.map((report) => (
-                  <th key={report.id} className="data-table-header text-center px-4 py-2.5 min-w-[140px]">{report.report_name}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {data.groups.map((group) => (
-                <tr key={group.id} className="border-b last:border-0">
-                  <td className="px-4 py-3 font-medium">{group.name}</td>
-                  {data.reports.map((report) => {
-                    const row = data.visibility.find((item) => item.group_id === group.id && item.report_id === report.id);
-                    const checked = row?.is_visible ?? true;
-                    return (
-                      <td key={report.id} className="px-4 py-3 text-center">
-                        <Switch
-                          checked={checked}
-                          onCheckedChange={(value) => visibilityMutation.mutate({ groupId: group.id, reportId: report.id, isVisible: value })}
-                        />
-                      </td>
-                    );
-                  })}
+    <div className="mt-4 grid gap-6 xl:grid-cols-[1.25fr_0.9fr]">
+      <div className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Report visibility by group</CardTitle>
+            <CardDescription>Control which report modules each group can see without changing core permissions.</CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="data-table-header px-4 py-2.5 text-left">Group</th>
+                  {data.reports.map((report) => (
+                    <th key={report.id} className="data-table-header min-w-[140px] px-4 py-2.5 text-center">{report.report_name}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+              </thead>
+              <tbody>
+                {data.groups.map((group) => (
+                  <tr key={group.id} className="border-b last:border-0">
+                    <td className="px-4 py-3 font-medium">{group.name}</td>
+                    {data.reports.map((report) => {
+                      const row = data.visibility.find((item) => item.group_id === group.id && item.report_id === report.id);
+                      const checked = row?.is_visible ?? true;
+                      return (
+                        <td key={report.id} className="px-4 py-3 text-center">
+                          <Switch checked={checked} onCheckedChange={(value) => visibilityMutation.mutate({ groupId: group.id, reportId: report.id, isVisible: value })} />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Dashboard gadget visibility by group</CardTitle>
+            <CardDescription>Decide which gadgets users are allowed to add to their dashboard tab.</CardDescription>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="data-table-header px-4 py-2.5 text-left">Group</th>
+                  {data.gadgets.map((gadget) => (
+                    <th key={gadget.id} className="data-table-header min-w-[160px] px-4 py-2.5 text-center">{gadget.title}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.groups.map((group) => (
+                  <tr key={group.id} className="border-b last:border-0">
+                    <td className="px-4 py-3 font-medium">{group.name}</td>
+                    {data.gadgets.map((gadget) => {
+                      const row = data.gadgetVisibility.find((item) => item.group_id === group.id && item.gadget_id === gadget.id);
+                      const checked = row?.is_visible ?? true;
+                      return (
+                        <td key={gadget.id} className="px-4 py-3 text-center">
+                          <Switch checked={checked} onCheckedChange={(value) => gadgetVisibilityMutation.mutate({ groupId: group.id, gadgetId: gadget.id, isVisible: value })} />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="space-y-6">
         <Card>
@@ -181,27 +242,17 @@ export default function AnalyticsControlsTab() {
         <Card>
           <CardHeader>
             <CardTitle>Configurable thresholds</CardTitle>
-            <CardDescription>Shared by dashboard, reports, and AI risk categorization.</CardDescription>
+            <CardDescription>Shared by overview, dashboard, reports, and AI risk categorization.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="amber-threshold">Amber threshold %</Label>
-                <Input
-                  id="amber-threshold"
-                  type="number"
-                  defaultValue={thresholds.amber_pct}
-                  onBlur={(e) => thresholdsMutation.mutate({ amber_pct: Number(e.target.value || 10), red_pct: thresholds.red_pct })}
-                />
+                <Input id="amber-threshold" type="number" defaultValue={thresholds.amber_pct} onBlur={(e) => thresholdsMutation.mutate({ amber_pct: Number(e.target.value || 10), red_pct: thresholds.red_pct })} />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="red-threshold">Red threshold %</Label>
-                <Input
-                  id="red-threshold"
-                  type="number"
-                  defaultValue={thresholds.red_pct}
-                  onBlur={(e) => thresholdsMutation.mutate({ amber_pct: thresholds.amber_pct, red_pct: Number(e.target.value || 0) })}
-                />
+                <Input id="red-threshold" type="number" defaultValue={thresholds.red_pct} onBlur={(e) => thresholdsMutation.mutate({ amber_pct: thresholds.amber_pct, red_pct: Number(e.target.value || 0) })} />
               </div>
             </div>
             <p className="text-xs text-muted-foreground">Amber uses remaining budget threshold. Red remains forecast-over-budget by formula and stores this extra threshold for future extensions.</p>
