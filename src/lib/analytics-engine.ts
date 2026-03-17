@@ -1,4 +1,4 @@
-import type { Tables } from "@/integrations/supabase/types";
+import type { Json, Tables } from "@/integrations/supabase/types";
 import {
   ALL_FILTER_VALUE,
   compareMonth,
