@@ -19,7 +19,7 @@ import PositionsPage from "./pages/PositionsPage";
 import DeploymentSchedulePage from "./pages/DeploymentSchedulePage";
 import PeriodControlPage from "./pages/PeriodControlPage";
 import AdminPage from "./pages/AdminPage";
-import PlaceholderPage from "./pages/PlaceholderPage";
+import ReportsPage from "./pages/ReportsPage";
 import AIAssistantPage from "./pages/AIAssistantPage";
 import NotFound from "./pages/NotFound";
 
