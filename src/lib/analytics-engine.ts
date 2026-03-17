@@ -462,6 +462,13 @@ export function buildAnalyticsModel(
     };
   });
 
+  const uniquePurchaseOrders = Array.from(
+    data.purchaseOrders.reduce((map, po) => {
+      if (!map.has(po.po_number)) map.set(po.po_number, po);
+      return map;
+    }, new Map<string, PurchaseOrderRow>()).values(),
+  ).sort((a, b) => a.po_number.localeCompare(b.po_number));
+
   const filterOptions = {
     monthOptions: [
       { value: ALL_FILTER_VALUE, label: `Open period · ${formatMonthLabel(openMonth)}` },
@@ -470,9 +477,29 @@ export function buildAnalyticsModel(
     consultantOptions: [{ value: ALL_FILTER_VALUE, label: "All companies" }, ...data.consultants.map((consultant) => ({ value: consultant.id, label: consultant.name }))],
     projectOptions: [{ value: ALL_FILTER_VALUE, label: "All projects" }, ...data.projects.map((project) => ({ value: project.id, label: project.project_name }))],
     soOptions: [{ value: ALL_FILTER_VALUE, label: "All SOs" }, ...data.serviceOrders.map((so) => ({ value: so.id, label: so.so_number }))],
-    poOptions: [{ value: ALL_FILTER_VALUE, label: "All POs" }, ...data.purchaseOrders.map((po) => ({ value: po.id, label: po.po_number }))],
+    poOptions: [{ value: ALL_FILTER_VALUE, label: "All POs" }, ...uniquePurchaseOrders.map((po) => ({ value: po.po_number, label: po.po_number }))],
     positionOptions: [{ value: ALL_FILTER_VALUE, label: "All positions" }, ...data.positions.map((position) => ({ value: position.id, label: position.position_name }))],
   };
+
+  const visibleGadgetIds = new Set(
+    data.dashboardGadgetVisibility.filter((row) => row.is_visible).map((row) => row.gadget_id),
+  );
+  const userGadgetById = new Map(data.userDashboardGadgets.map((row) => [row.gadget_id, row]));
+  const dashboardGadgets = data.dashboardGadgets
+    .filter((gadget) => gadget.is_active && (visibleGadgetIds.size === 0 || visibleGadgetIds.has(gadget.id)))
+    .map((gadget, index) => {
+      const userConfig = userGadgetById.get(gadget.id);
+      return {
+        ...gadget,
+        isVisible: true,
+        isEnabled: userConfig?.is_enabled ?? false,
+        width: userConfig?.width ?? gadget.default_width,
+        height: userConfig?.height ?? gadget.default_height,
+        positionY: userConfig?.position_y ?? index,
+        settings: userConfig?.settings ?? {},
+      };
+    })
+    .sort((a, b) => a.positionY - b.positionY || a.sort_order - b.sort_order);
 
   const aiContext = {
     summary: {
