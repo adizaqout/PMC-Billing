@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ children, adminOnly, module }: ProtectedRouteProps) {
-  const { session, loading, isSuperAdmin, roles, hasModuleAccess } = useAuth();
+  const { session, loading, isSuperAdmin, roles, hasModuleAccess, hasFeatureEnabled } = useAuth();
 
   if (loading) {
     return (
@@ -30,6 +30,10 @@ export default function ProtectedRoute({ children, adminOnly, module }: Protecte
   }
 
   if (module && !hasModuleAccess(module)) {
+    return <Navigate to="/" replace />;
+  }
+
+  if (module === "ai_assistant" && !hasFeatureEnabled("ai_assistant")) {
     return <Navigate to="/" replace />;
   }
 

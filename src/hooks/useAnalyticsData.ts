@@ -1,13 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { Tables } from "@/integrations/supabase/types";
-
-export interface ReportVisibilityRow extends Tables<"group_report_visibility"> {}
-export interface ReportCatalogRow extends Tables<"report_catalog"> {}
-export interface FeatureToggleRow extends Tables<"group_feature_toggles"> {}
+import type { AnalyticsSourceData } from "@/lib/analytics-engine";
 
 export function useAnalyticsData() {
-  return useQuery({
+  return useQuery<AnalyticsSourceData>({
     queryKey: ["analytics-data"],
     queryFn: async () => {
       const [
@@ -26,8 +22,9 @@ export function useAnalyticsData() {
         reportCatalogRes,
         reportVisibilityRes,
         featureToggleRes,
+        savedInsightsRes,
       ] = await Promise.all([
-        supabase.from("period_control").select("*").eq("status", "open").maybeSingle(),
+        supabase.from("period_control").select("month, status").eq("status", "open").maybeSingle(),
         supabase.from("app_settings").select("setting_key, setting_value"),
         supabase.from("profiles").select("full_name, consultant_id").maybeSingle(),
         supabase.from("consultants").select("id, name, status"),
@@ -42,9 +39,12 @@ export function useAnalyticsData() {
         supabase.from("report_catalog").select("*"),
         supabase.from("group_report_visibility").select("*"),
         supabase.from("group_feature_toggles").select("*"),
+        supabase.from("saved_insights").select("*"),
       ]);
 
       if (periodRes.error) throw periodRes.error;
+      if (settingsRes.error) throw settingsRes.error;
+      if (profileRes.error) throw profileRes.error;
       if (consultantsRes.error) throw consultantsRes.error;
       if (projectsRes.error) throw projectsRes.error;
       if (employeesRes.error) throw employeesRes.error;
@@ -54,6 +54,10 @@ export function useAnalyticsData() {
       if (invoicesRes.error) throw invoicesRes.error;
       if (submissionsRes.error) throw submissionsRes.error;
       if (linesRes.error) throw linesRes.error;
+      if (reportCatalogRes.error) throw reportCatalogRes.error;
+      if (reportVisibilityRes.error) throw reportVisibilityRes.error;
+      if (featureToggleRes.error) throw featureToggleRes.error;
+      if (savedInsightsRes.error) throw savedInsightsRes.error;
 
       return {
         openPeriod: periodRes.data,
@@ -71,6 +75,7 @@ export function useAnalyticsData() {
         reportCatalog: reportCatalogRes.data || [],
         reportVisibility: reportVisibilityRes.data || [],
         featureToggles: featureToggleRes.data || [],
+        savedInsights: savedInsightsRes.data || [],
       };
     },
   });

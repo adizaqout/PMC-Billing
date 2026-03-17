@@ -80,7 +80,7 @@ const navSections: NavSection[] = [
 
 export default function AppSidebar() {
   const location = useLocation();
-  const { user, signOut, hasModuleAccess, isSuperAdmin, roles } = useAuth();
+  const { user, signOut, hasModuleAccess, hasFeatureEnabled, isSuperAdmin, roles } = useAuth();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [mini, setMini] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>(
@@ -94,13 +94,13 @@ export default function AppSidebar() {
     setExpandedSections((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
-  // Filter nav items based on permissions
   const filteredSections = navSections
     .map(section => ({
       ...section,
       items: section.items.filter(item => {
         if (item.adminOnly) return isAdminRole;
-        if (!item.module) return true; // Dashboard always visible
+        if (!item.module) return true;
+        if (item.module === "ai_assistant") return hasModuleAccess(item.module) && hasFeatureEnabled("ai_assistant");
         return hasModuleAccess(item.module);
       }),
     }))
