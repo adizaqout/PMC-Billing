@@ -33,7 +33,7 @@ type DashboardGadgetRow = {
   default_width: number;
   default_height: number;
   sort_order: number;
-  config: Record<string, unknown>;
+  config: Json;
 };
 type DashboardGadgetVisibilityRow = {
   id: string;
@@ -50,7 +50,7 @@ type UserDashboardGadgetRow = {
   width: number;
   height: number;
   is_enabled: boolean;
-  settings: Record<string, unknown>;
+  settings: Json;
 };
 export type PeriodRow = Pick<Tables<"period_control">, "month" | "status"> | null;
 
