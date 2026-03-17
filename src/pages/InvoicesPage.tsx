@@ -47,7 +47,6 @@ const cols = [
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "PO Number", key: "po_number", width: 14 },
   { header: "Rev", key: "po_revision", width: 6 },
-  { header: "Line", key: "po_line", width: 8 },
   { header: "PO Value (AED)", key: "po_value", width: 15 },
   { header: "Billed Amount", key: "billed_amount_no_vat", width: 15 },
   { header: "Billed To Date", key: "billed_to_date", width: 15 },
@@ -64,7 +63,7 @@ export default function InvoicesPage() {
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const invTableCols: ColumnDef[] = [
     { key: "inv_no", label: "Invoice No." }, { key: "month", label: "Month" }, { key: "consultant", label: "Consultant" },
-    { key: "po", label: "PO" }, { key: "rev", label: "Rev" }, { key: "line", label: "Line" },
+    { key: "po", label: "PO" }, { key: "rev", label: "Rev" },
     { key: "po_value", label: "PO Value" }, { key: "billed", label: "Billed" }, { key: "billed_to_date", label: "Billed To Date" },
     { key: "paid", label: "Paid" }, { key: "status", label: "Status" },
   ];
