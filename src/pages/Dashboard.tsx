@@ -186,7 +186,7 @@ export default function Dashboard() {
   const displayName = user?.email?.split("@")[0] || analytics.consultants[0]?.name || "User";
 
   const renderGadget = (gadgetKey: string, gadgetId?: string) => {
-    if (gadgetKey === "remaining_budget_by_project") {
+    if (gadgetKey === "project_risk") {
       const rows = analytics.projectMetrics.slice().sort((a, b) => a.remaining - b.remaining).slice(0, 8);
       return (
         <GadgetShell
@@ -219,7 +219,7 @@ export default function Dashboard() {
       );
     }
 
-    if (gadgetKey === "actual_vs_forecast_baseline") {
+    if (gadgetKey === "monthly_trend") {
       return (
         <GadgetShell
           title="Actual vs Forecast vs Baseline"
