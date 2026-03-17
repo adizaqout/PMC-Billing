@@ -63,12 +63,14 @@ export function compactNumber(value: number) {
   }).format(value || 0);
 }
 
-export function getLatestSubmissionIds(submissions: Submission[], includePreviousRevisions: boolean) {
+type RevisionComparableSubmission = Pick<Submission, "id" | "consultant_id" | "month" | "schedule_type" | "revision_no">;
+
+export function getLatestSubmissionIds<T extends RevisionComparableSubmission>(submissions: T[], includePreviousRevisions: boolean) {
   if (includePreviousRevisions) {
     return new Set(submissions.map((submission) => submission.id));
   }
 
-  const latest = new Map<string, Submission>();
+  const latest = new Map<string, T>();
   submissions.forEach((submission) => {
     const key = [submission.consultant_id, submission.month, submission.schedule_type].join("|");
     const current = latest.get(key);
