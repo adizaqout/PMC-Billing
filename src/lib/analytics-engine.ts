@@ -146,7 +146,7 @@ export interface AnalyticsModel {
     width: number;
     height: number;
     positionY: number;
-    settings: Record<string, unknown>;
+    settings: Json;
   }>;
   aiContext: {
     summary: {
