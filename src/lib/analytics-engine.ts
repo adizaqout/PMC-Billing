@@ -15,7 +15,7 @@ export type ProjectRow = Pick<Tables<"projects">, "id" | "project_name" | "lates
 export type EmployeeRow = Pick<Tables<"employees">, "id" | "employee_name" | "consultant_id" | "position_id" | "status">;
 export type PositionRow = Pick<Tables<"positions">, "id" | "position_name" | "consultant_id" | "so_id">;
 export type ServiceOrderRow = Pick<Tables<"service_orders">, "id" | "so_number" | "consultant_id" | "so_value">;
-export type PurchaseOrderRow = Pick<Tables<"purchase_orders">, "id" | "po_number" | "consultant_id" | "so_id" | "project_id" | "po_value" | "amount">;
+export type PurchaseOrderRow = Pick<Tables<"purchase_orders">, "id" | "po_number" | "consultant_id" | "so_id" | "project_id" | "po_value" | "amount"> & { revision_number?: number | null };
 export type InvoiceRow = Pick<Tables<"invoices">, "id" | "consultant_id" | "po_id" | "billed_amount_no_vat" | "invoice_month" | "status" | "invoice_number">;
 export type SubmissionRow = Pick<Tables<"deployment_submissions">, "id" | "consultant_id" | "month" | "schedule_type" | "revision_no" | "status" | "created_at" | "updated_at" | "submitted_on" | "reviewed_on">;
 export type DeploymentLineRow = Pick<Tables<"deployment_lines">, "id" | "submission_id" | "employee_id" | "worked_project_id" | "billed_project_id" | "so_id" | "po_id" | "allocation_pct" | "derived_cost" | "derived_monthly_rate" | "man_months" | "rate_year">;
@@ -23,6 +23,35 @@ export type ReportCatalogRow = Tables<"report_catalog">;
 export type ReportVisibilityRow = Tables<"group_report_visibility">;
 export type FeatureToggleRow = Tables<"group_feature_toggles">;
 export type SavedInsightRow = Tables<"saved_insights">;
+type DashboardGadgetRow = {
+  id: string;
+  gadget_key: string;
+  title: string;
+  description: string | null;
+  gadget_type: string;
+  is_active: boolean;
+  default_width: number;
+  default_height: number;
+  sort_order: number;
+  config: Record<string, unknown>;
+};
+type DashboardGadgetVisibilityRow = {
+  id: string;
+  group_id: string;
+  gadget_id: string;
+  is_visible: boolean;
+};
+type UserDashboardGadgetRow = {
+  id: string;
+  user_id: string;
+  gadget_id: string;
+  position_x: number;
+  position_y: number;
+  width: number;
+  height: number;
+  is_enabled: boolean;
+  settings: Record<string, unknown>;
+};
 export type PeriodRow = Pick<Tables<"period_control">, "month" | "status"> | null;
 
 export interface AnalyticsSourceData {
