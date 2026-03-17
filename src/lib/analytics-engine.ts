@@ -140,6 +140,14 @@ export interface AnalyticsModel {
     poOptions: Array<{ value: string; label: string }>;
     positionOptions: Array<{ value: string; label: string }>;
   };
+  dashboardGadgets: Array<DashboardGadgetRow & {
+    isVisible: boolean;
+    isEnabled: boolean;
+    width: number;
+    height: number;
+    positionY: number;
+    settings: Record<string, unknown>;
+  }>;
   aiContext: {
     summary: {
       openMonth: string;
