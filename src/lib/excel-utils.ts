@@ -16,9 +16,10 @@ function normalizeCellValue(value: unknown): string | number | boolean | Date {
 
 async function saveWorkbook(filename: string, workbook: ExcelJS.Workbook) {
   const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([
-    buffer instanceof ArrayBuffer ? buffer : new Uint8Array(buffer as ArrayBufferLike),
-  ], {
+  const arrayBuffer = buffer instanceof ArrayBuffer
+    ? buffer
+    : Uint8Array.from(buffer).buffer;
+  const blob = new Blob([arrayBuffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
 
