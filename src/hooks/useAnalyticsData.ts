@@ -9,6 +9,14 @@ export function useAnalyticsData() {
     gcTime: 5 * 60_000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
+      const { data: authData, error: authError } = await supabase.auth.getUser();
+      if (authError) throw authError;
+
+      const userId = authData.user?.id;
+      if (!userId) {
+        throw new Error("Authentication required to load dashboard data.");
+      }
+
       const [
         periodRes,
         settingsRes,
@@ -29,7 +37,7 @@ export function useAnalyticsData() {
       ] = await Promise.all([
         supabase.from("period_control").select("month, status").eq("status", "open").maybeSingle(),
         supabase.from("app_settings").select("setting_key, setting_value"),
-        supabase.from("profiles").select("full_name, consultant_id").maybeSingle(),
+        supabase.from("profiles").select("full_name, consultant_id").eq("user_id", userId).maybeSingle(),
         supabase.from("consultants").select("id, name, status"),
         supabase.from("projects").select("id, project_name, latest_budget, latest_pmc_budget, previous_pmc_budget, previous_pmc_actual, actual_pmc_to_date, portfolio, status"),
         supabase.from("employees").select("id, employee_name, consultant_id, position_id, status"),
