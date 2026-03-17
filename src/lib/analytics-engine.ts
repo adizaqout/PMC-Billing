@@ -228,8 +228,6 @@ export function buildAnalyticsModel(
     return true;
   });
 
-  const poNumberById = new Map(data.purchaseOrders.map((po) => [po.id, po.po_number]));
-
   const filteredInvoices = data.invoices.filter((invoice) => {
     if (appliedFilters.consultantId !== ALL_FILTER_VALUE && invoice.consultant_id !== appliedFilters.consultantId) return false;
     if (appliedFilters.month !== ALL_FILTER_VALUE && invoice.invoice_month !== appliedFilters.month) return false;
