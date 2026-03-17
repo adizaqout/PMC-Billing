@@ -259,9 +259,6 @@ export default function Dashboard() {
             <p className="page-subtitle">Overview keeps the summary and task flow; Dashboard is now the gadget workspace for each user.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant={showPreviousRevisions ? "default" : "outline"} size="sm" onClick={() => setShowPreviousRevisions((value) => !value)}>
-              {showPreviousRevisions ? "Viewing all revisions" : "Latest revisions only"}
-            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate("/reports")}>Open Reports</Button>
           </div>
         </div>
