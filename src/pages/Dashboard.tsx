@@ -270,9 +270,9 @@ export default function Dashboard() {
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
               <KpiCard title="Total PMC Budget" value={currency(analytics.kpis.totalBudget)} hint="Current visible portfolio budget" icon={DollarSign} />
-              <KpiCard title="Actual Billed to Date" value={currency(analytics.kpis.totalActualBilled)} hint="Invoices inside applied visibility" icon={CheckCircle2} />
+              <KpiCard title="Actual Deployment Cost" value={currency(analytics.kpis.totalActualBilled)} hint="Derived from actual deployment submissions" icon={CheckCircle2} />
               <KpiCard title="Forecast Cost" value={currency(analytics.kpis.totalForecastCost)} hint="Future months beyond the open period" icon={Clock3} />
-              <KpiCard title="Remaining Budget" value={currency(analytics.kpis.remainingBudget)} hint="Budget minus billed actuals" icon={FolderKanban} />
+              <KpiCard title="Remaining Budget" value={currency(analytics.kpis.remainingBudget)} hint="Budget minus actual deployment cost" icon={FolderKanban} />
               <KpiCard title="Forecast Remaining" value={currency(analytics.kpis.forecastRemaining)} hint="Budget minus forecast cost" icon={ShieldAlert} />
             </div>
 

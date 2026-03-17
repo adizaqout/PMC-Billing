@@ -47,7 +47,6 @@ const cols = [
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "PO Number", key: "po_number", width: 14 },
   { header: "Rev", key: "po_revision", width: 6 },
-  { header: "Line", key: "po_line", width: 8 },
   { header: "PO Value (AED)", key: "po_value", width: 15 },
   { header: "Billed Amount", key: "billed_amount_no_vat", width: 15 },
   { header: "Billed To Date", key: "billed_to_date", width: 15 },
@@ -64,7 +63,7 @@ export default function InvoicesPage() {
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const invTableCols: ColumnDef[] = [
     { key: "inv_no", label: "Invoice No." }, { key: "month", label: "Month" }, { key: "consultant", label: "Consultant" },
-    { key: "po", label: "PO" }, { key: "rev", label: "Rev" }, { key: "line", label: "Line" },
+    { key: "po", label: "PO" }, { key: "rev", label: "Rev" },
     { key: "po_value", label: "PO Value" }, { key: "billed", label: "Billed" }, { key: "billed_to_date", label: "Billed To Date" },
     { key: "paid", label: "Paid" }, { key: "status", label: "Status" },
   ];
@@ -160,31 +159,35 @@ export default function InvoicesPage() {
 
   const selectedPO = form.po_id ? allPOs.find(p => p.id === form.po_id) : null;
 
-  // Calculate billed to date for the form's current PO line
-  const billedToDate = useMemo(() => {
-    if (!form.po_id) return null;
-    return items
-      .filter(inv => inv.po_id === form.po_id && inv.id !== editing?.id)
-      .reduce((sum, inv) => sum + (inv.billed_amount_no_vat || 0), 0);
-  }, [form.po_id, items, editing]);
+  const getInvoicePoRevKey = (invoice: Invoice) => {
+    if (!invoice.purchase_orders?.po_number) return null;
+    return `${invoice.purchase_orders.po_number}|${invoice.purchase_orders.revision_number ?? 0}`;
+  };
 
-  // Calculate billed to date for each invoice row (grouped by po_id)
+  // Calculate billed to date for the form's current PO + revision
+  const billedToDate = useMemo(() => {
+    if (!form._po_key) return null;
+    return items
+      .filter((inv) => getInvoicePoRevKey(inv) === form._po_key && inv.id !== editing?.id)
+      .reduce((sum, inv) => sum + (inv.billed_amount_no_vat || 0), 0);
+  }, [form._po_key, items, editing]);
+
+  // Calculate billed to date for each invoice row (grouped by PO + revision)
   const billedToDateMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const inv of items) {
-      if (!inv.po_id) continue;
-      if (!(inv.po_id in map)) {
-        map[inv.po_id] = items
-          .filter(i => i.po_id === inv.po_id)
-          .reduce((sum, i) => sum + (i.billed_amount_no_vat || 0), 0);
-      }
+      const key = getInvoicePoRevKey(inv);
+      if (!key || key in map) continue;
+      map[key] = items
+        .filter((item) => getInvoicePoRevKey(item) === key)
+        .reduce((sum, item) => sum + (item.billed_amount_no_vat || 0), 0);
     }
     return map;
   }, [items]);
 
   const getBilledToDate = (inv: Invoice) => {
-    if (!inv.po_id) return null;
-    return billedToDateMap[inv.po_id] ?? null;
+    const key = getInvoicePoRevKey(inv);
+    return key ? (billedToDateMap[key] ?? null) : null;
   };
 
   const upsertMutation = useMutation({
@@ -262,7 +265,6 @@ export default function InvoicesPage() {
       consultant_name: i.consultants?.name || "",
       po_number: i.purchase_orders?.po_number || "",
       po_revision: i.purchase_orders?.revision_number ?? "",
-      po_line: i.purchase_orders?.po_reference || "",
       po_value: getPoRevTotal(i) ?? "",
       billed_to_date: getBilledToDate(i) ?? "",
     })));
@@ -281,10 +283,9 @@ export default function InvoicesPage() {
       if (!invNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
       const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
-      const po = (poNum && lineRef) ? allPOs.find(p =>
+      const po = poNum ? allPOs.find(p =>
         p.po_number === String(poNum).trim() &&
         (p.revision_number ?? 0) === (rev ? parseInt(String(rev)) : 0) &&
-        p.po_reference === String(lineRef).trim() &&
         p.consultant_id === consultant.id
       ) : null;
       const safeTrim = (v: any) => v == null ? "" : String(v).trim();
@@ -326,7 +327,6 @@ export default function InvoicesPage() {
                 {visibleColumns.has("consultant") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>}
                 {visibleColumns.has("po") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="PO" sortKey="purchase_orders.po_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.po || ""} onChange={(v) => setColFilter("po", v)} label="PO" /></SortableHeader></th>}
                 {visibleColumns.has("rev") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Rev" sortKey="purchase_orders.revision_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
-                {visibleColumns.has("line") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Line" sortKey="purchase_orders.po_reference" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("po_value") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="PO Value" sortKey="purchase_orders.po_value" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("billed") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="Billed" sortKey="billed_amount_no_vat" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("billed_to_date") && <th className="data-table-header text-right px-4 py-2.5">Billed To Date</th>}
@@ -341,7 +341,6 @@ export default function InvoicesPage() {
                   {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
                   {visibleColumns.has("po") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.purchase_orders?.po_number || "—"}</td>}
                   {visibleColumns.has("rev") && <td className="px-4 py-2.5 text-center font-mono text-xs">{item.purchase_orders?.revision_number ?? "—"}</td>}
-                  {visibleColumns.has("line") && <td className="px-4 py-2.5 font-mono text-xs">{item.purchase_orders?.po_reference || "—"}</td>}
                   {visibleColumns.has("po_value") && <td className="px-4 py-2.5 text-right font-mono text-xs text-muted-foreground">{fmt(getPoRevTotal(item))}</td>}
                   {visibleColumns.has("billed") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.billed_amount_no_vat)}</td>}
                   {visibleColumns.has("billed_to_date") && <td className="px-4 py-2.5 text-right font-mono text-xs font-semibold">{fmt(getBilledToDate(item))}</td>}
@@ -382,9 +381,7 @@ export default function InvoicesPage() {
               {form._po_key && selectedPO && (
                 <>
                   <div className="space-y-1.5"><Label>PO Value (AED)</Label><Input value={fmt(form._po_key ? (poRevTotalMap[form._po_key] ?? null) : null)} disabled className="bg-muted" /></div>
-                  {billedToDate != null && (
-                    <div className="space-y-1.5"><Label>Billed To Date (AED)</Label><Input value={fmt(billedToDate)} disabled className="bg-muted font-semibold" /></div>
-                  )}
+                  <div className="space-y-1.5"><Label>Billed To Date (AED)</Label><Input value={fmt(billedToDate)} disabled className="bg-muted font-semibold" /></div>
                 </>
               )}
               <div className="space-y-1.5"><Label>Billed Amount (AED)</Label><Input type="number" step="0.01" value={form.billed_amount_no_vat ?? ""} onChange={(e) => setForm({ ...form, billed_amount_no_vat: e.target.value ? parseFloat(e.target.value) : null })} /></div>

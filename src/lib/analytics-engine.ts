@@ -317,12 +317,13 @@ export function buildAnalyticsModel(
   }
 
   const actualByProject = new Map<string, number>();
-  for (const invoice of filteredInvoices) {
-    const po = invoice.po_id ? purchaseOrderById.get(invoice.po_id) : null;
-    incrementMap(actualByProject, po?.project_id, numeric(invoice.billed_amount_no_vat));
+  for (const line of filteredLines) {
+    const submission = submissionById.get(line.submission_id);
+    if (!submission || submission.schedule_type !== "actual") continue;
+    incrementMap(actualByProject, line.billed_project_id, numeric(line.derived_cost));
   }
 
-  const totalActualBilled = filteredInvoices.reduce((sum, invoice) => sum + numeric(invoice.billed_amount_no_vat), 0);
+  const totalActualBilled = Array.from(actualCostByMonth.values()).reduce((sum, value) => sum + value, 0);
   const totalForecastCost = filteredSubmissions
     .filter((submission) => submission.schedule_type === "forecast" && submission.month > openMonth)
     .reduce((sum, submission) => sum + (lineCostBySubmission.get(submission.id) || 0), 0);
