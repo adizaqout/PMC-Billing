@@ -159,31 +159,35 @@ export default function InvoicesPage() {
 
   const selectedPO = form.po_id ? allPOs.find(p => p.id === form.po_id) : null;
 
-  // Calculate billed to date for the form's current PO line
-  const billedToDate = useMemo(() => {
-    if (!form.po_id) return null;
-    return items
-      .filter(inv => inv.po_id === form.po_id && inv.id !== editing?.id)
-      .reduce((sum, inv) => sum + (inv.billed_amount_no_vat || 0), 0);
-  }, [form.po_id, items, editing]);
+  const getInvoicePoRevKey = (invoice: Invoice) => {
+    if (!invoice.purchase_orders?.po_number) return null;
+    return `${invoice.purchase_orders.po_number}|${invoice.purchase_orders.revision_number ?? 0}`;
+  };
 
-  // Calculate billed to date for each invoice row (grouped by po_id)
+  // Calculate billed to date for the form's current PO + revision
+  const billedToDate = useMemo(() => {
+    if (!form._po_key) return null;
+    return items
+      .filter((inv) => getInvoicePoRevKey(inv) === form._po_key && inv.id !== editing?.id)
+      .reduce((sum, inv) => sum + (inv.billed_amount_no_vat || 0), 0);
+  }, [form._po_key, items, editing]);
+
+  // Calculate billed to date for each invoice row (grouped by PO + revision)
   const billedToDateMap = useMemo(() => {
     const map: Record<string, number> = {};
     for (const inv of items) {
-      if (!inv.po_id) continue;
-      if (!(inv.po_id in map)) {
-        map[inv.po_id] = items
-          .filter(i => i.po_id === inv.po_id)
-          .reduce((sum, i) => sum + (i.billed_amount_no_vat || 0), 0);
-      }
+      const key = getInvoicePoRevKey(inv);
+      if (!key || key in map) continue;
+      map[key] = items
+        .filter((item) => getInvoicePoRevKey(item) === key)
+        .reduce((sum, item) => sum + (item.billed_amount_no_vat || 0), 0);
     }
     return map;
   }, [items]);
 
   const getBilledToDate = (inv: Invoice) => {
-    if (!inv.po_id) return null;
-    return billedToDateMap[inv.po_id] ?? null;
+    const key = getInvoicePoRevKey(inv);
+    return key ? (billedToDateMap[key] ?? null) : null;
   };
 
   const upsertMutation = useMutation({
