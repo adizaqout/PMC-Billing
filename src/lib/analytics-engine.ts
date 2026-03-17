@@ -128,6 +128,11 @@ function numeric(value: unknown) {
   return Number(value || 0);
 }
 
+function incrementMap(map: Map<string, number>, key: string | null | undefined, amount: number) {
+  if (!key) return;
+  map.set(key, (map.get(key) || 0) + amount);
+}
+
 export function buildAnalyticsModel(
   data: AnalyticsSourceData,
   filters: AnalyticsFilters,
@@ -150,6 +155,13 @@ export function buildAnalyticsModel(
 
   const latestSubmissionIds = getLatestSubmissionIds(data.submissions, includePreviousRevisions);
 
+  const consultantNameById = new Map(data.consultants.map((consultant) => [consultant.id, consultant.name]));
+  const projectNameById = new Map(data.projects.map((project) => [project.id, project.project_name]));
+  const employeeById = new Map(data.employees.map((employee) => [employee.id, employee]));
+  const employeeNameById = new Map(data.employees.map((employee) => [employee.id, employee.employee_name]));
+  const positionNameById = new Map(data.positions.map((position) => [position.id, position.position_name]));
+  const purchaseOrderById = new Map(data.purchaseOrders.map((po) => [po.id, po]));
+
   const filteredSubmissions = data.submissions.filter((submission) => {
     if (!latestSubmissionIds.has(submission.id)) return false;
     if (appliedFilters.month !== ALL_FILTER_VALUE && submission.month !== appliedFilters.month) return false;
@@ -159,7 +171,6 @@ export function buildAnalyticsModel(
     return true;
   });
 
-  const employeeById = new Map(data.employees.map((employee) => [employee.id, employee]));
   const submissionById = new Map(filteredSubmissions.map((submission) => [submission.id, submission]));
   const submissionIds = new Set(filteredSubmissions.map((submission) => submission.id));
 
@@ -182,22 +193,100 @@ export function buildAnalyticsModel(
     return true;
   });
 
-  const consultantNameById = new Map(data.consultants.map((consultant) => [consultant.id, consultant.name]));
-  const projectNameById = new Map(data.projects.map((project) => [project.id, project.project_name]));
-  const employeeNameById = new Map(data.employees.map((employee) => [employee.id, employee.employee_name]));
-  const positionNameById = new Map(data.positions.map((position) => [position.id, position.position_name]));
+  const months = Array.from(new Set(filteredSubmissions.map((submission) => submission.month))).sort(compareMonth);
+  const lineProjectBySubmission = new Map<string, string | null>();
+  const linesBySubmission = new Map<string, DeploymentLineRow[]>();
+  const lineCostBySubmission = new Map<string, number>();
+  const actualCostByMonth = new Map<string, number>();
+  const forecastCostByMonth = new Map<string, number>();
+  const baselineCostByMonth = new Map<string, number>();
+  const forecastCostByProject = new Map<string, number>();
+  const deploymentCostBySo = new Map<string, number>();
+  const overAllocationMap = new Map<string, { employee: string; month: string; allocation: number }>();
+  const crossBilling: AnalyticsModel["crossBilling"] = [];
+  const heatmap: AnalyticsModel["heatmap"] = [];
+  const employeeDeployment: AnalyticsModel["employeeDeployment"] = [];
+
+  for (const line of filteredLines) {
+    const submission = submissionById.get(line.submission_id);
+    if (!submission) continue;
+
+    const lineCost = numeric(line.derived_cost);
+    const lineValue = numeric(line.derived_cost || line.allocation_pct);
+    const employee = line.employee_id ? employeeById.get(line.employee_id) : null;
+
+    const existingLines = linesBySubmission.get(line.submission_id);
+    if (existingLines) {
+      existingLines.push(line);
+    } else {
+      linesBySubmission.set(line.submission_id, [line]);
+    }
+
+    if (!lineProjectBySubmission.has(line.submission_id) && line.billed_project_id) {
+      lineProjectBySubmission.set(line.submission_id, line.billed_project_id);
+    }
+
+    lineCostBySubmission.set(line.submission_id, (lineCostBySubmission.get(line.submission_id) || 0) + lineCost);
+
+    if (submission.schedule_type === "actual") incrementMap(actualCostByMonth, submission.month, lineCost);
+    if (submission.schedule_type === "forecast") {
+      incrementMap(forecastCostByMonth, submission.month, lineCost);
+      if (submission.month > openMonth) incrementMap(forecastCostByProject, line.billed_project_id, lineCost);
+    }
+    if (submission.schedule_type === "baseline") incrementMap(baselineCostByMonth, submission.month, lineCost);
+    incrementMap(deploymentCostBySo, line.so_id, lineCost);
+
+    if (line.worked_project_id && line.billed_project_id && line.worked_project_id !== line.billed_project_id) {
+      crossBilling.push({
+        id: line.id,
+        employee: employeeNameById.get(line.employee_id || "") || "Unassigned",
+        workedProject: projectNameById.get(line.worked_project_id) || "—",
+        billedProject: projectNameById.get(line.billed_project_id) || "—",
+        company: consultantNameById.get(submission.consultant_id || employee?.consultant_id || "") || "Unknown",
+        amount: lineCost,
+      });
+    }
+
+    if (line.employee_id) {
+      const allocationKey = `${submission.month}|${line.employee_id}`;
+      const current = overAllocationMap.get(allocationKey) || {
+        employee: employeeNameById.get(line.employee_id) || "Unassigned",
+        month: submission.month,
+        allocation: 0,
+      };
+      current.allocation += numeric(line.allocation_pct);
+      overAllocationMap.set(allocationKey, current);
+    }
+
+    heatmap.push({
+      position: positionNameById.get(employee?.position_id || "") || "Unassigned",
+      project: projectNameById.get(line.billed_project_id || line.worked_project_id || "") || "Unassigned",
+      value: lineValue,
+    });
+
+    const allocation = numeric(line.allocation_pct);
+    if (allocation > 0) {
+      employeeDeployment.push({
+        employee: employeeNameById.get(line.employee_id || "") || "Unassigned",
+        project: projectNameById.get(line.billed_project_id || "") || "Unassigned",
+        allocation,
+      });
+    }
+  }
+
+  const actualByProject = new Map<string, number>();
+  for (const invoice of filteredInvoices) {
+    const po = invoice.po_id ? purchaseOrderById.get(invoice.po_id) : null;
+    incrementMap(actualByProject, po?.project_id, numeric(invoice.billed_amount_no_vat));
+  }
 
   const totalActualBilled = filteredInvoices.reduce((sum, invoice) => sum + numeric(invoice.billed_amount_no_vat), 0);
   const totalForecastCost = filteredSubmissions
     .filter((submission) => submission.schedule_type === "forecast" && submission.month > openMonth)
-    .reduce((sum, submission) => sum + filteredLines
-      .filter((line) => line.submission_id === submission.id)
-      .reduce((lineSum, line) => lineSum + numeric(line.derived_cost), 0), 0);
+    .reduce((sum, submission) => sum + (lineCostBySubmission.get(submission.id) || 0), 0);
   const totalBaselineCost = filteredSubmissions
     .filter((submission) => submission.schedule_type === "baseline")
-    .reduce((sum, submission) => sum + filteredLines
-      .filter((line) => line.submission_id === submission.id)
-      .reduce((lineSum, line) => lineSum + numeric(line.derived_cost), 0), 0);
+    .reduce((sum, submission) => sum + (lineCostBySubmission.get(submission.id) || 0), 0);
   const totalBudget = data.projects.reduce((sum, project) => sum + numeric(project.latest_pmc_budget || project.latest_budget), 0);
   const remainingBudget = totalBudget - totalActualBilled;
   const forecastRemaining = totalBudget - totalForecastCost;
@@ -208,13 +297,8 @@ export function buildAnalyticsModel(
 
   const projectMetrics = data.projects
     .map((project) => {
-      const actual = filteredInvoices
-        .filter((invoice) => invoice.po_id && data.purchaseOrders.some((po) => po.id === invoice.po_id && po.project_id === project.id))
-        .reduce((sum, invoice) => sum + numeric(invoice.billed_amount_no_vat), 0);
-      const forecast = filteredSubmissions
-        .filter((submission) => submission.schedule_type === "forecast" && submission.month > openMonth)
-        .flatMap((submission) => filteredLines.filter((line) => line.submission_id === submission.id && line.billed_project_id === project.id))
-        .reduce((sum, line) => sum + numeric(line.derived_cost), 0);
+      const actual = actualByProject.get(project.id) || 0;
+      const forecast = forecastCostByProject.get(project.id) || 0;
       const budget = numeric(project.latest_pmc_budget || project.latest_budget);
       const remaining = budget - actual;
       const remainingPct = budget > 0 ? (remaining / budget) * 100 : 0;
@@ -233,22 +317,13 @@ export function buildAnalyticsModel(
     .filter((project) => project.budget > 0 || project.actual > 0 || project.forecast > 0);
 
   const projectsAtRisk = projectMetrics.filter((project) => project.risk !== "green").length;
-  const months = Array.from(new Set(filteredSubmissions.map((submission) => submission.month))).sort(compareMonth);
 
-  const monthlyTrend = months.map((month) => {
-    const monthlySubmissions = filteredSubmissions.filter((submission) => submission.month === month);
-    const totalForType = (type: string) => monthlySubmissions
-      .filter((submission) => submission.schedule_type === type)
-      .reduce((sum, submission) => sum + filteredLines
-        .filter((line) => line.submission_id === submission.id)
-        .reduce((lineSum, line) => lineSum + numeric(line.derived_cost), 0), 0);
-    return {
-      month: formatMonthLabel(month),
-      actual: totalForType("actual"),
-      forecast: totalForType("forecast"),
-      baseline: totalForType("baseline"),
-    };
-  });
+  const monthlyTrend = months.map((month) => ({
+    month: formatMonthLabel(month),
+    actual: actualCostByMonth.get(month) || 0,
+    forecast: forecastCostByMonth.get(month) || 0,
+    baseline: baselineCostByMonth.get(month) || 0,
+  }));
 
   const statusCounts = ["draft", "submitted", "in_review", "approved", "returned", "rejected"].map((status) => ({
     name: status.replace("_", " "),
@@ -262,7 +337,7 @@ export function buildAnalyticsModel(
       id: submission.id,
       type: submission.schedule_type,
       month: submission.month,
-      project: filteredLines.find((line) => line.submission_id === submission.id)?.billed_project_id || null,
+      project: lineProjectBySubmission.get(submission.id) || null,
       status: submission.status,
       dueDate: submission.reviewed_on || submission.submitted_on || submission.updated_at,
     }));
@@ -288,33 +363,6 @@ export function buildAnalyticsModel(
       timestamp: submission.updated_at,
     }));
 
-  const crossBilling = filteredLines
-    .filter((line) => line.worked_project_id && line.billed_project_id && line.worked_project_id !== line.billed_project_id)
-    .map((line) => ({
-      id: line.id,
-      employee: employeeNameById.get(line.employee_id || "") || "Unassigned",
-      workedProject: projectNameById.get(line.worked_project_id || "") || "—",
-      billedProject: projectNameById.get(line.billed_project_id || "") || "—",
-      company: consultantNameById.get(submissionById.get(line.submission_id)?.consultant_id || employeeById.get(line.employee_id || "")?.consultant_id || "") || "Unknown",
-      amount: numeric(line.derived_cost),
-    }));
-
-  const overAllocationMap = new Map<string, { employee: string; month: string; allocation: number }>();
-  filteredSubmissions.forEach((submission) => {
-    filteredLines
-      .filter((line) => line.submission_id === submission.id)
-      .forEach((line) => {
-        if (!line.employee_id) return;
-        const key = `${submission.month}|${line.employee_id}`;
-        const current = overAllocationMap.get(key) || {
-          employee: employeeNameById.get(line.employee_id) || "Unassigned",
-          month: submission.month,
-          allocation: 0,
-        };
-        current.allocation += numeric(line.allocation_pct);
-        overAllocationMap.set(key, current);
-      });
-  });
   const overAllocation = Array.from(overAllocationMap.values()).filter((row) => row.allocation > 100).slice(0, 8);
 
   const portfolio = projectMetrics.map((project) => ({
@@ -327,22 +375,28 @@ export function buildAnalyticsModel(
 
   const burnTrend = months.map((month) => ({
     month: formatMonthLabel(month),
-    actual: filteredSubmissions
-      .filter((submission) => submission.month === month && submission.schedule_type === "actual")
-      .flatMap((submission) => filteredLines.filter((line) => line.submission_id === submission.id))
-      .reduce((sum, line) => sum + numeric(line.derived_cost), 0),
-    forecast: filteredSubmissions
-      .filter((submission) => submission.month === month && submission.schedule_type === "forecast")
-      .flatMap((submission) => filteredLines.filter((line) => line.submission_id === submission.id))
-      .reduce((sum, line) => sum + numeric(line.derived_cost), 0),
+    actual: actualCostByMonth.get(month) || 0,
+    forecast: forecastCostByMonth.get(month) || 0,
   }));
+
+  const purchaseOrdersBySo = new Map<string, PurchaseOrderRow[]>();
+  for (const po of data.purchaseOrders) {
+    if (!po.so_id) continue;
+    const rows = purchaseOrdersBySo.get(po.so_id);
+    if (rows) {
+      rows.push(po);
+    } else {
+      purchaseOrdersBySo.set(po.so_id, [po]);
+    }
+  }
 
   const commercial = data.serviceOrders
     .map((so) => {
-      const pos = data.purchaseOrders.filter((po) => po.so_id === so.id);
+      const pos = purchaseOrdersBySo.get(so.id) || [];
       const poValue = pos.reduce((sum, po) => sum + numeric(po.po_value || po.amount), 0);
-      const invoiced = filteredInvoices.filter((invoice) => pos.some((po) => po.id === invoice.po_id)).reduce((sum, invoice) => sum + numeric(invoice.billed_amount_no_vat), 0);
-      const deploymentCost = filteredLines.filter((line) => line.so_id === so.id).reduce((sum, line) => sum + numeric(line.derived_cost), 0);
+      const poIds = new Set(pos.map((po) => po.id));
+      const invoiced = filteredInvoices.reduce((sum, invoice) => sum + (invoice.po_id && poIds.has(invoice.po_id) ? numeric(invoice.billed_amount_no_vat) : 0), 0);
+      const deploymentCost = deploymentCostBySo.get(so.id) || 0;
       return {
         so: so.so_number,
         soValue: numeric(so.so_value),
@@ -353,23 +407,6 @@ export function buildAnalyticsModel(
       };
     })
     .filter((row) => row.soValue || row.poValue || row.invoiced);
-
-  const heatmap = filteredLines.map((line) => {
-    const employee = line.employee_id ? employeeById.get(line.employee_id) : null;
-    return {
-      position: positionNameById.get(employee?.position_id || "") || "Unassigned",
-      project: projectNameById.get(line.billed_project_id || line.worked_project_id || "") || "Unassigned",
-      value: numeric(line.derived_cost || line.allocation_pct),
-    };
-  });
-
-  const employeeDeployment = filteredLines
-    .map((line) => ({
-      employee: employeeNameById.get(line.employee_id || "") || "Unassigned",
-      project: projectNameById.get(line.billed_project_id || "") || "Unassigned",
-      allocation: numeric(line.allocation_pct),
-    }))
-    .filter((row) => row.allocation > 0);
 
   const workflowAudit = months.map((month) => {
     const monthSubmissions = filteredSubmissions.filter((submission) => submission.month === month);
