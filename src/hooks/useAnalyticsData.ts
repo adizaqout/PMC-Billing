@@ -34,6 +34,9 @@ export function useAnalyticsData() {
         reportVisibilityRes,
         featureToggleRes,
         savedInsightsRes,
+        dashboardGadgetsRes,
+        gadgetVisibilityRes,
+        userDashboardGadgetsRes,
       ] = await Promise.all([
         supabase.from("period_control").select("month, status").eq("status", "open").maybeSingle(),
         supabase.from("app_settings").select("setting_key, setting_value"),
@@ -43,7 +46,7 @@ export function useAnalyticsData() {
         supabase.from("employees").select("id, employee_name, consultant_id, position_id, status"),
         supabase.from("positions").select("id, position_name, consultant_id, so_id"),
         supabase.from("service_orders").select("id, so_number, consultant_id, so_value"),
-        supabase.from("purchase_orders").select("id, po_number, consultant_id, so_id, project_id, po_value, amount"),
+        supabase.from("purchase_orders").select("id, po_number, consultant_id, so_id, project_id, po_value, amount, revision_number"),
         supabase.from("invoices").select("id, consultant_id, po_id, billed_amount_no_vat, invoice_month, status, invoice_number"),
         supabase.from("deployment_submissions").select("id, consultant_id, month, schedule_type, revision_no, status, created_at, updated_at, submitted_on, reviewed_on"),
         supabase.from("deployment_lines").select("id, submission_id, employee_id, worked_project_id, billed_project_id, so_id, po_id, allocation_pct, derived_cost, derived_monthly_rate, man_months, rate_year"),
@@ -51,6 +54,9 @@ export function useAnalyticsData() {
         supabase.from("group_report_visibility").select("*"),
         supabase.from("group_feature_toggles").select("*"),
         supabase.from("saved_insights").select("*"),
+        supabase.from("dashboard_gadgets").select("*").order("sort_order"),
+        supabase.from("group_dashboard_gadget_visibility").select("*"),
+        supabase.from("user_dashboard_gadgets").select("*").eq("user_id", userId),
       ]);
 
       if (periodRes.error) throw periodRes.error;
@@ -65,19 +71,14 @@ export function useAnalyticsData() {
       if (submissionsRes.error) throw submissionsRes.error;
       if (linesRes.error) throw linesRes.error;
       if (reportCatalogRes.error) throw reportCatalogRes.error;
+      if (dashboardGadgetsRes.error) throw dashboardGadgetsRes.error;
+      if (gadgetVisibilityRes.error) throw gadgetVisibilityRes.error;
+      if (userDashboardGadgetsRes.error) throw userDashboardGadgetsRes.error;
 
-      if (settingsRes.error) {
-        console.warn("Analytics settings unavailable, using defaults.", settingsRes.error.message);
-      }
-      if (reportVisibilityRes.error) {
-        console.warn("Report visibility unavailable, falling back to catalog defaults.", reportVisibilityRes.error.message);
-      }
-      if (featureToggleRes.error) {
-        console.warn("Feature toggles unavailable in analytics payload.", featureToggleRes.error.message);
-      }
-      if (savedInsightsRes.error) {
-        console.warn("Saved insights unavailable in analytics payload.", savedInsightsRes.error.message);
-      }
+      if (settingsRes.error) console.warn("Analytics settings unavailable, using defaults.", settingsRes.error.message);
+      if (reportVisibilityRes.error) console.warn("Report visibility unavailable, falling back to catalog defaults.", reportVisibilityRes.error.message);
+      if (featureToggleRes.error) console.warn("Feature toggles unavailable in analytics payload.", featureToggleRes.error.message);
+      if (savedInsightsRes.error) console.warn("Saved insights unavailable in analytics payload.", savedInsightsRes.error.message);
 
       return {
         openPeriod: periodRes.data,
@@ -96,6 +97,9 @@ export function useAnalyticsData() {
         reportVisibility: reportVisibilityRes.data || [],
         featureToggles: featureToggleRes.data || [],
         savedInsights: savedInsightsRes.data || [],
+        dashboardGadgets: dashboardGadgetsRes.data || [],
+        dashboardGadgetVisibility: gadgetVisibilityRes.data || [],
+        userDashboardGadgets: userDashboardGadgetsRes.data || [],
       };
     },
   });

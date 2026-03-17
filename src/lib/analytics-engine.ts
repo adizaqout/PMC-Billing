@@ -214,11 +214,13 @@ export function buildAnalyticsModel(
   const submissionById = new Map(filteredSubmissions.map((submission) => [submission.id, submission]));
   const submissionIds = new Set(filteredSubmissions.map((submission) => submission.id));
 
+  const poNumberById = new Map(data.purchaseOrders.map((po) => [po.id, po.po_number]));
+
   const filteredLines = data.lines.filter((line) => {
     if (!submissionIds.has(line.submission_id)) return false;
     if (appliedFilters.projectId !== ALL_FILTER_VALUE && line.billed_project_id !== appliedFilters.projectId && line.worked_project_id !== appliedFilters.projectId) return false;
     if (appliedFilters.soId !== ALL_FILTER_VALUE && line.so_id !== appliedFilters.soId) return false;
-    if (appliedFilters.poId !== ALL_FILTER_VALUE && line.po_id !== appliedFilters.poId) return false;
+    if (appliedFilters.poId !== ALL_FILTER_VALUE && poNumberById.get(line.po_id || "") !== appliedFilters.poId) return false;
     if (appliedFilters.positionId !== ALL_FILTER_VALUE) {
       const employee = line.employee_id ? employeeById.get(line.employee_id) : null;
       if (!employee || employee.position_id !== appliedFilters.positionId) return false;
