@@ -283,10 +283,9 @@ export default function InvoicesPage() {
       if (!invNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
       const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
-      const po = (poNum && lineRef) ? allPOs.find(p =>
+      const po = poNum ? allPOs.find(p =>
         p.po_number === String(poNum).trim() &&
         (p.revision_number ?? 0) === (rev ? parseInt(String(rev)) : 0) &&
-        p.po_reference === String(lineRef).trim() &&
         p.consultant_id === consultant.id
       ) : null;
       const safeTrim = (v: any) => v == null ? "" : String(v).trim();
