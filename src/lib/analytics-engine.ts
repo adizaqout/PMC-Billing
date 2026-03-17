@@ -1,4 +1,4 @@
-import type { Tables } from "@/integrations/supabase/types";
+import type { Json, Tables } from "@/integrations/supabase/types";
 import {
   ALL_FILTER_VALUE,
   compareMonth,
@@ -15,7 +15,7 @@ export type ProjectRow = Pick<Tables<"projects">, "id" | "project_name" | "lates
 export type EmployeeRow = Pick<Tables<"employees">, "id" | "employee_name" | "consultant_id" | "position_id" | "status">;
 export type PositionRow = Pick<Tables<"positions">, "id" | "position_name" | "consultant_id" | "so_id">;
 export type ServiceOrderRow = Pick<Tables<"service_orders">, "id" | "so_number" | "consultant_id" | "so_value">;
-export type PurchaseOrderRow = Pick<Tables<"purchase_orders">, "id" | "po_number" | "consultant_id" | "so_id" | "project_id" | "po_value" | "amount">;
+export type PurchaseOrderRow = Pick<Tables<"purchase_orders">, "id" | "po_number" | "consultant_id" | "so_id" | "project_id" | "po_value" | "amount"> & { revision_number?: number | null };
 export type InvoiceRow = Pick<Tables<"invoices">, "id" | "consultant_id" | "po_id" | "billed_amount_no_vat" | "invoice_month" | "status" | "invoice_number">;
 export type SubmissionRow = Pick<Tables<"deployment_submissions">, "id" | "consultant_id" | "month" | "schedule_type" | "revision_no" | "status" | "created_at" | "updated_at" | "submitted_on" | "reviewed_on">;
 export type DeploymentLineRow = Pick<Tables<"deployment_lines">, "id" | "submission_id" | "employee_id" | "worked_project_id" | "billed_project_id" | "so_id" | "po_id" | "allocation_pct" | "derived_cost" | "derived_monthly_rate" | "man_months" | "rate_year">;
@@ -23,6 +23,35 @@ export type ReportCatalogRow = Tables<"report_catalog">;
 export type ReportVisibilityRow = Tables<"group_report_visibility">;
 export type FeatureToggleRow = Tables<"group_feature_toggles">;
 export type SavedInsightRow = Tables<"saved_insights">;
+type DashboardGadgetRow = {
+  id: string;
+  gadget_key: string;
+  title: string;
+  description: string | null;
+  gadget_type: string;
+  is_active: boolean;
+  default_width: number;
+  default_height: number;
+  sort_order: number;
+  config: Json;
+};
+type DashboardGadgetVisibilityRow = {
+  id: string;
+  group_id: string;
+  gadget_id: string;
+  is_visible: boolean;
+};
+type UserDashboardGadgetRow = {
+  id: string;
+  user_id: string;
+  gadget_id: string;
+  position_x: number;
+  position_y: number;
+  width: number;
+  height: number;
+  is_enabled: boolean;
+  settings: Json;
+};
 export type PeriodRow = Pick<Tables<"period_control">, "month" | "status"> | null;
 
 export interface AnalyticsSourceData {
@@ -42,6 +71,9 @@ export interface AnalyticsSourceData {
   reportVisibility: ReportVisibilityRow[];
   featureToggles: FeatureToggleRow[];
   savedInsights: SavedInsightRow[];
+  dashboardGadgets: DashboardGadgetRow[];
+  dashboardGadgetVisibility: DashboardGadgetVisibilityRow[];
+  userDashboardGadgets: UserDashboardGadgetRow[];
 }
 
 export interface AnalyticsModel {
@@ -108,6 +140,14 @@ export interface AnalyticsModel {
     poOptions: Array<{ value: string; label: string }>;
     positionOptions: Array<{ value: string; label: string }>;
   };
+  dashboardGadgets: Array<DashboardGadgetRow & {
+    isVisible: boolean;
+    isEnabled: boolean;
+    width: number;
+    height: number;
+    positionY: number;
+    settings: Json;
+  }>;
   aiContext: {
     summary: {
       openMonth: string;
@@ -174,11 +214,13 @@ export function buildAnalyticsModel(
   const submissionById = new Map(filteredSubmissions.map((submission) => [submission.id, submission]));
   const submissionIds = new Set(filteredSubmissions.map((submission) => submission.id));
 
+  const poNumberById = new Map(data.purchaseOrders.map((po) => [po.id, po.po_number]));
+
   const filteredLines = data.lines.filter((line) => {
     if (!submissionIds.has(line.submission_id)) return false;
     if (appliedFilters.projectId !== ALL_FILTER_VALUE && line.billed_project_id !== appliedFilters.projectId && line.worked_project_id !== appliedFilters.projectId) return false;
     if (appliedFilters.soId !== ALL_FILTER_VALUE && line.so_id !== appliedFilters.soId) return false;
-    if (appliedFilters.poId !== ALL_FILTER_VALUE && line.po_id !== appliedFilters.poId) return false;
+    if (appliedFilters.poId !== ALL_FILTER_VALUE && poNumberById.get(line.po_id || "") !== appliedFilters.poId) return false;
     if (appliedFilters.positionId !== ALL_FILTER_VALUE) {
       const employee = line.employee_id ? employeeById.get(line.employee_id) : null;
       if (!employee || employee.position_id !== appliedFilters.positionId) return false;
@@ -189,7 +231,7 @@ export function buildAnalyticsModel(
   const filteredInvoices = data.invoices.filter((invoice) => {
     if (appliedFilters.consultantId !== ALL_FILTER_VALUE && invoice.consultant_id !== appliedFilters.consultantId) return false;
     if (appliedFilters.month !== ALL_FILTER_VALUE && invoice.invoice_month !== appliedFilters.month) return false;
-    if (appliedFilters.poId !== ALL_FILTER_VALUE && invoice.po_id !== appliedFilters.poId) return false;
+    if (appliedFilters.poId !== ALL_FILTER_VALUE && poNumberById.get(invoice.po_id || "") !== appliedFilters.poId) return false;
     return true;
   });
 
@@ -422,6 +464,13 @@ export function buildAnalyticsModel(
     };
   });
 
+  const uniquePurchaseOrders = Array.from(
+    data.purchaseOrders.reduce((map, po) => {
+      if (!map.has(po.po_number)) map.set(po.po_number, po);
+      return map;
+    }, new Map<string, PurchaseOrderRow>()).values(),
+  ).sort((a, b) => a.po_number.localeCompare(b.po_number));
+
   const filterOptions = {
     monthOptions: [
       { value: ALL_FILTER_VALUE, label: `Open period · ${formatMonthLabel(openMonth)}` },
@@ -430,9 +479,29 @@ export function buildAnalyticsModel(
     consultantOptions: [{ value: ALL_FILTER_VALUE, label: "All companies" }, ...data.consultants.map((consultant) => ({ value: consultant.id, label: consultant.name }))],
     projectOptions: [{ value: ALL_FILTER_VALUE, label: "All projects" }, ...data.projects.map((project) => ({ value: project.id, label: project.project_name }))],
     soOptions: [{ value: ALL_FILTER_VALUE, label: "All SOs" }, ...data.serviceOrders.map((so) => ({ value: so.id, label: so.so_number }))],
-    poOptions: [{ value: ALL_FILTER_VALUE, label: "All POs" }, ...data.purchaseOrders.map((po) => ({ value: po.id, label: po.po_number }))],
+    poOptions: [{ value: ALL_FILTER_VALUE, label: "All POs" }, ...uniquePurchaseOrders.map((po) => ({ value: po.po_number, label: po.po_number }))],
     positionOptions: [{ value: ALL_FILTER_VALUE, label: "All positions" }, ...data.positions.map((position) => ({ value: position.id, label: position.position_name }))],
   };
+
+  const visibleGadgetIds = new Set(
+    data.dashboardGadgetVisibility.filter((row) => row.is_visible).map((row) => row.gadget_id),
+  );
+  const userGadgetById = new Map(data.userDashboardGadgets.map((row) => [row.gadget_id, row]));
+  const dashboardGadgets = data.dashboardGadgets
+    .filter((gadget) => gadget.is_active && (visibleGadgetIds.size === 0 || visibleGadgetIds.has(gadget.id)))
+    .map((gadget, index) => {
+      const userConfig = userGadgetById.get(gadget.id);
+      return {
+        ...gadget,
+        isVisible: true,
+        isEnabled: userConfig?.is_enabled ?? false,
+        width: userConfig?.width ?? gadget.default_width,
+        height: userConfig?.height ?? gadget.default_height,
+        positionY: userConfig?.position_y ?? index,
+        settings: userConfig?.settings ?? {},
+      };
+    })
+    .sort((a, b) => a.positionY - b.positionY || a.sort_order - b.sort_order);
 
   const aiContext = {
     summary: {
@@ -522,6 +591,7 @@ export function buildAnalyticsModel(
     reviewQueue,
     recentActivity,
     filterOptions,
+    dashboardGadgets,
     aiContext,
   };
 }
