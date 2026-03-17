@@ -589,6 +589,7 @@ export function buildAnalyticsModel(
     reviewQueue,
     recentActivity,
     filterOptions,
+    dashboardGadgets,
     aiContext,
   };
 }
