@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          setting_key: string
+          setting_value: Json
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          setting_key: string
+          setting_value?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          setting_key?: string
+          setting_value?: Json
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -418,6 +448,44 @@ export type Database = {
           },
         ]
       }
+      group_feature_toggles: {
+        Row: {
+          created_at: string
+          feature_key: string
+          group_id: string
+          id: string
+          is_enabled: boolean
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          feature_key: string
+          group_id: string
+          id?: string
+          is_enabled?: boolean
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          feature_key?: string
+          group_id?: string
+          id?: string
+          is_enabled?: boolean
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_feature_toggles_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       group_permissions: {
         Row: {
           group_id: string
@@ -443,6 +511,48 @@ export type Database = {
             columns: ["group_id"]
             isOneToOne: false
             referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_report_visibility: {
+        Row: {
+          created_at: string
+          group_id: string
+          id: string
+          is_visible: boolean
+          report_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          group_id: string
+          id?: string
+          is_visible?: boolean
+          report_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          group_id?: string
+          id?: string
+          is_visible?: boolean
+          report_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_report_visibility_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_report_visibility_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "report_catalog"
             referencedColumns: ["id"]
           },
         ]
@@ -989,6 +1099,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      report_catalog: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          module_key: string
+          report_key: string
+          report_name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          module_key: string
+          report_key: string
+          report_name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          module_key?: string
+          report_key?: string
+          report_name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      saved_insights: {
+        Row: {
+          chart_config: Json | null
+          created_at: string
+          filters: Json
+          id: string
+          insight_type: string
+          is_pinned_to_dashboard: boolean
+          prompt: string | null
+          summary_markdown: string | null
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          chart_config?: Json | null
+          created_at?: string
+          filters?: Json
+          id?: string
+          insight_type?: string
+          is_pinned_to_dashboard?: boolean
+          prompt?: string | null
+          summary_markdown?: string | null
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          chart_config?: Json | null
+          created_at?: string
+          filters?: Json
+          id?: string
+          insight_type?: string
+          is_pinned_to_dashboard?: boolean
+          prompt?: string | null
+          summary_markdown?: string | null
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       service_orders: {
         Row: {
