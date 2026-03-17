@@ -71,6 +71,9 @@ export interface AnalyticsSourceData {
   reportVisibility: ReportVisibilityRow[];
   featureToggles: FeatureToggleRow[];
   savedInsights: SavedInsightRow[];
+  dashboardGadgets: DashboardGadgetRow[];
+  dashboardGadgetVisibility: DashboardGadgetVisibilityRow[];
+  userDashboardGadgets: UserDashboardGadgetRow[];
 }
 
 export interface AnalyticsModel {
