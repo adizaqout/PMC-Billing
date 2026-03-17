@@ -163,6 +163,51 @@ export type Database = {
         }
         Relationships: []
       }
+      dashboard_gadgets: {
+        Row: {
+          config: Json
+          created_at: string
+          default_height: number
+          default_width: number
+          description: string | null
+          gadget_key: string
+          gadget_type: string
+          id: string
+          is_active: boolean
+          sort_order: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          default_height?: number
+          default_width?: number
+          description?: string | null
+          gadget_key: string
+          gadget_type: string
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          default_height?: number
+          default_width?: number
+          description?: string | null
+          gadget_key?: string
+          gadget_type?: string
+          id?: string
+          is_active?: boolean
+          sort_order?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       deployment_lines: {
         Row: {
           allocation_pct: number
@@ -444,6 +489,48 @@ export type Database = {
             columns: ["consultant_id"]
             isOneToOne: false
             referencedRelation: "consultants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      group_dashboard_gadget_visibility: {
+        Row: {
+          created_at: string
+          gadget_id: string
+          group_id: string
+          id: string
+          is_visible: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          gadget_id: string
+          group_id: string
+          id?: string
+          is_visible?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          gadget_id?: string
+          group_id?: string
+          id?: string
+          is_visible?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "group_dashboard_gadget_visibility_gadget_id_fkey"
+            columns: ["gadget_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_gadgets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "group_dashboard_gadget_visibility_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "groups"
             referencedColumns: ["id"]
           },
         ]
@@ -1231,6 +1318,56 @@ export type Database = {
             columns: ["framework_id"]
             isOneToOne: false
             referencedRelation: "framework_agreements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_dashboard_gadgets: {
+        Row: {
+          created_at: string
+          gadget_id: string
+          height: number
+          id: string
+          is_enabled: boolean
+          position_x: number
+          position_y: number
+          settings: Json
+          updated_at: string
+          user_id: string
+          width: number
+        }
+        Insert: {
+          created_at?: string
+          gadget_id: string
+          height?: number
+          id?: string
+          is_enabled?: boolean
+          position_x?: number
+          position_y?: number
+          settings?: Json
+          updated_at?: string
+          user_id: string
+          width?: number
+        }
+        Update: {
+          created_at?: string
+          gadget_id?: string
+          height?: number
+          id?: string
+          is_enabled?: boolean
+          position_x?: number
+          position_y?: number
+          settings?: Json
+          updated_at?: string
+          user_id?: string
+          width?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_dashboard_gadgets_gadget_id_fkey"
+            columns: ["gadget_id"]
+            isOneToOne: false
+            referencedRelation: "dashboard_gadgets"
             referencedColumns: ["id"]
           },
         ]
