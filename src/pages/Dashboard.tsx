@@ -73,10 +73,18 @@ export default function Dashboard() {
   const [showPreviousRevisions, setShowPreviousRevisions] = useState(false);
   const { analytics, isLoading } = useAnalyticsModel(filters, showPreviousRevisions);
 
-  if (isLoading || !analytics) {
+  if (isLoading) {
     return (
       <AppLayout>
         <div className="flex min-h-[60vh] items-center justify-center text-sm text-muted-foreground">Loading dashboard…</div>
+      </AppLayout>
+    );
+  }
+
+  if (!analytics) {
+    return (
+      <AppLayout>
+        <div className="flex min-h-[60vh] items-center justify-center text-sm text-destructive">Dashboard data is unavailable right now.</div>
       </AppLayout>
     );
   }

@@ -5,6 +5,9 @@ import type { AnalyticsSourceData } from "@/lib/analytics-engine";
 export function useAnalyticsData() {
   return useQuery<AnalyticsSourceData>({
     queryKey: ["analytics-data"],
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const [
         periodRes,
@@ -43,7 +46,6 @@ export function useAnalyticsData() {
       ]);
 
       if (periodRes.error) throw periodRes.error;
-      if (settingsRes.error) throw settingsRes.error;
       if (profileRes.error) throw profileRes.error;
       if (consultantsRes.error) throw consultantsRes.error;
       if (projectsRes.error) throw projectsRes.error;
@@ -55,9 +57,19 @@ export function useAnalyticsData() {
       if (submissionsRes.error) throw submissionsRes.error;
       if (linesRes.error) throw linesRes.error;
       if (reportCatalogRes.error) throw reportCatalogRes.error;
-      if (reportVisibilityRes.error) throw reportVisibilityRes.error;
-      if (featureToggleRes.error) throw featureToggleRes.error;
-      if (savedInsightsRes.error) throw savedInsightsRes.error;
+
+      if (settingsRes.error) {
+        console.warn("Analytics settings unavailable, using defaults.", settingsRes.error.message);
+      }
+      if (reportVisibilityRes.error) {
+        console.warn("Report visibility unavailable, falling back to catalog defaults.", reportVisibilityRes.error.message);
+      }
+      if (featureToggleRes.error) {
+        console.warn("Feature toggles unavailable in analytics payload.", featureToggleRes.error.message);
+      }
+      if (savedInsightsRes.error) {
+        console.warn("Saved insights unavailable in analytics payload.", savedInsightsRes.error.message);
+      }
 
       return {
         openPeriod: periodRes.data,
