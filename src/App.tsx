@@ -47,7 +47,7 @@ const App = () => (
             <Route path="/deployments" element={<ProtectedRoute module="deployments"><DeploymentSchedulePage /></ProtectedRoute>} />
             <Route path="/period-control" element={<ProtectedRoute module="period_control"><PeriodControlPage /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute adminOnly><AdminPage /></ProtectedRoute>} />
-            <Route path="/reports" element={<ProtectedRoute module="reports"><PlaceholderPage title="Reports" subtitle="Baseline vs Actual vs Forecast and more" /></ProtectedRoute>} />
+            <Route path="/reports" element={<ProtectedRoute module="reports"><ReportsPage /></ProtectedRoute>} />
             <Route path="/ai-assistant" element={<ProtectedRoute module="ai_assistant"><AIAssistantPage /></ProtectedRoute>} />
             <Route path="*" element={<NotFound />} />
           </Routes>
