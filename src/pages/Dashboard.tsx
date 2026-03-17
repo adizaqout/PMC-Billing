@@ -138,8 +138,9 @@ export default function Dashboard() {
   });
 
   const removeGadgetMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("user_dashboard_gadgets").update({ is_enabled: false }).eq("id", id);
+    mutationFn: async (gadgetId: string) => {
+      if (!user?.id) throw new Error("Authentication required");
+      const { error } = await supabase.from("user_dashboard_gadgets").update({ is_enabled: false }).eq("user_id", user.id).eq("gadget_id", gadgetId);
       if (error) throw error;
     },
     onSuccess: () => {
