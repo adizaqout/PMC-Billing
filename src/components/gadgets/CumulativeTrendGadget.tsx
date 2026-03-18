@@ -32,9 +32,21 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
   const [startMonth, setStartMonth] = useState<string>(ALL_FILTER_VALUE);
   const [endMonth, setEndMonth] = useState<string>(ALL_FILTER_VALUE);
 
+  // Extract months from deployment line notes (format: "month:YYYY-MM|...")
+  const getLineMonth = (notes: string | null, fallbackMonth: string) => {
+    const match = notes?.match(/month:([^|]+)/);
+    return match?.[1] || fallbackMonth;
+  };
+
   const allMonths = useMemo(() => {
     if (!data) return [];
-    return Array.from(new Set(data.submissions.map((s) => s.month))).sort(compareMonth);
+    const months = new Set<string>();
+    const subMap = new Map(data.submissions.map((s) => [s.id, s]));
+    for (const line of data.lines) {
+      const sub = subMap.get(line.submission_id);
+      if (sub) months.add(getLineMonth(line.notes, sub.month));
+    }
+    return Array.from(months).sort(compareMonth);
   }, [data]);
 
   const companyOptions = useMemo(() => {
