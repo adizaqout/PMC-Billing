@@ -45,6 +45,7 @@ import {
   formatMonthLabel,
   type AnalyticsFilters,
 } from "@/lib/analytics";
+import CumulativeTrendGadget from "@/components/gadgets/CumulativeTrendGadget";
 import { toast } from "sonner";
 
 const PIE_COLORS = [
