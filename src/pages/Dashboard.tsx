@@ -56,7 +56,7 @@ const PIE_COLORS = [
   "hsl(var(--primary))",
 ];
 
-const GADGET_RENDER_ORDER = ["project_risk", "monthly_trend"] as const;
+const GADGET_RENDER_ORDER = ["project_risk", "monthly_trend", "cumulative_trend"] as const;
 
 function KpiCard({ title, value, hint, icon: Icon }: { title: string; value: string; hint: string; icon: typeof DollarSign }) {
   return (
