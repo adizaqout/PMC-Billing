@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { AnalyticsSourceData } from "@/lib/analytics-engine";
+import type { AnalyticsSourceData, DeploymentLineRow, SubmissionRow } from "@/lib/analytics-engine";
 
 const PAGE_SIZE = 1000;
 
