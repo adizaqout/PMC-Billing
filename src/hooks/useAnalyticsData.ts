@@ -2,6 +2,25 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { AnalyticsSourceData } from "@/lib/analytics-engine";
 
+const PAGE_SIZE = 1000;
+
+async function fetchAllRows<T>(queryBuilder: any): Promise<T[]> {
+  const rows: T[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await queryBuilder.range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+
+    rows.push(...(data as T[]));
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return rows;
+}
+
 export function useAnalyticsData() {
   return useQuery<AnalyticsSourceData>({
     queryKey: ["analytics-data"],
@@ -48,8 +67,8 @@ export function useAnalyticsData() {
         supabase.from("service_orders").select("id, so_number, consultant_id, so_value"),
         supabase.from("purchase_orders").select("id, po_number, consultant_id, so_id, project_id, po_value, amount, revision_number"),
         supabase.from("invoices").select("id, consultant_id, po_id, billed_amount_no_vat, invoice_month, status, invoice_number"),
-        supabase.from("deployment_submissions").select("id, consultant_id, month, schedule_type, revision_no, status, created_at, updated_at, submitted_on, reviewed_on"),
-        supabase.from("deployment_lines").select("id, submission_id, employee_id, worked_project_id, billed_project_id, so_id, po_id, allocation_pct, derived_cost, derived_monthly_rate, man_months, rate_year, notes"),
+        fetchAllRows(supabase.from("deployment_submissions").select("id, consultant_id, month, schedule_type, revision_no, status, created_at, updated_at, submitted_on, reviewed_on")),
+        fetchAllRows(supabase.from("deployment_lines").select("id, submission_id, employee_id, worked_project_id, billed_project_id, so_id, po_id, allocation_pct, derived_cost, derived_monthly_rate, man_months, rate_year, notes")),
         supabase.from("report_catalog").select("*"),
         supabase.from("group_report_visibility").select("*"),
         supabase.from("group_feature_toggles").select("*"),
@@ -68,8 +87,6 @@ export function useAnalyticsData() {
       if (serviceOrdersRes.error) throw serviceOrdersRes.error;
       if (purchaseOrdersRes.error) throw purchaseOrdersRes.error;
       if (invoicesRes.error) throw invoicesRes.error;
-      if (submissionsRes.error) throw submissionsRes.error;
-      if (linesRes.error) throw linesRes.error;
       if (reportCatalogRes.error) throw reportCatalogRes.error;
       if (dashboardGadgetsRes.error) throw dashboardGadgetsRes.error;
       if (gadgetVisibilityRes.error) throw gadgetVisibilityRes.error;
@@ -91,8 +108,8 @@ export function useAnalyticsData() {
         serviceOrders: serviceOrdersRes.data || [],
         purchaseOrders: purchaseOrdersRes.data || [],
         invoices: invoicesRes.data || [],
-        submissions: submissionsRes.data || [],
-        lines: linesRes.data || [],
+        submissions: submissionsRes || [],
+        lines: linesRes || [],
         reportCatalog: reportCatalogRes.data || [],
         reportVisibility: reportVisibilityRes.data || [],
         featureToggles: featureToggleRes.data || [],
@@ -104,3 +121,4 @@ export function useAnalyticsData() {
     },
   });
 }
+
