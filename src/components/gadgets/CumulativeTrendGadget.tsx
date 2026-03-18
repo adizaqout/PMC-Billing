@@ -32,9 +32,21 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
   const [startMonth, setStartMonth] = useState<string>(ALL_FILTER_VALUE);
   const [endMonth, setEndMonth] = useState<string>(ALL_FILTER_VALUE);
 
+  // Extract months from deployment line notes (format: "month:YYYY-MM|...")
+  const getLineMonth = (notes: string | null, fallbackMonth: string) => {
+    const match = notes?.match(/month:([^|]+)/);
+    return match?.[1] || fallbackMonth;
+  };
+
   const allMonths = useMemo(() => {
     if (!data) return [];
-    return Array.from(new Set(data.submissions.map((s) => s.month))).sort(compareMonth);
+    const months = new Set<string>();
+    const subMap = new Map(data.submissions.map((s) => [s.id, s]));
+    for (const line of data.lines) {
+      const sub = subMap.get(line.submission_id);
+      if (sub) months.add(getLineMonth(line.notes, sub.month));
+    }
+    return Array.from(months).sort(compareMonth);
   }, [data]);
 
   const companyOptions = useMemo(() => {
@@ -89,9 +101,10 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
       const sub = submissionById.get(line.submission_id);
       if (!sub) continue;
       const cost = computeCost(line);
-      if (sub.schedule_type === "actual") actualByMonth.set(sub.month, (actualByMonth.get(sub.month) || 0) + cost);
-      if (sub.schedule_type === "forecast") forecastByMonth.set(sub.month, (forecastByMonth.get(sub.month) || 0) + cost);
-      if (sub.schedule_type === "baseline") baselineByMonth.set(sub.month, (baselineByMonth.get(sub.month) || 0) + cost);
+      const lineMonth = getLineMonth(line.notes, sub.month);
+      if (sub.schedule_type === "actual") actualByMonth.set(lineMonth, (actualByMonth.get(lineMonth) || 0) + cost);
+      if (sub.schedule_type === "forecast") forecastByMonth.set(lineMonth, (forecastByMonth.get(lineMonth) || 0) + cost);
+      if (sub.schedule_type === "baseline") baselineByMonth.set(lineMonth, (baselineByMonth.get(lineMonth) || 0) + cost);
     }
 
     let months = allMonths;

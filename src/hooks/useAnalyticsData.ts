@@ -49,7 +49,7 @@ export function useAnalyticsData() {
         supabase.from("purchase_orders").select("id, po_number, consultant_id, so_id, project_id, po_value, amount, revision_number"),
         supabase.from("invoices").select("id, consultant_id, po_id, billed_amount_no_vat, invoice_month, status, invoice_number"),
         supabase.from("deployment_submissions").select("id, consultant_id, month, schedule_type, revision_no, status, created_at, updated_at, submitted_on, reviewed_on"),
-        supabase.from("deployment_lines").select("id, submission_id, employee_id, worked_project_id, billed_project_id, so_id, po_id, allocation_pct, derived_cost, derived_monthly_rate, man_months, rate_year"),
+        supabase.from("deployment_lines").select("id, submission_id, employee_id, worked_project_id, billed_project_id, so_id, po_id, allocation_pct, derived_cost, derived_monthly_rate, man_months, rate_year, notes"),
         supabase.from("report_catalog").select("*"),
         supabase.from("group_report_visibility").select("*"),
         supabase.from("group_feature_toggles").select("*"),
