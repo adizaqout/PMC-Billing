@@ -101,9 +101,10 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
       const sub = submissionById.get(line.submission_id);
       if (!sub) continue;
       const cost = computeCost(line);
-      if (sub.schedule_type === "actual") actualByMonth.set(sub.month, (actualByMonth.get(sub.month) || 0) + cost);
-      if (sub.schedule_type === "forecast") forecastByMonth.set(sub.month, (forecastByMonth.get(sub.month) || 0) + cost);
-      if (sub.schedule_type === "baseline") baselineByMonth.set(sub.month, (baselineByMonth.get(sub.month) || 0) + cost);
+      const lineMonth = getLineMonth(line.notes, sub.month);
+      if (sub.schedule_type === "actual") actualByMonth.set(lineMonth, (actualByMonth.get(lineMonth) || 0) + cost);
+      if (sub.schedule_type === "forecast") forecastByMonth.set(lineMonth, (forecastByMonth.get(lineMonth) || 0) + cost);
+      if (sub.schedule_type === "baseline") baselineByMonth.set(lineMonth, (baselineByMonth.get(lineMonth) || 0) + cost);
     }
 
     let months = allMonths;
