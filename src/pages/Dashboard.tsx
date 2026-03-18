@@ -248,6 +248,14 @@ export default function Dashboard() {
       );
     }
 
+    if (gadgetKey === "cumulative_trend") {
+      return (
+        <CumulativeTrendGadget
+          onRemove={gadgetId ? () => removeGadgetMutation.mutate(gadgetId) : undefined}
+        />
+      );
+    }
+
     return null;
   };
 
