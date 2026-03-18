@@ -97,7 +97,7 @@ export function useAnalyticsData() {
       if (featureToggleRes.error) console.warn("Feature toggles unavailable in analytics payload.", featureToggleRes.error.message);
       if (savedInsightsRes.error) console.warn("Saved insights unavailable in analytics payload.", savedInsightsRes.error.message);
 
-      return {
+      const analyticsData: AnalyticsSourceData = {
         openPeriod: periodRes.data,
         settings: settingsRes.data || [],
         profile: profileRes.data,
@@ -108,8 +108,8 @@ export function useAnalyticsData() {
         serviceOrders: serviceOrdersRes.data || [],
         purchaseOrders: purchaseOrdersRes.data || [],
         invoices: invoicesRes.data || [],
-        submissions: submissionsRes || [],
-        lines: linesRes || [],
+        submissions: submissionsRes,
+        lines: linesRes,
         reportCatalog: reportCatalogRes.data || [],
         reportVisibility: reportVisibilityRes.data || [],
         featureToggles: featureToggleRes.data || [],
@@ -118,6 +118,8 @@ export function useAnalyticsData() {
         dashboardGadgetVisibility: gadgetVisibilityRes.data || [],
         userDashboardGadgets: userDashboardGadgetsRes.data || [],
       };
+
+      return analyticsData;
     },
   });
 }
