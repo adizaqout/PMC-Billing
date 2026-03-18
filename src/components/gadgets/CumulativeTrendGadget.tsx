@@ -56,6 +56,30 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
     const submissionIds = new Set(filteredSubmissions.map((s) => s.id));
     const submissionById = new Map(filteredSubmissions.map((s) => [s.id, s]));
 
+    // Build employee → position rate lookup
+    const employeePositionMap = new Map<string, string>();
+    for (const emp of data.employees) {
+      if (emp.position_id) employeePositionMap.set(emp.id, emp.position_id);
+    }
+    const positionById = new Map(data.positions.map((p) => [p.id, p]));
+
+    function getRate(positionId: string | undefined, rateYear: number | null) {
+      if (!positionId) return 0;
+      const pos = positionById.get(positionId);
+      if (!pos) return 0;
+      const yr = rateYear || 1;
+      const rateKey = `year_${yr}_rate` as keyof typeof pos;
+      return Number(pos[rateKey] || 0);
+    }
+
+    function computeCost(line: typeof data.lines[0]) {
+      const positionId = line.employee_id ? employeePositionMap.get(line.employee_id) : undefined;
+      const rate = getRate(positionId, line.rate_year);
+      const pct = Number(line.allocation_pct || 0) / 100;
+      const manMonths = Number(line.man_months || 0);
+      return pct * rate * manMonths;
+    }
+
     const actualByMonth = new Map<string, number>();
     const forecastByMonth = new Map<string, number>();
     const baselineByMonth = new Map<string, number>();
@@ -64,7 +88,7 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
       if (!submissionIds.has(line.submission_id)) continue;
       const sub = submissionById.get(line.submission_id);
       if (!sub) continue;
-      const cost = Number(line.derived_cost || 0);
+      const cost = computeCost(line);
       if (sub.schedule_type === "actual") actualByMonth.set(sub.month, (actualByMonth.get(sub.month) || 0) + cost);
       if (sub.schedule_type === "forecast") forecastByMonth.set(sub.month, (forecastByMonth.get(sub.month) || 0) + cost);
       if (sub.schedule_type === "baseline") baselineByMonth.set(sub.month, (baselineByMonth.get(sub.month) || 0) + cost);
