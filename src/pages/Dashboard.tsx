@@ -45,6 +45,7 @@ import {
   formatMonthLabel,
   type AnalyticsFilters,
 } from "@/lib/analytics";
+import CumulativeTrendGadget from "@/components/gadgets/CumulativeTrendGadget";
 import { toast } from "sonner";
 
 const PIE_COLORS = [
@@ -56,7 +57,7 @@ const PIE_COLORS = [
   "hsl(var(--primary))",
 ];
 
-const GADGET_RENDER_ORDER = ["project_risk", "monthly_trend"] as const;
+const GADGET_RENDER_ORDER = ["project_risk", "monthly_trend", "cumulative_trend"] as const;
 
 function KpiCard({ title, value, hint, icon: Icon }: { title: string; value: string; hint: string; icon: typeof DollarSign }) {
   return (
@@ -244,6 +245,14 @@ export default function Dashboard() {
             </LineChart>
           </ResponsiveContainer>
         </GadgetShell>
+      );
+    }
+
+    if (gadgetKey === "cumulative_trend") {
+      return (
+        <CumulativeTrendGadget
+          onRemove={gadgetId ? () => removeGadgetMutation.mutate(gadgetId) : undefined}
+        />
       );
     }
 
