@@ -484,17 +484,25 @@ export function buildAnalyticsModel(
     positionOptions: [{ value: ALL_FILTER_VALUE, label: "All positions" }, ...data.positions.map((position) => ({ value: position.id, label: position.position_name }))],
   };
 
-  const visibleGadgetIds = new Set(
-    data.dashboardGadgetVisibility.filter((row) => row.is_visible).map((row) => row.gadget_id),
-  );
+  const gadgetVisibilityById = data.dashboardGadgetVisibility.reduce((map, row) => {
+    const rows = map.get(row.gadget_id);
+    if (rows) {
+      rows.push(row);
+    } else {
+      map.set(row.gadget_id, [row]);
+    }
+    return map;
+  }, new Map<string, DashboardGadgetVisibilityRow[]>());
   const userGadgetById = new Map(data.userDashboardGadgets.map((row) => [row.gadget_id, row]));
   const dashboardGadgets = data.dashboardGadgets
-    .filter((gadget) => gadget.is_active && (visibleGadgetIds.size === 0 || visibleGadgetIds.has(gadget.id)))
     .map((gadget, index) => {
+      const visibilityRows = gadgetVisibilityById.get(gadget.id) || [];
+      const isVisible = visibilityRows.length === 0 || visibilityRows.some((row) => row.is_visible);
       const userConfig = userGadgetById.get(gadget.id);
+
       return {
         ...gadget,
-        isVisible: true,
+        isVisible,
         isEnabled: userConfig?.is_enabled ?? false,
         width: userConfig?.width ?? gadget.default_width,
         height: userConfig?.height ?? gadget.default_height,
@@ -502,6 +510,7 @@ export function buildAnalyticsModel(
         settings: userConfig?.settings ?? {},
       };
     })
+    .filter((gadget) => gadget.is_active && gadget.isVisible)
     .sort((a, b) => a.positionY - b.positionY || a.sort_order - b.sort_order);
 
   const aiContext = {
