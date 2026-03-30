@@ -110,9 +110,9 @@ export default function PurchaseOrdersPage() {
   };
 
   const filtered = items.filter((i) => {
-    if (search && !i.po_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !i.po_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.po_number && !i.po_number.toLowerCase().includes(colFilters.po_number.toLowerCase())) return false;
-    if (colFilters.consultant && !(i.consultants?.name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
+    if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
     if (colFilters.so && !(i.service_orders?.so_number || "").toLowerCase().includes(colFilters.so.toLowerCase())) return false;
     if (colFilters.project && !(i.projects?.project_name || "").toLowerCase().includes(colFilters.project.toLowerCase()) && !(i.projects?.project_number || "").toLowerCase().includes(colFilters.project.toLowerCase())) return false;
     if (colFilters.type && !(i.type || "").toLowerCase().includes(colFilters.type.toLowerCase())) return false;
@@ -122,7 +122,7 @@ export default function PurchaseOrdersPage() {
   const { sorted, sort, toggleSort } = useSort(filtered, "po_number", "asc");
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
-  const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("po-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
@@ -201,7 +201,7 @@ export default function PurchaseOrdersPage() {
                   {visibleColumns.has("po_number") && <td className="px-4 py-2.5 font-mono font-medium">{item.po_number}</td>}
                   {visibleColumns.has("rev") && <td className="px-4 py-2.5 text-center font-mono">{item.revision_number ?? 0}</td>}
                   {visibleColumns.has("line") && <td className="px-4 py-2.5 text-xs">{item.po_reference || "—"}</td>}
-                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("so") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.service_orders?.so_number || "—"}</td>}
                   {visibleColumns.has("proj_no") && <td className="px-4 py-2.5 font-mono text-xs">{item.projects?.project_number || "—"}</td>}
                   {visibleColumns.has("proj_name") && <td className="px-4 py-2.5 text-xs">{item.projects?.project_name || "—"}</td>}

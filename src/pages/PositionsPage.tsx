@@ -113,7 +113,7 @@ export default function PositionsPage() {
 
   const filtered = items.filter((i) => {
     const s = search.toLowerCase();
-    const matchSearch = !s || i.position_name.toLowerCase().includes(s) || (i.consultants?.name || "").toLowerCase().includes(s) || (i.position_id || "").toLowerCase().includes(s);
+    const matchSearch = !s || i.position_name.toLowerCase().includes(s) || (i.consultants?.short_name || "").toLowerCase().includes(s) || (i.position_id || "").toLowerCase().includes(s);
     if (!matchSearch) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
@@ -121,7 +121,7 @@ export default function PositionsPage() {
       if (key === "position_id" && !(i.position_id || "").toLowerCase().includes(v)) return false;
       if (key === "system_id" && !((i as any).system_id || "").toLowerCase().includes(v)) return false;
       if (key === "position_name" && !i.position_name.toLowerCase().includes(v)) return false;
-      if (key === "consultant" && !(i.consultants?.name || "").toLowerCase().includes(v)) return false;
+      if (key === "consultant" && !(i.consultants?.short_name || "").toLowerCase().includes(v)) return false;
       if (key === "so" && !(i.service_orders?.so_number || "").toLowerCase().includes(v)) return false;
     }
     return true;
@@ -129,7 +129,7 @@ export default function PositionsPage() {
   const { sorted, sort, toggleSort } = useSort(filtered, "position_name", "asc");
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
-  const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("positions-template.xlsx", importCols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
   const handleImportWithProgress = useCallback(async (
@@ -212,7 +212,7 @@ export default function PositionsPage() {
                   {visibleColumns.has("pos_id") && <td className="px-4 py-2.5 font-mono text-xs text-primary">{item.position_id || "—"}</td>}
                   {visibleColumns.has("sys_id") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{(item as any).system_id || "—"}</td>}
                   {visibleColumns.has("name") && <td className="px-4 py-2.5 font-medium">{item.position_name}</td>}
-                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("so") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.service_orders?.so_number || "—"}</td>}
                   {visibleColumns.has("exp") && <td className="px-4 py-2.5 text-center font-mono">{item.total_years_of_exp ?? "—"}</td>}
                   {visibleColumns.has("y1") && <td className="px-4 py-2.5 text-right font-mono">{fmt(item.year_1_rate)}</td>}

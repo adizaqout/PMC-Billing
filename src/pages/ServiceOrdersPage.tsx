@@ -90,16 +90,16 @@ export default function ServiceOrdersPage() {
   };
 
   const filtered = items.filter((i) => {
-    if (search && !i.so_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !i.so_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.so_number && !i.so_number.toLowerCase().includes(colFilters.so_number.toLowerCase())) return false;
-    if (colFilters.consultant && !(i.consultants?.name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
+    if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
     if (colFilters.framework && !(i.framework_agreements?.framework_agreement_no || "").toLowerCase().includes(colFilters.framework.toLowerCase())) return false;
     return true;
   });
   const { sorted, sort, toggleSort } = useSort(filtered, "so_number", "asc");
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
-  const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
@@ -165,7 +165,7 @@ export default function ServiceOrdersPage() {
               <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   {visibleColumns.has("so_number") && <td className="px-4 py-2.5 font-mono font-medium">{item.so_number}</td>}
-                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("framework") && <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{item.framework_agreements?.framework_agreement_no || "—"}</td>}
                   {visibleColumns.has("start_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.so_start_date)}</td>}
                   {visibleColumns.has("end_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.so_end_date)}</td>}

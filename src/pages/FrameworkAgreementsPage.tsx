@@ -89,16 +89,16 @@ export default function FrameworkAgreementsPage() {
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
   
   const filtered = items.filter((i) => {
-    if (search && !i.framework_agreement_no.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !i.framework_agreement_no.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.agreement_no && !i.framework_agreement_no.toLowerCase().includes(colFilters.agreement_no.toLowerCase())) return false;
-    if (colFilters.consultant && !(i.consultants?.name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
+    if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
     if (colFilters.status && !i.status.toLowerCase().includes(colFilters.status.toLowerCase())) return false;
     return true;
   });
   const { sorted, sort, toggleSort } = useSort(filtered, "framework_agreement_no", "asc");
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
-  const handleExport = () => { exportToExcel("framework-agreements.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("framework-agreements.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("fa-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
@@ -152,7 +152,7 @@ export default function FrameworkAgreementsPage() {
               <tbody>{paginatedItems.map((item) => (
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   {visibleColumns.has("agreement_no") && <td className="px-4 py-2.5 font-mono font-medium">{item.framework_agreement_no}</td>}
-                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("start_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.start_date)}</td>}
                   {visibleColumns.has("end_date") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(item.end_date)}</td>}
                   {visibleColumns.has("status") && <td className="px-4 py-2.5 text-center"><StatusBadge status={item.status} /></td>}

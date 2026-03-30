@@ -247,10 +247,10 @@ export default function InvoicesPage() {
   };
 
   const filtered = items.filter((i) => {
-    if (search && !i.invoice_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !i.invoice_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.invoice_number && !i.invoice_number.toLowerCase().includes(colFilters.invoice_number.toLowerCase())) return false;
     if (colFilters.month && !i.invoice_month.toLowerCase().includes(colFilters.month.toLowerCase())) return false;
-    if (colFilters.consultant && !(i.consultants?.name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
+    if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
     if (colFilters.po && !(i.purchase_orders?.po_number || "").toLowerCase().includes(colFilters.po.toLowerCase())) return false;
     if (colFilters.status && !i.status.toLowerCase().includes(colFilters.status.toLowerCase())) return false;
     return true;
@@ -262,7 +262,7 @@ export default function InvoicesPage() {
   const handleExport = () => {
     exportToExcel("invoices.xlsx", cols, filtered.map(i => ({
       ...i,
-      consultant_name: i.consultants?.name || "",
+      consultant_name: i.consultants?.short_name || "",
       po_number: i.purchase_orders?.po_number || "",
       po_revision: i.purchase_orders?.revision_number ?? "",
       po_value: getPoRevTotal(i) ?? "",
@@ -338,7 +338,7 @@ export default function InvoicesPage() {
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   {visibleColumns.has("inv_no") && <td className="px-4 py-2.5 font-mono font-medium">{item.invoice_number}</td>}
                   {visibleColumns.has("month") && <td className="px-4 py-2.5 font-mono text-xs">{item.invoice_month}</td>}
-                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("po") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.purchase_orders?.po_number || "—"}</td>}
                   {visibleColumns.has("rev") && <td className="px-4 py-2.5 text-center font-mono text-xs">{item.purchase_orders?.revision_number ?? "—"}</td>}
                   {visibleColumns.has("po_value") && <td className="px-4 py-2.5 text-right font-mono text-xs text-muted-foreground">{fmt(getPoRevTotal(item))}</td>}

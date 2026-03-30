@@ -113,12 +113,12 @@ export default function EmployeesPage() {
 
   const filtered = employees.filter((e) => {
     const s = search.toLowerCase();
-    if (s && !e.employee_name.toLowerCase().includes(s) && !(e.consultants?.name || "").toLowerCase().includes(s) && !((e as any).employee_id || "").toLowerCase().includes(s)) return false;
+    if (s && !e.employee_name.toLowerCase().includes(s) && !(e.consultants?.short_name || "").toLowerCase().includes(s) && !((e as any).employee_id || "").toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
       const v = val.toLowerCase();
       if (key === "name" && !e.employee_name.toLowerCase().includes(v)) return false;
-      if (key === "consultant" && !(e.consultants?.name || "").toLowerCase().includes(v)) return false;
+      if (key === "consultant" && !(e.consultants?.short_name || "").toLowerCase().includes(v)) return false;
       if (key === "position" && !(e.positions?.position_name || "").toLowerCase().includes(v)) return false;
       if (key === "status" && !e.status.toLowerCase().includes(v)) return false;
     }
@@ -128,7 +128,7 @@ export default function EmployeesPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.short_name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
@@ -194,7 +194,7 @@ export default function EmployeesPage() {
                 <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   {visibleColumns.has("emp_id") && <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{(emp as any).employee_id || "—"}</td>}
                   {visibleColumns.has("name") && <td className="px-4 py-2.5 font-medium">{emp.employee_name}</td>}
-                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{emp.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{emp.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("pos_id") && <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{emp.positions?.position_id || "—"}</td>}
                   {visibleColumns.has("pos_name") && <td className="px-4 py-2.5 text-muted-foreground">{emp.positions?.position_name || "—"}</td>}
                   {visibleColumns.has("exp") && <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>}
