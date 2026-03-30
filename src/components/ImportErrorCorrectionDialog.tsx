@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { Fragment, useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -35,17 +35,20 @@ interface Props {
   onRetryImport: () => void;
 }
 
+const getErrorKey = (error: ImportErrorRow) =>
+  `${error.row}|${error.issue_type}|${error.employee_id_code || ""}|${error.position_id_code || ""}`;
+
 export default function ImportErrorCorrectionDialog({
   open, errors: initialErrors, consultantId, positions, serviceOrders,
   onErrorResolved, onAllResolved, onCancelImport, onRetryImport,
 }: Props) {
   const [errors, setErrors] = useState<ImportErrorRow[]>(initialErrors);
-  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [batchProgress, setBatchProgress] = useState(0);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-  const [resolvedRows, setResolvedRows] = useState<Set<number>>(new Set());
+  const [resolvedRows, setResolvedRows] = useState<Set<string>>(new Set());
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   // Form state for inline edits
@@ -63,7 +66,7 @@ export default function ImportErrorCorrectionDialog({
 
   const totalErrors = initialErrors.length;
   const resolvedCount = resolvedRows.size;
-  const remainingErrors = errors.filter(e => !resolvedRows.has(e.row));
+  const remainingErrors = errors.filter(e => !resolvedRows.has(getErrorKey(e)));
   const allResolved = remainingErrors.length === 0 && totalErrors > 0;
 
   const missingEmployeeCount = remainingErrors.filter(e => e.issue_type === "missing_employee").length;
@@ -71,8 +74,9 @@ export default function ImportErrorCorrectionDialog({
   const invalidMappingCount = remainingErrors.filter(e => e.issue_type === "invalid_mapping").length;
 
   const openInlineForm = (error: ImportErrorRow) => {
-    if (expandedRow === error.row) { setExpandedRow(null); return; }
-    setExpandedRow(error.row);
+    const errorKey = getErrorKey(error);
+    if (expandedRow === errorKey) { setExpandedRow(null); return; }
+    setExpandedRow(errorKey);
     if (error.issue_type === "missing_employee") {
       const matchedPos = positions.find(p => p.position_id.toLowerCase() === error.position_id_code.toLowerCase());
       setEmpForm({ name: error.employee_name, positionId: matchedPos?.id || "", startDate: new Date().toISOString().split("T")[0], endDate: "", status: "active" });
