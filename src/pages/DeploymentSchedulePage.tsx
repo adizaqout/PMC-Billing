@@ -832,7 +832,61 @@ export default function DeploymentSchedulePage() {
     toast.success("Template downloaded");
   };
 
+  const validateImportData = (rawRows: string[][]): ImportErrorRow[] => {
+    const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
+    const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
+    const errorRows: ImportErrorRow[] = [];
+    const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
+
+    const get = (row: string[], key: string) => {
+      const idx = headers.findIndex(h => h.includes(key));
+      return idx >= 0 ? String(row[idx] || "").trim() : "";
+    };
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const rowNum = i + 2;
+      const empIdCode = get(row, "employee id");
+      const empName = get(row, "employee name");
+      const posIdCode = get(row, "position id");
+      const posName = get(row, "position name");
+      const excelData: Record<string, string> = {};
+      headers.forEach((h, idx) => { excelData[h] = String(row[idx] || "").trim(); });
+
+      const emp = empIdCode ? employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : null;
+      const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+
+      if (empIdCode && !emp && !allowEmptyEmployee) {
+        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_employee", excel_data: excelData });
+      } else if (posIdCode && !pos) {
+        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_position", excel_data: excelData });
+      } else if (emp && posIdCode && pos && emp.position_id !== pos.id) {
+        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "invalid_mapping", excel_data: excelData });
+      }
+    }
+    return errorRows;
+  };
+
   const handleImportWithProgress = async (
+    rawRows: string[][],
+    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void
+  ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
+    if (!selectedSubmission) throw new Error("No submission selected");
+
+    // Pre-validate for missing employees/positions
+    const validationErrors = validateImportData(rawRows);
+    if (validationErrors.length > 0) {
+      setImportErrors(validationErrors);
+      setPendingImportData(rawRows);
+      setImportErrorDialogOpen(true);
+      // Return a "paused" progress — the actual import will happen after corrections
+      return { total: 0, processed: 0, created: 0, errors: [{ row: 0, message: `Found ${validationErrors.length} data issues. Please resolve them in the correction dialog.` }] };
+    }
+
+    return executeImport(rawRows, onProgress);
+  };
+
+  const executeImport = async (
     rawRows: string[][],
     onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void
   ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
