@@ -100,7 +100,7 @@ export default function ServiceOrdersPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
-  const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
+  const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
   ): Promise<ImportProgress> => {
@@ -109,7 +109,7 @@ export default function ServiceOrdersPage() {
     for (let i = 1; i < rows.length; i++) {
       const [soNum, consultantName, fwNo, startDate, endDate, value, comments] = rows[i];
       if (!soNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       const fw = fwNo ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === fwNo.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
       const excelDateToISO = (v: any): string | null => {
@@ -187,7 +187,7 @@ export default function ServiceOrdersPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="col-span-2 space-y-1.5"><Label>SO Number *</Label><Input value={form.so_number} onChange={(e) => setForm({ ...form, so_number: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Framework Agreement</Label><Select value={form.framework_id || "none"} onValueChange={(v) => setForm({ ...form, framework_id: v === "none" ? null : v })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredFrameworks.map((f) => <SelectItem key={f.id} value={f.id}>{f.framework_agreement_no}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.so_start_date || ""} onChange={(e) => setForm({ ...form, so_start_date: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.so_end_date || ""} onChange={(e) => setForm({ ...form, so_end_date: e.target.value || null })} min={form.so_start_date || undefined} /></div>

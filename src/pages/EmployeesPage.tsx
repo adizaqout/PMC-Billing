@@ -129,7 +129,7 @@ export default function EmployeesPage() {
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
   const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
-  const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
+  const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.short_name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
   ): Promise<ImportProgress> => {
@@ -138,7 +138,7 @@ export default function EmployeesPage() {
     for (let i = 1; i < rows.length; i++) {
       const [empId, name, consultantName, positionIdCode, , exp, startDate, endDate, status] = rows[i];
       if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       // Resolve position by position_id code
       const posIdStr = positionIdCode != null ? String(positionIdCode).trim() : "";
@@ -219,7 +219,7 @@ export default function EmployeesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Employee ID</Label><Input value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} placeholder="e.g. EMP-001" /></div>
               <div className="space-y-1.5"><Label>Employee Name *</Label><Input value={form.employee_name} onChange={(e) => setForm({ ...form, employee_name: e.target.value })} /></div>
-              <div className="col-span-2 space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v, position_id: "" })}><SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="col-span-2 space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v, position_id: "" })}><SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="col-span-2 space-y-1.5"><Label>Position</Label><Select value={form.position_id} onValueChange={(v) => setForm({ ...form, position_id: v })}><SelectTrigger><SelectValue placeholder="Select position" /></SelectTrigger><SelectContent>{allPositions.filter(p => p.consultant_id === form.consultant_id).map((p) => <SelectItem key={p.id} value={p.id}>{p.position_id} — {p.position_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Experience (Years)</Label><Input type="number" value={form.experience_years ?? ""} onChange={(e) => setForm({ ...form, experience_years: e.target.value ? parseInt(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statuses.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select></div>

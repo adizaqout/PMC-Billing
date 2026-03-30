@@ -130,7 +130,7 @@ export default function PositionsPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", consultant_name: i.consultants?.name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
-  const handleTemplate = () => { downloadTemplate("positions-template.xlsx", importCols, { Consultants: consultants.map(c => c.name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
+  const handleTemplate = () => { downloadTemplate("positions-template.xlsx", importCols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
   const handleImportWithProgress = useCallback(async (
     rows: string[][],
@@ -151,7 +151,7 @@ export default function PositionsPage() {
       const to = row[11] != null ? String(row[11]).trim() : "";
       const notes = row[12] != null ? String(row[12]).trim() : "";
       if (!name) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName.toLowerCase());
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       const so = soNum ? allServiceOrders.find(s => s.so_number.toLowerCase() === soNum.toLowerCase() && s.consultant_id === consultant.id) : null;
       const { error } = await supabase.from("positions").insert({
@@ -240,7 +240,7 @@ export default function PositionsPage() {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5"><Label>Position ID</Label><Input value={form.position_id} onChange={(e) => setForm({ ...form, position_id: e.target.value })} placeholder="e.g. SE-01" /></div>
               <div className="col-span-2 space-y-1.5"><Label>Position Name *</Label><Input value={form.position_name} onChange={(e) => setForm({ ...form, position_name: e.target.value })} /></div>
-              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Service Order</Label><Select value={form.so_id || "none"} onValueChange={(v) => setForm({ ...form, so_id: v === "none" ? null : v })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredSOs.map((s) => <SelectItem key={s.id} value={s.id}>{s.so_number}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Total Exp (Yrs)</Label><Input type="number" value={form.total_years_of_exp ?? ""} onChange={(e) => numSet("total_years_of_exp", e.target.value)} /></div>
               <div className="space-y-1.5"><Label>Year 1 Rate</Label><Input type="number" value={form.year_1_rate ?? ""} onChange={(e) => numSet("year_1_rate", e.target.value)} /></div>

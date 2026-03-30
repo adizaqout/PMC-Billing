@@ -271,7 +271,7 @@ export default function InvoicesPage() {
     toast.success("Exported");
   };
 
-  const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.name) }); toast.success("Template downloaded"); };
+  const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
 
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
@@ -281,7 +281,7 @@ export default function InvoicesPage() {
     for (let i = 1; i < rows.length; i++) {
       const [invNum, month, consultantName, poNum, rev, lineRef, , billed, , paid, status, desc] = rows[i];
       if (!invNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       const po = poNum ? allPOs.find(p =>
         p.po_number === String(poNum).trim() &&
@@ -365,7 +365,7 @@ export default function InvoicesPage() {
               <div className="space-y-1.5"><Label>Invoice Number *</Label><Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Invoice Month * (YYYY-MM)</Label><Input value={form.invoice_month} onChange={(e) => setForm({ ...form, invoice_month: e.target.value })} placeholder="2026-02" /></div>
               <div className="space-y-1.5"><Label>Consultant *</Label>
-                <Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}</SelectContent></Select>
               </div>
               <div className="space-y-1.5"><Label>PO + Revision</Label>
                 <Select value={form._po_key || "none"} onValueChange={handlePORevChange} disabled={!form.consultant_id}>
