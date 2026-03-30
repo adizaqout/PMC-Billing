@@ -45,6 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import ImportErrorCorrectionDialog, { type ImportErrorRow } from "@/components/ImportErrorCorrectionDialog";
 
 type Submission = Tables<"deployment_submissions"> & { consultants?: { short_name: string } | null };
 type DeploymentLine = Tables<"deployment_lines">;
