@@ -26,10 +26,11 @@ type Consultant = Tables<"consultants">;
 type ConsultantInsert = TablesInsert<"consultants">;
 
 const emptyForm: Partial<ConsultantInsert> = {
-  name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active",
+  short_name: "", name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active",
 };
 
 const columns = [
+  { header: "Short Name", key: "short_name", width: 20 },
   { header: "Name", key: "name", width: 30 },
   { header: "CR No.", key: "commercial_registration_no", width: 20 },
   { header: "Tax No.", key: "tax_registration_no", width: 20 },
@@ -40,6 +41,7 @@ const columns = [
 ];
 
 const tableCols: ColumnDef[] = [
+  { key: "shortName", label: "Short Name" },
   { key: "name", label: "Name" },
   { key: "cr", label: "CR No." },
   { key: "tax", label: "Tax No." },
@@ -102,7 +104,7 @@ export default function ConsultantsPage() {
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (c: Consultant) => {
     setEditing(c);
-    setForm({ name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status });
+    setForm({ short_name: c.short_name, name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status });
     setDialogOpen(true);
   };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
@@ -117,10 +119,11 @@ export default function ConsultantsPage() {
 
   const filtered = consultants.filter((c) => {
     const s = search.toLowerCase();
-    if (s && !c.name.toLowerCase().includes(s)) return false;
+    if (s && !(c.short_name || "").toLowerCase().includes(s) && !c.name.toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
       const lv = val.toLowerCase();
+      if (key === "shortName" && !(c.short_name || "").toLowerCase().includes(lv)) return false;
       if (key === "name" && !c.name.toLowerCase().includes(lv)) return false;
       if (key === "cr" && !(c.commercial_registration_no || "").toLowerCase().includes(lv)) return false;
       if (key === "tax" && !(c.tax_registration_no || "").toLowerCase().includes(lv)) return false;
@@ -130,7 +133,7 @@ export default function ConsultantsPage() {
     }
     return true;
   });
-  const { sorted, sort, toggleSort } = useSort(filtered, "name", "asc");
+  const { sorted, sort, toggleSort } = useSort(filtered, "short_name", "asc");
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
@@ -141,10 +144,10 @@ export default function ConsultantsPage() {
     const total = rows.length - 1;
     const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
     for (let i = 1; i < rows.length; i++) {
-      const [name, crNo, taxNo, email, phone, address, status] = rows[i];
+      const [shortName, name, crNo, taxNo, email, phone, address, status] = rows[i];
       if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
       const { error } = await supabase.from("consultants").insert({
-        name: name.trim(), commercial_registration_no: crNo?.trim() || null, tax_registration_no: taxNo?.trim() || null,
+        short_name: shortName?.trim() || null, name: name.trim(), commercial_registration_no: crNo?.trim() || null, tax_registration_no: taxNo?.trim() || null,
         contact_email: email?.trim() || null, contact_phone: phone?.trim() || null, address: address?.trim() || null,
         status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
       });
@@ -188,6 +191,7 @@ export default function ConsultantsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b">
+                    {v("shortName") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Short Name" sortKey="short_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.shortName || ""} onChange={(lv) => setColFilter("shortName", lv)} label="Short Name" /></SortableHeader></th>}
                     {v("name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(lv) => setColFilter("name", lv)} label="Name" /></SortableHeader></th>}
                     {v("cr") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="CR No." sortKey="commercial_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.cr || ""} onChange={(lv) => setColFilter("cr", lv)} label="CR No." /></SortableHeader></th>}
                     {v("tax") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Tax No." sortKey="tax_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.tax || ""} onChange={(lv) => setColFilter("tax", lv)} label="Tax No." /></SortableHeader></th>}
@@ -200,7 +204,8 @@ export default function ConsultantsPage() {
                 <tbody>
                   {paginatedItems.map((c) => (
                     <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
-                      {v("name") && <td className="px-4 py-2.5 font-medium">{c.name}</td>}
+                      {v("shortName") && <td className="px-4 py-2.5 font-medium">{c.short_name || "—"}</td>}
+                      {v("name") && <td className="px-4 py-2.5">{c.name}</td>}
                       {v("cr") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.commercial_registration_no || "—"}</td>}
                       {v("tax") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.tax_registration_no || "—"}</td>}
                       {v("email") && <td className="px-4 py-2.5 text-muted-foreground">{c.contact_email || "—"}</td>}
@@ -230,7 +235,8 @@ export default function ConsultantsPage() {
           <DialogHeader><DialogTitle>{editing ? "Edit Consultant" : "Add Consultant"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5"><Label>Name *</Label><Input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Short Name</Label><Input value={form.short_name || ""} onChange={(e) => setForm({ ...form, short_name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Name (Long) *</Label><Input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>CR No.</Label><Input value={form.commercial_registration_no || ""} onChange={(e) => setForm({ ...form, commercial_registration_no: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Tax No.</Label><Input value={form.tax_registration_no || ""} onChange={(e) => setForm({ ...form, tax_registration_no: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.contact_email || ""} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} /></div>
