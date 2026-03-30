@@ -1247,6 +1247,13 @@ export default function DeploymentSchedulePage() {
     return (
       <AppLayout>
         <div className="animate-fade-in">
+          {/* Import success banner */}
+          {importBanner && (
+            <div className="mb-4 flex items-center justify-between gap-2 px-4 py-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm">
+              <span>Successfully imported {importBanner.rows} rows. Added {importBanner.employees} new employee(s) and {importBanner.positions} new position(s).</span>
+              <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setImportBanner(null)}>Dismiss</Button>
+            </div>
+          )}
           <div className="page-header">
             <div>
               <h1 className="page-title">
