@@ -88,7 +88,7 @@ export default function InvoicesPage() {
     queryFn: async () => {
       const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name");
       if (error) throw error;
-      return data as { id: string; name: string }[];
+      return data as { id: string; short_name: string }[];
     }
   });
 

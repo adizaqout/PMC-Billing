@@ -24,7 +24,7 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 
 type Employee = Tables<"employees"> & { consultants?: { short_name: string } | null; positions?: { position_name: string; position_id: string } | null };
-type Consultant = { id: string; name: string };
+type Consultant = { id: string; short_name: string };
 type Position = { id: string; position_id: string; position_name: string; consultant_id: string };
 
 interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }

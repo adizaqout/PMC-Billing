@@ -79,7 +79,7 @@ export default function PositionsPage() {
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: items = [], isLoading } = useQuery({ queryKey: ["positions"], queryFn: async () => { const { data, error } = await supabase.from("positions").select("*, consultants(short_name), service_orders(so_number)").order("position_name"); if (error) throw error; return data as Position[]; } });
-  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as { id: string; name: string }[]; } });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
   const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number"); if (error) throw error; return data as { id: string; so_number: string; consultant_id: string }[]; } });
   const filteredSOs = form.consultant_id ? allServiceOrders.filter(s => s.consultant_id === form.consultant_id) : [];
 
