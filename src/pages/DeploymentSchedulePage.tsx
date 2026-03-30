@@ -1113,6 +1113,54 @@ export default function DeploymentSchedulePage() {
     }
   };
 
+  // Import error correction handlers
+  const handleErrorResolved = (error: ImportErrorRow, newRecordId: string) => {
+    // Refetch employees and positions so retry import picks up new records
+    queryClient.invalidateQueries({ queryKey: ["deployment-employees", consultantId] });
+    queryClient.invalidateQueries({ queryKey: ["deployment-positions", consultantId] });
+  };
+
+  const handleRetryImport = async () => {
+    if (!pendingImportData || !selectedSubmission) return;
+    setImportErrorDialogOpen(false);
+    
+    // Wait for refetch to complete
+    await queryClient.refetchQueries({ queryKey: ["deployment-employees", consultantId] });
+    await queryClient.refetchQueries({ queryKey: ["deployment-positions", consultantId] });
+    
+    // Re-validate with refreshed data
+    const revalidationErrors = validateImportData(pendingImportData);
+    if (revalidationErrors.length > 0) {
+      setImportErrors(revalidationErrors);
+      setImportErrorDialogOpen(true);
+      toast.error(`Still ${revalidationErrors.length} unresolved issues`);
+      return;
+    }
+
+    // Execute the actual import
+    toast.info("Retrying import...");
+    try {
+      const result = await executeImport(pendingImportData, () => {});
+      if (result.errors.length === 0) {
+        setImportBanner({ rows: result.created, employees: importErrors.filter(e => e.issue_type === "missing_employee").length, positions: importErrors.filter(e => e.issue_type === "missing_position").length });
+        toast.success(`Successfully imported ${result.created} rows`);
+      } else {
+        toast.error(`Import completed with ${result.errors.length} errors`);
+      }
+      setPendingImportData(null);
+      setImportErrors([]);
+      handleImportComplete();
+    } catch (err: any) {
+      toast.error(err.message || "Import failed");
+    }
+  };
+
+  const handleCancelImport = () => {
+    setImportErrorDialogOpen(false);
+    setPendingImportData(null);
+    setImportErrors([]);
+  };
+
   // ---- List view hooks (must be before any early return) ----
   const submittedSubs = submissions.filter(s => s.status === "submitted");
 
