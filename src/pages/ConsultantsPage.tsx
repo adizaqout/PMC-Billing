@@ -235,7 +235,8 @@ export default function ConsultantsPage() {
           <DialogHeader><DialogTitle>{editing ? "Edit Consultant" : "Add Consultant"}</DialogTitle></DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5"><Label>Name *</Label><Input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Short Name</Label><Input value={form.short_name || ""} onChange={(e) => setForm({ ...form, short_name: e.target.value })} /></div>
+              <div className="space-y-1.5"><Label>Name (Long) *</Label><Input value={form.name || ""} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>CR No.</Label><Input value={form.commercial_registration_no || ""} onChange={(e) => setForm({ ...form, commercial_registration_no: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Tax No.</Label><Input value={form.tax_registration_no || ""} onChange={(e) => setForm({ ...form, tax_registration_no: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Email</Label><Input type="email" value={form.contact_email || ""} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} /></div>
