@@ -1487,6 +1487,19 @@ export default function DeploymentSchedulePage() {
             <span>{projectColumns.length} project column(s)</span>
           </div>
         </div>
+
+        {/* Import Error Correction Dialog */}
+        <ImportErrorCorrectionDialog
+          open={importErrorDialogOpen}
+          errors={importErrors}
+          consultantId={consultantId}
+          positions={positions.map(p => ({ id: p.id, position_id: p.position_id, position_name: p.position_name, consultant_id: p.consultant_id }))}
+          serviceOrders={serviceOrders.map(s => ({ id: s.id, so_number: s.so_number }))}
+          onErrorResolved={handleErrorResolved}
+          onAllResolved={() => {}}
+          onCancelImport={handleCancelImport}
+          onRetryImport={handleRetryImport}
+        />
       </AppLayout>
     );
   }
