@@ -45,7 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import ImportErrorCorrectionDialog, { type ImportErrorRow } from "@/components/ImportErrorCorrectionDialog";
+import ImportErrorCorrectionDialog, { type DistinctImportError } from "@/components/ImportErrorCorrectionDialog";
 
 type Submission = Tables<"deployment_submissions"> & { consultants?: { short_name: string } | null };
 type DeploymentLine = Tables<"deployment_lines">;
@@ -92,7 +92,7 @@ export default function DeploymentSchedulePage() {
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
   const [subSearch, setSubSearch] = useState("");
   // Import error correction state
-  const [importErrors, setImportErrors] = useState<ImportErrorRow[]>([]);
+  const [importErrors, setImportErrors] = useState<DistinctImportError[]>([]);
   const [importErrorDialogOpen, setImportErrorDialogOpen] = useState(false);
   const [pendingImportData, setPendingImportData] = useState<string[][] | null>(null);
   const [importBanner, setImportBanner] = useState<{ rows: number; employees: number; positions: number } | null>(null);
@@ -836,10 +836,20 @@ export default function DeploymentSchedulePage() {
     rawRows: string[][],
     employeeSnapshot: Employee[] = employees,
     positionSnapshot: Position[] = positions,
-  ): ImportErrorRow[] => {
+  ): DistinctImportError[] => {
+    type RawImportIssue = {
+      row: number;
+      employee_id_code: string;
+      employee_name: string;
+      position_id_code: string;
+      position_name: string;
+      issue_type: "missing_employee" | "missing_position" | "invalid_mapping";
+      excel_data: Record<string, string>;
+    };
+
     const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
     const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
-    const errorRows: ImportErrorRow[] = [];
+    const rawIssues: RawImportIssue[] = [];
 
     const get = (row: string[], key: string) => {
       const idx = headers.findIndex(h => h.includes(key));
@@ -860,16 +870,53 @@ export default function DeploymentSchedulePage() {
       const pos = posIdCode ? positionSnapshot.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
 
       if (empIdCode && !emp) {
-        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_employee", excel_data: excelData });
+        rawIssues.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_employee", excel_data: excelData });
       }
       if (posIdCode && !pos) {
-        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_position", excel_data: excelData });
+        rawIssues.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_position", excel_data: excelData });
       }
       if (emp && posIdCode && pos && emp.position_id !== pos.id) {
-        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "invalid_mapping", excel_data: excelData });
+        rawIssues.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "invalid_mapping", excel_data: excelData });
       }
     }
-    return errorRows;
+
+    const distinctIssues = new Map<string, DistinctImportError>();
+
+    rawIssues.forEach((issue) => {
+      const employeeCode = issue.employee_id_code || "unknown_employee";
+      const positionCode = issue.position_id_code || "unknown_position";
+
+      const key = issue.issue_type === "missing_position"
+        ? `pos_${positionCode.toLowerCase()}`
+        : issue.issue_type === "missing_employee"
+          ? `emp_${employeeCode.toLowerCase()}`
+          : `map_${employeeCode.toLowerCase()}`;
+
+      const existing = distinctIssues.get(key);
+
+      if (!existing) {
+        distinctIssues.set(key, {
+          key,
+          employee_id_code: issue.employee_id_code,
+          employee_name: issue.employee_name,
+          position_id_code: issue.position_id_code,
+          position_name: issue.position_name,
+          issue_type: issue.issue_type,
+          affected_rows: [issue.row],
+          affected_count: 1,
+          excel_data: issue.excel_data,
+        });
+      } else {
+        existing.affected_rows.push(issue.row);
+        existing.affected_count += 1;
+      }
+    });
+
+    return Array.from(distinctIssues.values()).sort((a, b) => {
+      const aMinRow = Math.min(...a.affected_rows);
+      const bMinRow = Math.min(...b.affected_rows);
+      return aMinRow - bMinRow;
+    });
   };
 
   const handleImportWithProgress = async (
@@ -883,7 +930,7 @@ export default function DeploymentSchedulePage() {
       setImportErrors(validationErrors);
       setPendingImportData(rawRows);
       setImportErrorDialogOpen(true);
-      return { total: 0, processed: 0, created: 0, errors: [{ row: 0, message: `Found ${validationErrors.length} data issues. Please resolve them in the correction dialog.` }] };
+      return { total: 0, processed: 0, created: 0, errors: [{ row: 0, message: `Found ${validationErrors.length} distinct data issues. Please resolve them in the correction dialog.` }] };
     }
 
     return executeImport(rawRows, onProgress, employees, positions);
@@ -1122,7 +1169,7 @@ export default function DeploymentSchedulePage() {
   };
 
   // Import error correction handlers
-  const handleErrorResolved = (_error: ImportErrorRow, _newRecordId: string) => {
+  const handleErrorResolved = (_error: DistinctImportError) => {
     queryClient.invalidateQueries({ queryKey: ["deployment-employees", consultantId] });
     queryClient.invalidateQueries({ queryKey: ["deployment-positions", consultantId] });
   };
@@ -1526,10 +1573,10 @@ export default function DeploymentSchedulePage() {
           open={importErrorDialogOpen}
           errors={importErrors}
           consultantId={consultantId}
+          totalImportRows={(pendingImportData?.slice(1).filter((r) => r[0] && !String(r[0]).startsWith("---")).length) ?? 0}
           positions={positions.map(p => ({ id: p.id, position_id: p.position_id, position_name: p.position_name, consultant_id: p.consultant_id }))}
           serviceOrders={serviceOrders.map(s => ({ id: s.id, so_number: s.so_number }))}
           onErrorResolved={handleErrorResolved}
-          onAllResolved={() => {}}
           onCancelImport={handleCancelImport}
           onRetryImport={handleRetryImport}
         />
