@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
+import { useLookupValues } from "@/hooks/useLookupValues";
 import AppLayout from "@/components/AppLayout";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
@@ -85,6 +86,7 @@ export default function PositionsPage() {
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
   const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number"); if (error) throw error; return data as { id: string; so_number: string; consultant_id: string }[]; } });
   const filteredSOs = form.consultant_id ? allServiceOrders.filter(s => s.consultant_id === form.consultant_id) : [];
+  const { data: functionLookups = [] } = useLookupValues("Position Function");
 
   const upsertMutation = useMutation({
     mutationFn: async (values: PosForm & { id?: string }) => {
@@ -247,7 +249,7 @@ export default function PositionsPage() {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5"><Label>Position ID</Label><Input value={form.position_id} onChange={(e) => setForm({ ...form, position_id: e.target.value })} placeholder="e.g. SE-01" /></div>
               <div className="col-span-2 space-y-1.5"><Label>Position Name *</Label><Input value={form.position_name} onChange={(e) => setForm({ ...form, position_name: e.target.value })} /></div>
-              <div className="col-span-3 space-y-1.5"><Label>Function</Label><Input value={form.function || ""} onChange={(e) => setForm({ ...form, function: e.target.value || null })} maxLength={50} placeholder="e.g. Project Manager" /></div>
+              <div className="col-span-3 space-y-1.5"><Label>Function</Label><Select value={form.function || ""} onValueChange={(v) => setForm({ ...form, function: v || null })}><SelectTrigger><SelectValue placeholder="Select function" /></SelectTrigger><SelectContent>{functionLookups.map(lv => <SelectItem key={lv.id} value={lv.value}>{lv.label}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Service Order</Label><Select value={form.so_id || "none"} onValueChange={(v) => setForm({ ...form, so_id: v === "none" ? null : v })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredSOs.map((s) => <SelectItem key={s.id} value={s.id}>{s.so_number}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Total Exp (Yrs)</Label><Input type="number" value={form.total_years_of_exp ?? ""} onChange={(e) => numSet("total_years_of_exp", e.target.value)} /></div>
