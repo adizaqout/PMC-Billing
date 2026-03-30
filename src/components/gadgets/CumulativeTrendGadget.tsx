@@ -225,6 +225,7 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
                 strokeWidth={2.5}
                 dot={false}
                 strokeDasharray="8 4"
+                connectNulls={false}
               />
               <Line
                 type="monotone"
@@ -239,6 +240,7 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
                 stroke="hsl(0, 72%, 40%)"
                 strokeWidth={2.5}
                 dot={false}
+                connectNulls={false}
               />
             </LineChart>
           </ResponsiveContainer>
