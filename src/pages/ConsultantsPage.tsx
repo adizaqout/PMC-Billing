@@ -133,7 +133,7 @@ export default function ConsultantsPage() {
     }
     return true;
   });
-  const { sorted, sort, toggleSort } = useSort(filtered, "name", "asc");
+  const { sorted, sort, toggleSort } = useSort(filtered, "short_name", "asc");
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
