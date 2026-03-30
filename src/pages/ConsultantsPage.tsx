@@ -26,10 +26,11 @@ type Consultant = Tables<"consultants">;
 type ConsultantInsert = TablesInsert<"consultants">;
 
 const emptyForm: Partial<ConsultantInsert> = {
-  name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active",
+  short_name: "", name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active",
 };
 
 const columns = [
+  { header: "Short Name", key: "short_name", width: 20 },
   { header: "Name", key: "name", width: 30 },
   { header: "CR No.", key: "commercial_registration_no", width: 20 },
   { header: "Tax No.", key: "tax_registration_no", width: 20 },
@@ -40,6 +41,7 @@ const columns = [
 ];
 
 const tableCols: ColumnDef[] = [
+  { key: "shortName", label: "Short Name" },
   { key: "name", label: "Name" },
   { key: "cr", label: "CR No." },
   { key: "tax", label: "Tax No." },
