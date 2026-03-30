@@ -77,7 +77,7 @@ export default function EmployeesPage() {
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ["employees"],
-    queryFn: async () => { const { data, error } = await supabase.from("employees").select("*, consultants(name), positions(position_id, position_name)").order("employee_name"); if (error) throw error; return data as Employee[]; },
+    queryFn: async () => { const { data, error } = await supabase.from("employees").select("*, consultants(short_name), positions(position_id, position_name)").order("employee_name"); if (error) throw error; return data as Employee[]; },
   });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as Consultant[]; } });
   const { data: allPositions = [] } = useQuery({ queryKey: ["positions-list"], queryFn: async () => { const { data, error } = await supabase.from("positions").select("id, position_id, position_name, consultant_id").order("position_name"); if (error) throw error; return data as Position[]; } });

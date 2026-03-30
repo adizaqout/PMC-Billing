@@ -155,7 +155,7 @@ export default function DeploymentSchedulePage() {
       if (!consultantId) return [];
       const { data, error } = await supabase
         .from("deployment_submissions")
-        .select("*, consultants(name)")
+        .select("*, consultants(short_name)")
         .eq("consultant_id", consultantId)
         .order("month", { ascending: false })
         .order("schedule_type")
@@ -450,7 +450,7 @@ export default function DeploymentSchedulePage() {
           revision_no: newRevision,
           created_by: user?.id || null,
         })
-        .select("*, consultants(name)")
+        .select("*, consultants(short_name)")
         .single();
       if (error) throw error;
 

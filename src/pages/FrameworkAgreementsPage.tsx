@@ -57,7 +57,7 @@ export default function FrameworkAgreementsPage() {
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["framework_agreements"],
-    queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("*, consultants(name)").order("framework_agreement_no"); if (error) throw error; return data as FA[]; },
+    queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("*, consultants(short_name)").order("framework_agreement_no"); if (error) throw error; return data as FA[]; },
   });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
 

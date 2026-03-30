@@ -76,7 +76,7 @@ export default function InvoicesPage() {
     queryKey: ["invoices"],
     queryFn: async () => {
       const { data, error } = await supabase.from("invoices")
-        .select("*, consultants(name), purchase_orders(po_number, revision_number, po_reference, po_value, project_id)")
+        .select("*, consultants(short_name), purchase_orders(po_number, revision_number, po_reference, po_value, project_id)")
         .order("invoice_month", { ascending: false });
       if (error) throw error;
       return data as Invoice[];
