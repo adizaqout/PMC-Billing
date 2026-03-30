@@ -24,13 +24,16 @@ import {
 
 interface CumulativeTrendGadgetProps {
   onRemove?: () => void;
+  filterMonth?: string;
+  filterConsultantId?: string;
 }
 
-export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadgetProps) {
+export default function CumulativeTrendGadget({ onRemove, filterMonth, filterConsultantId }: CumulativeTrendGadgetProps) {
   const { data } = useAnalyticsData();
-  const [selectedCompany, setSelectedCompany] = useState<string>(ALL_FILTER_VALUE);
-  const [startMonth, setStartMonth] = useState<string>(ALL_FILTER_VALUE);
-  const [endMonth, setEndMonth] = useState<string>(ALL_FILTER_VALUE);
+  const ALL = ALL_FILTER_VALUE;
+  const [selectedCompany, setSelectedCompany] = useState<string>(ALL);
+  const [startMonth, setStartMonth] = useState<string>(ALL);
+  const [endMonth, setEndMonth] = useState<string>(ALL);
 
   // Extract months from deployment line notes (format: "month:YYYY-MM|...")
   const getLineMonth = (notes: string | null, fallbackMonth: string) => {
