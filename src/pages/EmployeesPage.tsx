@@ -23,7 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Employee = Tables<"employees"> & { consultants?: { name: string } | null; positions?: { position_name: string; position_id: string } | null };
+type Employee = Tables<"employees"> & { consultants?: { short_name: string } | null; positions?: { position_name: string; position_id: string } | null };
 type Consultant = { id: string; name: string };
 type Position = { id: string; position_id: string; position_name: string; consultant_id: string };
 

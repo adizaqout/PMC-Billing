@@ -24,7 +24,7 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 
 type Invoice = Tables<"invoices"> & {
-  consultants?: { name: string } | null;
+  consultants?: { short_name: string } | null;
   purchase_orders?: { po_number: string; revision_number: number | null; po_reference: string | null; po_value: number | null; project_id: string | null } | null;
 };
 type PORecord = { id: string; po_number: string; consultant_id: string; revision_number: number | null; po_reference: string | null; po_value: number | null; project_id: string | null };

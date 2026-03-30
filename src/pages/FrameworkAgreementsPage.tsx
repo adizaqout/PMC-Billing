@@ -22,7 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type FA = Tables<"framework_agreements"> & { consultants?: { name: string } | null };
+type FA = Tables<"framework_agreements"> & { consultants?: { short_name: string } | null };
 type FAInsert = TablesInsert<"framework_agreements">;
 
 interface FAForm { framework_agreement_no: string; consultant_id: string; start_date: string | null; end_date: string | null; status: "active" | "inactive"; }

@@ -46,7 +46,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Submission = Tables<"deployment_submissions"> & { consultants?: { name: string } | null };
+type Submission = Tables<"deployment_submissions"> & { consultants?: { short_name: string } | null };
 type DeploymentLine = Tables<"deployment_lines">;
 type Period = Tables<"period_control">;
 type Employee = Tables<"employees"> & { positions?: { position_name: string } | null };

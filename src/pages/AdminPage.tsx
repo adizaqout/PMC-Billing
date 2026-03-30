@@ -22,7 +22,7 @@ import SavedInsightsAdminTab from "@/components/admin/SavedInsightsAdminTab";
 
 // ---- Types ----
 type Profile = Tables<"profiles">;
-type Group = Tables<"groups"> & { consultants?: { name: string } | null };
+type Group = Tables<"groups"> & { consultants?: { short_name: string } | null };
 type UserRole = Tables<"user_roles"> & { groups?: { name: string } | null };
 type GroupPermission = Tables<"group_permissions">;
 interface LookupValue { id: string; category: string; value: string; label: string; sort_order: number; is_active: boolean; }

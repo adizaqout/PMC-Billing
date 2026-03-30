@@ -22,7 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type SO = Tables<"service_orders"> & { consultants?: { name: string } | null; framework_agreements?: { framework_agreement_no: string } | null };
+type SO = Tables<"service_orders"> & { consultants?: { short_name: string } | null; framework_agreements?: { framework_agreement_no: string } | null };
 interface SOForm { so_number: string; consultant_id: string; framework_id: string | null; so_start_date: string | null; so_end_date: string | null; so_value: number | null; comments: string | null; }
 const emptyForm: SOForm = { so_number: "", consultant_id: "", framework_id: null, so_start_date: null, so_end_date: null, so_value: null, comments: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
