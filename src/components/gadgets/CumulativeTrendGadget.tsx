@@ -51,7 +51,7 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
 
   const companyOptions = useMemo(() => {
     if (!data) return [];
-    return data.consultants.map((c) => ({ value: c.id, label: c.name }));
+    return data.consultants.map((c) => ({ value: c.id, label: c.short_name }));
   }, [data]);
 
   const trendData = useMemo(() => {

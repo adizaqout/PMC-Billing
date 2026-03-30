@@ -60,7 +60,7 @@ export function useAnalyticsData() {
         supabase.from("period_control").select("month, status").eq("status", "open").maybeSingle(),
         supabase.from("app_settings").select("setting_key, setting_value"),
         supabase.from("profiles").select("full_name, consultant_id").eq("user_id", userId).maybeSingle(),
-        supabase.from("consultants").select("id, name, status"),
+        supabase.from("consultants").select("id, name, short_name, status"),
         supabase.from("projects").select("id, project_name, latest_budget, latest_pmc_budget, previous_pmc_budget, previous_pmc_actual, actual_pmc_to_date, portfolio, status"),
         supabase.from("employees").select("id, employee_name, consultant_id, position_id, status"),
         supabase.from("positions").select("id, position_name, consultant_id, so_id, year_1_rate, year_2_rate, year_3_rate, year_4_rate, year_5_rate"),
