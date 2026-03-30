@@ -1141,7 +1141,7 @@ export default function DeploymentSchedulePage() {
               <h1 className="page-title">
                 {selectedSubmission.schedule_type.charAt(0).toUpperCase() + selectedSubmission.schedule_type.slice(1)} — {selectedSubmission.month}
               </h1>
-              <p className="page-subtitle">Revision #{selectedSubmission.revision_no} · {consultants.find(c => c.id === consultantId)?.name}</p>
+              <p className="page-subtitle">Revision #{selectedSubmission.revision_no} · {consultants.find(c => c.id === consultantId)?.short_name}</p>
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status={selectedSubmission.status} />
