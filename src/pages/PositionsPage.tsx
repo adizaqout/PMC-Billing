@@ -23,8 +23,8 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 
 type Position = Tables<"positions"> & { consultants?: { short_name: string } | null; service_orders?: { so_number: string } | null };
-interface PosForm { position_id: string; position_name: string; consultant_id: string; so_id: string | null; total_years_of_exp: number | null; year_1_rate: number | null; year_2_rate: number | null; year_3_rate: number | null; year_4_rate: number | null; year_5_rate: number | null; effective_from: string | null; effective_to: string | null; notes: string | null; }
-const emptyForm: PosForm = { position_id: "", position_name: "", consultant_id: "", so_id: null, total_years_of_exp: null, year_1_rate: null, year_2_rate: null, year_3_rate: null, year_4_rate: null, year_5_rate: null, effective_from: null, effective_to: null, notes: null };
+interface PosForm { position_id: string; position_name: string; consultant_id: string; so_id: string | null; total_years_of_exp: number | null; year_1_rate: number | null; year_2_rate: number | null; year_3_rate: number | null; year_4_rate: number | null; year_5_rate: number | null; effective_from: string | null; effective_to: string | null; notes: string | null; function: string | null; }
+const emptyForm: PosForm = { position_id: "", position_name: "", consultant_id: "", so_id: null, total_years_of_exp: null, year_1_rate: null, year_2_rate: null, year_3_rate: null, year_4_rate: null, year_5_rate: null, effective_from: null, effective_to: null, notes: null, function: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -32,6 +32,7 @@ const exportCols = [
   { header: "Position ID", key: "position_id", width: 14 },
   { header: "System ID", key: "system_id", width: 18 },
   { header: "Position Name", key: "position_name", width: 25 },
+  { header: "Function", key: "function", width: 20 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Service Order", key: "so_number", width: 18 },
   { header: "Exp (Yrs)", key: "total_years_of_exp", width: 10 },
@@ -47,6 +48,7 @@ const exportCols = [
 const importCols = [
   { header: "Position ID", key: "position_id", width: 14 },
   { header: "Position Name", key: "position_name", width: 25 },
+  { header: "Function", key: "function", width: 20 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Service Order", key: "so_number", width: 18 },
   { header: "Exp (Yrs)", key: "total_years_of_exp", width: 10 },
@@ -68,6 +70,7 @@ export default function PositionsPage() {
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const posTableCols: ColumnDef[] = [
     { key: "pos_id", label: "Position ID" }, { key: "sys_id", label: "System ID" }, { key: "name", label: "Position" },
+    { key: "function", label: "Function" },
     { key: "consultant", label: "Consultant" }, { key: "so", label: "SO" }, { key: "exp", label: "Exp" },
     { key: "y1", label: "Y1 Rate" }, { key: "y2", label: "Y2 Rate" }, { key: "y3", label: "Y3 Rate" },
     { key: "y4", label: "Y4 Rate" }, { key: "y5", label: "Y5 Rate" },
@@ -85,7 +88,7 @@ export default function PositionsPage() {
 
   const upsertMutation = useMutation({
     mutationFn: async (values: PosForm & { id?: string }) => {
-      const payload: any = { position_id: values.position_id.trim() || null, position_name: values.position_name, consultant_id: values.consultant_id, so_id: values.so_id || null, total_years_of_exp: values.total_years_of_exp, year_1_rate: values.year_1_rate, year_2_rate: values.year_2_rate, year_3_rate: values.year_3_rate, year_4_rate: values.year_4_rate, year_5_rate: values.year_5_rate, effective_from: values.effective_from || null, effective_to: values.effective_to || null, notes: values.notes || null };
+      const payload: any = { position_id: values.position_id.trim() || null, position_name: values.position_name, consultant_id: values.consultant_id, so_id: values.so_id || null, total_years_of_exp: values.total_years_of_exp, year_1_rate: values.year_1_rate, year_2_rate: values.year_2_rate, year_3_rate: values.year_3_rate, year_4_rate: values.year_4_rate, year_5_rate: values.year_5_rate, effective_from: values.effective_from || null, effective_to: values.effective_to || null, notes: values.notes || null, "function": values.function ? values.function.substring(0, 50) : null };
       if (values.id) { const { error } = await supabase.from("positions").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("positions").insert(payload as TablesInsert<"positions">); if (error) throw error; }
     },
@@ -95,7 +98,7 @@ export default function PositionsPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("positions").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["positions"] }); toast.success("Deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (item: Position) => { setEditing(item); setForm({ position_id: item.position_id || "", position_name: item.position_name, consultant_id: item.consultant_id, so_id: item.so_id, total_years_of_exp: item.total_years_of_exp, year_1_rate: item.year_1_rate, year_2_rate: item.year_2_rate, year_3_rate: item.year_3_rate, year_4_rate: item.year_4_rate, year_5_rate: item.year_5_rate, effective_from: item.effective_from, effective_to: item.effective_to, notes: item.notes }); setDialogOpen(true); };
+  const openEdit = (item: Position) => { setEditing(item); setForm({ position_id: item.position_id || "", position_name: item.position_name, consultant_id: item.consultant_id, so_id: item.so_id, total_years_of_exp: item.total_years_of_exp, year_1_rate: item.year_1_rate, year_2_rate: item.year_2_rate, year_3_rate: item.year_3_rate, year_4_rate: item.year_4_rate, year_5_rate: item.year_5_rate, effective_from: item.effective_from, effective_to: item.effective_to, notes: item.notes, function: (item as any).function || null }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
   const handleConsultantChange = (v: string) => { setForm({ ...form, consultant_id: v, so_id: null }); };
 
@@ -129,7 +132,7 @@ export default function PositionsPage() {
   const { sorted, sort, toggleSort } = useSort(filtered, "position_name", "asc");
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
-  const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", function: (i as any).function || "", consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("positions-template.xlsx", importCols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
   const handleImportWithProgress = useCallback(async (
