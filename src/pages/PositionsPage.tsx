@@ -146,13 +146,14 @@ export default function PositionsPage() {
       const row = rows[i];
       const posId = row[0] != null ? String(row[0]).trim() : null;
       const name = row[1] != null ? String(row[1]).trim() : "";
-      const consultantName = row[2] != null ? String(row[2]).trim() : "";
-      const soNum = row[3] != null ? String(row[3]).trim() : "";
-      const exp = row[4] != null ? String(row[4]).trim() : "";
-      const y1 = row[5], y2 = row[6], y3 = row[7], y4 = row[8], y5 = row[9];
-      const from = row[10] != null ? String(row[10]).trim() : "";
-      const to = row[11] != null ? String(row[11]).trim() : "";
-      const notes = row[12] != null ? String(row[12]).trim() : "";
+      const fnVal = row[2] != null ? String(row[2]).trim().substring(0, 50) : "";
+      const consultantName = row[3] != null ? String(row[3]).trim() : "";
+      const soNum = row[4] != null ? String(row[4]).trim() : "";
+      const exp = row[5] != null ? String(row[5]).trim() : "";
+      const y1 = row[6], y2 = row[7], y3 = row[8], y4 = row[9], y5 = row[10];
+      const from = row[11] != null ? String(row[11]).trim() : "";
+      const to = row[12] != null ? String(row[12]).trim() : "";
+      const notes = row[13] != null ? String(row[13]).trim() : "";
       if (!name) { result.processed++; onProgress({ ...result }); continue; }
       const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
@@ -163,7 +164,7 @@ export default function PositionsPage() {
         year_1_rate: y1 != null ? parseFloat(String(y1)) : null, year_2_rate: y2 != null ? parseFloat(String(y2)) : null,
         year_3_rate: y3 != null ? parseFloat(String(y3)) : null, year_4_rate: y4 != null ? parseFloat(String(y4)) : null,
         year_5_rate: y5 != null ? parseFloat(String(y5)) : null,
-        effective_from: from || null, effective_to: to || null, notes: notes || null,
+        effective_from: from || null, effective_to: to || null, notes: notes || null, "function": fnVal || null,
       } as TablesInsert<"positions">);
       if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
       result.processed++;
