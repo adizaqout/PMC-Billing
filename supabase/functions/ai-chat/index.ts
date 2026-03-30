@@ -46,7 +46,6 @@ async function fetchDatabaseSnapshot(supabaseClient: any) {
     .select("id, name, status, contact_email, contact_phone");
   
   if (consultants) {
-    // Get employee counts per consultant
     const consultantSummaries = [];
     for (const c of consultants) {
       const { count } = await supabaseClient
@@ -152,17 +151,52 @@ serve(async (req) => {
   }
 
   try {
+    // 1. Authenticate the caller via JWT
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
+
+    // Create a user-scoped client that respects RLS
+    const callerClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // Verify the JWT and get user
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await callerClient.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 2. Check module-level permission for ai_assistant
+    const { data: hasPerm } = await callerClient.rpc("has_module_permission", {
+      p_module: "ai_assistant",
+      p_level: "read",
+    });
+
+    if (!hasPerm) {
+      return new Response(
+        JSON.stringify({ error: "You do not have permission to access the AI Assistant." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const { messages } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Create Supabase client with service role to read data
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Fetch real data
-    const snapshot = await fetchDatabaseSnapshot(supabaseClient);
+    // 3. Use the user-scoped client for data fetching so RLS applies
+    const snapshot = await fetchDatabaseSnapshot(callerClient);
     
     const systemPrompt = `${SYSTEM_PROMPT_BASE}
 
