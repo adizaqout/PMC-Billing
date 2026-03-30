@@ -253,6 +253,8 @@ export default function Dashboard() {
       return (
         <CumulativeTrendGadget
           onRemove={gadgetId ? () => removeGadgetMutation.mutate(gadgetId) : undefined}
+          filterMonth={filters.month}
+          filterConsultantId={filters.consultantId}
         />
       );
     }
@@ -261,6 +263,8 @@ export default function Dashboard() {
       return (
         <StaffAllocationGadget
           onRemove={gadgetId ? () => removeGadgetMutation.mutate(gadgetId) : undefined}
+          filterMonth={filters.month}
+          filterConsultantId={filters.consultantId}
         />
       );
     }
