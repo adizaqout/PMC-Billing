@@ -37,6 +37,7 @@ const LOOKUP_CATEGORIES = [
   { value: "project_classification", label: "Project Classification" },
   { value: "portfolio", label: "Portfolio" },
   { value: "entity", label: "Entity" },
+  { value: "Position Function", label: "Position Function" },
 ] as const;
 
 export default function AdminPage() {
