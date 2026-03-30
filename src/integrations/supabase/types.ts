@@ -870,6 +870,7 @@ export type Database = {
           created_by: string | null
           effective_from: string | null
           effective_to: string | null
+          function: string | null
           id: string
           notes: string | null
           position_id: string
@@ -891,6 +892,7 @@ export type Database = {
           created_by?: string | null
           effective_from?: string | null
           effective_to?: string | null
+          function?: string | null
           id?: string
           notes?: string | null
           position_id: string
@@ -912,6 +914,7 @@ export type Database = {
           created_by?: string | null
           effective_from?: string | null
           effective_to?: string | null
+          function?: string | null
           id?: string
           notes?: string | null
           position_id?: string

@@ -1,0 +1,1 @@
+ALTER TABLE public.positions ADD COLUMN IF NOT EXISTS "function" text DEFAULT NULL;
