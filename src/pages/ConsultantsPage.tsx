@@ -144,10 +144,10 @@ export default function ConsultantsPage() {
     const total = rows.length - 1;
     const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
     for (let i = 1; i < rows.length; i++) {
-      const [name, crNo, taxNo, email, phone, address, status] = rows[i];
+      const [shortName, name, crNo, taxNo, email, phone, address, status] = rows[i];
       if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
       const { error } = await supabase.from("consultants").insert({
-        name: name.trim(), commercial_registration_no: crNo?.trim() || null, tax_registration_no: taxNo?.trim() || null,
+        short_name: shortName?.trim() || null, name: name.trim(), commercial_registration_no: crNo?.trim() || null, tax_registration_no: taxNo?.trim() || null,
         contact_email: email?.trim() || null, contact_phone: phone?.trim() || null, address: address?.trim() || null,
         status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
       });
