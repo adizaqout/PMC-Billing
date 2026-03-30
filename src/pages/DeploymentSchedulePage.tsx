@@ -856,11 +856,14 @@ export default function DeploymentSchedulePage() {
       const emp = empIdCode ? employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : null;
       const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
 
-      if (empIdCode && !emp && !allowEmptyEmployee) {
+      // Always flag missing employee when an ID is provided (even for baseline/forecast)
+      if (empIdCode && !emp) {
         errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_employee", excel_data: excelData });
-      } else if (posIdCode && !pos) {
+      }
+      if (posIdCode && !pos) {
         errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_position", excel_data: excelData });
-      } else if (emp && posIdCode && pos && emp.position_id !== pos.id) {
+      }
+      if (emp && posIdCode && pos && emp.position_id !== pos.id) {
         errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "invalid_mapping", excel_data: excelData });
       }
     }
