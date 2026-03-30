@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { Fragment, useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
@@ -35,17 +35,20 @@ interface Props {
   onRetryImport: () => void;
 }
 
+const getErrorKey = (error: ImportErrorRow) =>
+  `${error.row}|${error.issue_type}|${error.employee_id_code || ""}|${error.position_id_code || ""}`;
+
 export default function ImportErrorCorrectionDialog({
   open, errors: initialErrors, consultantId, positions, serviceOrders,
   onErrorResolved, onAllResolved, onCancelImport, onRetryImport,
 }: Props) {
   const [errors, setErrors] = useState<ImportErrorRow[]>(initialErrors);
-  const [expandedRow, setExpandedRow] = useState<number | null>(null);
+  const [expandedRow, setExpandedRow] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isBatchProcessing, setIsBatchProcessing] = useState(false);
   const [batchProgress, setBatchProgress] = useState(0);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-  const [resolvedRows, setResolvedRows] = useState<Set<number>>(new Set());
+  const [resolvedRows, setResolvedRows] = useState<Set<string>>(new Set());
   const firstInputRef = useRef<HTMLInputElement>(null);
 
   // Form state for inline edits
@@ -63,7 +66,7 @@ export default function ImportErrorCorrectionDialog({
 
   const totalErrors = initialErrors.length;
   const resolvedCount = resolvedRows.size;
-  const remainingErrors = errors.filter(e => !resolvedRows.has(e.row));
+  const remainingErrors = errors.filter(e => !resolvedRows.has(getErrorKey(e)));
   const allResolved = remainingErrors.length === 0 && totalErrors > 0;
 
   const missingEmployeeCount = remainingErrors.filter(e => e.issue_type === "missing_employee").length;
@@ -71,8 +74,9 @@ export default function ImportErrorCorrectionDialog({
   const invalidMappingCount = remainingErrors.filter(e => e.issue_type === "invalid_mapping").length;
 
   const openInlineForm = (error: ImportErrorRow) => {
-    if (expandedRow === error.row) { setExpandedRow(null); return; }
-    setExpandedRow(error.row);
+    const errorKey = getErrorKey(error);
+    if (expandedRow === errorKey) { setExpandedRow(null); return; }
+    setExpandedRow(errorKey);
     if (error.issue_type === "missing_employee") {
       const matchedPos = positions.find(p => p.position_id.toLowerCase() === error.position_id_code.toLowerCase());
       setEmpForm({ name: error.employee_name, positionId: matchedPos?.id || "", startDate: new Date().toISOString().split("T")[0], endDate: "", status: "active" });
@@ -87,6 +91,7 @@ export default function ImportErrorCorrectionDialog({
   const handleSaveEmployee = async (error: ImportErrorRow) => {
     if (!empForm.name.trim()) { toast.error("Employee name is required"); return; }
     setIsSubmitting(true);
+    const errorKey = getErrorKey(error);
     try {
       const { data, error: dbErr } = await supabase.from("employees").insert({
         consultant_id: consultantId,
@@ -99,7 +104,7 @@ export default function ImportErrorCorrectionDialog({
       }).select("id").single();
       if (dbErr) throw dbErr;
       toast.success(`Employee "${empForm.name}" added successfully`);
-      setResolvedRows(prev => new Set(prev).add(error.row));
+      setResolvedRows(prev => new Set(prev).add(errorKey));
       setExpandedRow(null);
       onErrorResolved(error, data.id);
     } catch (err: any) {
@@ -112,6 +117,7 @@ export default function ImportErrorCorrectionDialog({
   const handleSavePosition = async (error: ImportErrorRow) => {
     if (!posForm.name.trim()) { toast.error("Position name is required"); return; }
     setIsSubmitting(true);
+    const errorKey = getErrorKey(error);
     try {
       const { data, error: dbErr } = await supabase.from("positions").insert({
         consultant_id: consultantId,
@@ -126,7 +132,7 @@ export default function ImportErrorCorrectionDialog({
       }).select("id").single();
       if (dbErr) throw dbErr;
       toast.success(`Position "${posForm.name}" added successfully`);
-      setResolvedRows(prev => new Set(prev).add(error.row));
+      setResolvedRows(prev => new Set(prev).add(errorKey));
       setExpandedRow(null);
       onErrorResolved(error, data.id);
     } catch (err: any) {
@@ -139,6 +145,7 @@ export default function ImportErrorCorrectionDialog({
   const handleFixMapping = async (error: ImportErrorRow) => {
     if (!mapForm.positionId) { toast.error("Select a position"); return; }
     setIsSubmitting(true);
+    const errorKey = getErrorKey(error);
     try {
       // Find the employee by employee_id code
       const { data: emp } = await supabase.from("employees")
@@ -149,7 +156,7 @@ export default function ImportErrorCorrectionDialog({
         .update({ position_id: mapForm.positionId }).eq("id", emp.id);
       if (dbErr) throw dbErr;
       toast.success("Employee position mapping updated");
-      setResolvedRows(prev => new Set(prev).add(error.row));
+      setResolvedRows(prev => new Set(prev).add(errorKey));
       setExpandedRow(null);
       onErrorResolved(error, emp.id);
     } catch (err: any) {
@@ -167,6 +174,7 @@ export default function ImportErrorCorrectionDialog({
 
     for (let i = 0; i < remainingErrors.length; i++) {
       const err = remainingErrors[i];
+      const errKey = getErrorKey(err);
       try {
         if (err.issue_type === "missing_employee") {
           const matchedPos = positions.find(p => p.position_id.toLowerCase() === err.position_id_code.toLowerCase());
@@ -199,7 +207,7 @@ export default function ImportErrorCorrectionDialog({
             }
           }
         }
-        setResolvedRows(prev => new Set(prev).add(err.row));
+        setResolvedRows(prev => new Set(prev).add(errKey));
       } catch (e) {
         // Continue with next error
       }
@@ -221,8 +229,8 @@ export default function ImportErrorCorrectionDialog({
   const issueBadge = (type: ImportErrorRow["issue_type"]) => {
     switch (type) {
       case "missing_employee": return <Badge variant="destructive" className="text-[10px]">Missing Employee</Badge>;
-      case "missing_position": return <Badge className="bg-amber-500 text-white text-[10px]">Missing Position</Badge>;
-      case "invalid_mapping": return <Badge variant="outline" className="text-[10px] border-orange-400 text-orange-600">Invalid Mapping</Badge>;
+      case "missing_position": return <Badge variant="secondary" className="text-[10px]">Missing Position</Badge>;
+      case "invalid_mapping": return <Badge variant="outline" className="text-[10px]">Invalid Mapping</Badge>;
     }
   };
 
@@ -286,9 +294,9 @@ export default function ImportErrorCorrectionDialog({
           )}
 
           {allResolved && (
-            <div className="flex items-center gap-2 p-3 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800">
-              <CheckCircle2 size={18} className="text-green-600" />
-              <span className="text-sm font-medium text-green-800 dark:text-green-300">All data corrections completed</span>
+            <div className="flex items-center gap-2 p-3 rounded-md bg-accent/20 border border-border">
+              <CheckCircle2 size={18} className="text-primary" />
+              <span className="text-sm font-medium text-foreground">All data corrections completed</span>
             </div>
           )}
 
@@ -308,15 +316,16 @@ export default function ImportErrorCorrectionDialog({
               </TableHeader>
               <TableBody>
                 {errors.map((error) => {
-                  const isResolved = resolvedRows.has(error.row);
-                  const isExpanded = expandedRow === error.row;
+                  const errorKey = getErrorKey(error);
+                  const isResolved = resolvedRows.has(errorKey);
+                  const isExpanded = expandedRow === errorKey;
                   return (
-                    <> 
+                    <Fragment key={`group-${errorKey}`}>
                       <TableRow
-                        key={`row-${error.row}`}
+                        key={`row-${errorKey}`}
                         className={isResolved
-                          ? "bg-green-50/50 dark:bg-green-950/20 opacity-60 transition-all duration-500"
-                          : "bg-destructive/5 dark:bg-destructive/10"
+                          ? "bg-accent/20 opacity-60 transition-all duration-500"
+                          : "bg-destructive/5"
                         }
                       >
                         <TableCell className="font-mono text-xs">{error.row}</TableCell>
@@ -327,7 +336,7 @@ export default function ImportErrorCorrectionDialog({
                         <TableCell>{issueBadge(error.issue_type)}</TableCell>
                         <TableCell>
                           {isResolved ? (
-                            <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle2 size={12} />Resolved</span>
+                            <span className="text-xs text-primary flex items-center gap-1"><CheckCircle2 size={12} />Resolved</span>
                           ) : (
                             <div className="flex items-center gap-1">
                               {actionButton(error)}
@@ -460,7 +469,7 @@ export default function ImportErrorCorrectionDialog({
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>

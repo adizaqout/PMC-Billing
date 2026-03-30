@@ -832,11 +832,14 @@ export default function DeploymentSchedulePage() {
     toast.success("Template downloaded");
   };
 
-  const validateImportData = (rawRows: string[][]): ImportErrorRow[] => {
+  const validateImportData = (
+    rawRows: string[][],
+    employeeSnapshot: Employee[] = employees,
+    positionSnapshot: Position[] = positions,
+  ): ImportErrorRow[] => {
     const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
     const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
     const errorRows: ImportErrorRow[] = [];
-    const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
 
     const get = (row: string[], key: string) => {
       const idx = headers.findIndex(h => h.includes(key));
@@ -853,10 +856,9 @@ export default function DeploymentSchedulePage() {
       const excelData: Record<string, string> = {};
       headers.forEach((h, idx) => { excelData[h] = String(row[idx] || "").trim(); });
 
-      const emp = empIdCode ? employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : null;
-      const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+      const emp = empIdCode ? employeeSnapshot.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : null;
+      const pos = posIdCode ? positionSnapshot.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
 
-      // Always flag missing employee when an ID is provided (even for baseline/forecast)
       if (empIdCode && !emp) {
         errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_employee", excel_data: excelData });
       }
@@ -876,24 +878,27 @@ export default function DeploymentSchedulePage() {
   ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
     if (!selectedSubmission) throw new Error("No submission selected");
 
-    // Pre-validate for missing employees/positions
-    const validationErrors = validateImportData(rawRows);
+    const validationErrors = validateImportData(rawRows, employees, positions);
     if (validationErrors.length > 0) {
       setImportErrors(validationErrors);
       setPendingImportData(rawRows);
       setImportErrorDialogOpen(true);
-      // Return a "paused" progress — the actual import will happen after corrections
       return { total: 0, processed: 0, created: 0, errors: [{ row: 0, message: `Found ${validationErrors.length} data issues. Please resolve them in the correction dialog.` }] };
     }
 
-    return executeImport(rawRows, onProgress);
+    return executeImport(rawRows, onProgress, employees, positions);
   };
 
   const executeImport = async (
     rawRows: string[][],
-    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void
+    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void,
+    employeeSnapshot: Employee[] = employees,
+    positionSnapshot: Position[] = positions,
   ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
     if (!selectedSubmission) throw new Error("No submission selected");
+
+    const currentEmployees = employeeSnapshot;
+    const currentPositions = positionSnapshot;
 
     const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
     const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
@@ -976,7 +981,7 @@ export default function DeploymentSchedulePage() {
         }
         // For baseline/forecast, allow missing employee ID — will insert as null
       } else {
-        emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
+        emp = currentEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
         if (!emp && !allowEmptyEmployee) {
           progress.errors.push({ row: rowNum, message: `Employee ID "${empIdCode}" not found` }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue;
         }
@@ -984,7 +989,7 @@ export default function DeploymentSchedulePage() {
 
       // Position
       const posIdCode = get("position id");
-      const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+      const pos = posIdCode ? currentPositions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
 
       // Parse rate year: handle "Year 1", "Year 2", etc. and plain numbers
       const rateYearRaw = get("rate year");
@@ -1117,8 +1122,7 @@ export default function DeploymentSchedulePage() {
   };
 
   // Import error correction handlers
-  const handleErrorResolved = (error: ImportErrorRow, newRecordId: string) => {
-    // Refetch employees and positions so retry import picks up new records
+  const handleErrorResolved = (_error: ImportErrorRow, _newRecordId: string) => {
     queryClient.invalidateQueries({ queryKey: ["deployment-employees", consultantId] });
     queryClient.invalidateQueries({ queryKey: ["deployment-positions", consultantId] });
   };
@@ -1126,13 +1130,16 @@ export default function DeploymentSchedulePage() {
   const handleRetryImport = async () => {
     if (!pendingImportData || !selectedSubmission) return;
     setImportErrorDialogOpen(false);
-    
-    // Wait for refetch to complete
-    await queryClient.refetchQueries({ queryKey: ["deployment-employees", consultantId] });
-    await queryClient.refetchQueries({ queryKey: ["deployment-positions", consultantId] });
-    
-    // Re-validate with refreshed data
-    const revalidationErrors = validateImportData(pendingImportData);
+
+    await Promise.all([
+      queryClient.refetchQueries({ queryKey: ["deployment-employees", consultantId], exact: true }),
+      queryClient.refetchQueries({ queryKey: ["deployment-positions", consultantId], exact: true }),
+    ]);
+
+    const latestEmployees = (queryClient.getQueryData(["deployment-employees", consultantId]) as Employee[] | undefined) ?? employees;
+    const latestPositions = (queryClient.getQueryData(["deployment-positions", consultantId]) as Position[] | undefined) ?? positions;
+
+    const revalidationErrors = validateImportData(pendingImportData, latestEmployees, latestPositions);
     if (revalidationErrors.length > 0) {
       setImportErrors(revalidationErrors);
       setImportErrorDialogOpen(true);
@@ -1140,10 +1147,9 @@ export default function DeploymentSchedulePage() {
       return;
     }
 
-    // Execute the actual import
     toast.info("Retrying import...");
     try {
-      const result = await executeImport(pendingImportData, () => {});
+      const result = await executeImport(pendingImportData, () => {}, latestEmployees, latestPositions);
       if (result.errors.length === 0) {
         setImportBanner({ rows: result.created, employees: importErrors.filter(e => e.issue_type === "missing_employee").length, positions: importErrors.filter(e => e.issue_type === "missing_position").length });
         toast.success(`Successfully imported ${result.created} rows`);
