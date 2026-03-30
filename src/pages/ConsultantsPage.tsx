@@ -104,7 +104,7 @@ export default function ConsultantsPage() {
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (c: Consultant) => {
     setEditing(c);
-    setForm({ name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status });
+    setForm({ short_name: c.short_name, name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status });
     setDialogOpen(true);
   };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
@@ -119,10 +119,11 @@ export default function ConsultantsPage() {
 
   const filtered = consultants.filter((c) => {
     const s = search.toLowerCase();
-    if (s && !c.name.toLowerCase().includes(s)) return false;
+    if (s && !(c.short_name || "").toLowerCase().includes(s) && !c.name.toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
       const lv = val.toLowerCase();
+      if (key === "shortName" && !(c.short_name || "").toLowerCase().includes(lv)) return false;
       if (key === "name" && !c.name.toLowerCase().includes(lv)) return false;
       if (key === "cr" && !(c.commercial_registration_no || "").toLowerCase().includes(lv)) return false;
       if (key === "tax" && !(c.tax_registration_no || "").toLowerCase().includes(lv)) return false;
