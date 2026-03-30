@@ -59,7 +59,7 @@ export default function ServiceOrdersPage() {
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
   const { data: items = [], isLoading } = useQuery({ queryKey: ["service_orders"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("*, consultants(short_name), framework_agreements(framework_agreement_no)").order("so_number"); if (error) throw error; return data as SO[]; } });
-  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name"); if (error) throw error; return data as { id: string; name: string }[]; } });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as { id: string; name: string }[]; } });
   const { data: frameworks = [] } = useQuery({ queryKey: ["frameworks-all"], queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("id, framework_agreement_no, consultant_id").eq("status", "active").order("framework_agreement_no"); if (error) throw error; return data as { id: string; framework_agreement_no: string; consultant_id: string }[]; } });
   const filteredFrameworks = form.consultant_id ? frameworks.filter(f => f.consultant_id === form.consultant_id) : [];
 
