@@ -139,7 +139,7 @@ export default function DeploymentSchedulePage() {
   const { data: consultants = [] } = useQuery({
     queryKey: ["consultants-list"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name");
+      const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name");
       if (error) throw error;
       return data;
     },
@@ -1396,7 +1396,7 @@ export default function DeploymentSchedulePage() {
           <Select value={consultantId} onValueChange={setConsultantId}>
             <SelectTrigger className="w-48 h-8 text-sm"><SelectValue placeholder="Select consultant" /></SelectTrigger>
             <SelectContent>
-              {consultants.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {consultants.map(c => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}
             </SelectContent>
           </Select>
 
