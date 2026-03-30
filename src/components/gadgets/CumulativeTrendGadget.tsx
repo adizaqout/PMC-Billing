@@ -140,7 +140,7 @@ export default function CumulativeTrendGadget({ onRemove, filterMonth, filterCon
         Baseline: cumBaseline,
       };
     });
-  }, [data, selectedCompany, startMonth, endMonth, allMonths]);
+  }, [data, selectedCompany, startMonth, endMonth, allMonths, filterConsultantId]);
 
   return (
     <Card>
