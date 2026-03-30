@@ -62,9 +62,12 @@ export default function CumulativeTrendGadget({ onRemove, filterMonth, filterCon
 
     const latestIds = getLatestSubmissionIds(data.submissions, false);
 
+    // Apply dashboard-level consultant filter, then local company override
+    const effectiveCompany = filterConsultantId && filterConsultantId !== ALL ? filterConsultantId : selectedCompany;
+
     const filteredSubmissions = data.submissions.filter((s) => {
       if (!latestIds.has(s.id)) return false;
-      if (selectedCompany !== ALL_FILTER_VALUE && s.consultant_id !== selectedCompany) return false;
+      if (effectiveCompany !== ALL && s.consultant_id !== effectiveCompany) return false;
       return true;
     });
 
