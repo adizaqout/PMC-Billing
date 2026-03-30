@@ -469,7 +469,7 @@ export default function ImportErrorCorrectionDialog({
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })}
               </TableBody>
