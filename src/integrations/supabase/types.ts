@@ -128,6 +128,7 @@ export type Database = {
           created_by: string | null
           id: string
           name: string
+          short_name: string | null
           status: Database["public"]["Enums"]["record_status"]
           tax_registration_no: string | null
           updated_at: string
@@ -142,6 +143,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name: string
+          short_name?: string | null
           status?: Database["public"]["Enums"]["record_status"]
           tax_registration_no?: string | null
           updated_at?: string
@@ -156,6 +158,7 @@ export type Database = {
           created_by?: string | null
           id?: string
           name?: string
+          short_name?: string | null
           status?: Database["public"]["Enums"]["record_status"]
           tax_registration_no?: string | null
           updated_at?: string

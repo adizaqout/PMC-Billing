@@ -1,0 +1,1 @@
+ALTER TABLE public.consultants ADD COLUMN short_name text;
