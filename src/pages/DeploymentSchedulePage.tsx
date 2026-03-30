@@ -45,6 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import ImportErrorCorrectionDialog, { type ImportErrorRow } from "@/components/ImportErrorCorrectionDialog";
 
 type Submission = Tables<"deployment_submissions"> & { consultants?: { short_name: string } | null };
 type DeploymentLine = Tables<"deployment_lines">;
@@ -90,6 +91,11 @@ export default function DeploymentSchedulePage() {
   const [reviewComment, setReviewComment] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
   const [subSearch, setSubSearch] = useState("");
+  // Import error correction state
+  const [importErrors, setImportErrors] = useState<ImportErrorRow[]>([]);
+  const [importErrorDialogOpen, setImportErrorDialogOpen] = useState(false);
+  const [pendingImportData, setPendingImportData] = useState<string[][] | null>(null);
+  const [importBanner, setImportBanner] = useState<{ rows: number; employees: number; positions: number } | null>(null);
   const [subColFilters, setSubColFilters] = useState<Record<string, string>>({});
   const setSubColFilter = (key: string, value: string) => setSubColFilters(prev => ({ ...prev, [key]: value }));
   const subTableCols: ColumnDef[] = [
@@ -826,7 +832,61 @@ export default function DeploymentSchedulePage() {
     toast.success("Template downloaded");
   };
 
+  const validateImportData = (rawRows: string[][]): ImportErrorRow[] => {
+    const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
+    const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
+    const errorRows: ImportErrorRow[] = [];
+    const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
+
+    const get = (row: string[], key: string) => {
+      const idx = headers.findIndex(h => h.includes(key));
+      return idx >= 0 ? String(row[idx] || "").trim() : "";
+    };
+
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const rowNum = i + 2;
+      const empIdCode = get(row, "employee id");
+      const empName = get(row, "employee name");
+      const posIdCode = get(row, "position id");
+      const posName = get(row, "position name");
+      const excelData: Record<string, string> = {};
+      headers.forEach((h, idx) => { excelData[h] = String(row[idx] || "").trim(); });
+
+      const emp = empIdCode ? employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : null;
+      const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+
+      if (empIdCode && !emp && !allowEmptyEmployee) {
+        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_employee", excel_data: excelData });
+      } else if (posIdCode && !pos) {
+        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_position", excel_data: excelData });
+      } else if (emp && posIdCode && pos && emp.position_id !== pos.id) {
+        errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "invalid_mapping", excel_data: excelData });
+      }
+    }
+    return errorRows;
+  };
+
   const handleImportWithProgress = async (
+    rawRows: string[][],
+    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void
+  ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
+    if (!selectedSubmission) throw new Error("No submission selected");
+
+    // Pre-validate for missing employees/positions
+    const validationErrors = validateImportData(rawRows);
+    if (validationErrors.length > 0) {
+      setImportErrors(validationErrors);
+      setPendingImportData(rawRows);
+      setImportErrorDialogOpen(true);
+      // Return a "paused" progress — the actual import will happen after corrections
+      return { total: 0, processed: 0, created: 0, errors: [{ row: 0, message: `Found ${validationErrors.length} data issues. Please resolve them in the correction dialog.` }] };
+    }
+
+    return executeImport(rawRows, onProgress);
+  };
+
+  const executeImport = async (
     rawRows: string[][],
     onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void
   ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
@@ -1053,6 +1113,54 @@ export default function DeploymentSchedulePage() {
     }
   };
 
+  // Import error correction handlers
+  const handleErrorResolved = (error: ImportErrorRow, newRecordId: string) => {
+    // Refetch employees and positions so retry import picks up new records
+    queryClient.invalidateQueries({ queryKey: ["deployment-employees", consultantId] });
+    queryClient.invalidateQueries({ queryKey: ["deployment-positions", consultantId] });
+  };
+
+  const handleRetryImport = async () => {
+    if (!pendingImportData || !selectedSubmission) return;
+    setImportErrorDialogOpen(false);
+    
+    // Wait for refetch to complete
+    await queryClient.refetchQueries({ queryKey: ["deployment-employees", consultantId] });
+    await queryClient.refetchQueries({ queryKey: ["deployment-positions", consultantId] });
+    
+    // Re-validate with refreshed data
+    const revalidationErrors = validateImportData(pendingImportData);
+    if (revalidationErrors.length > 0) {
+      setImportErrors(revalidationErrors);
+      setImportErrorDialogOpen(true);
+      toast.error(`Still ${revalidationErrors.length} unresolved issues`);
+      return;
+    }
+
+    // Execute the actual import
+    toast.info("Retrying import...");
+    try {
+      const result = await executeImport(pendingImportData, () => {});
+      if (result.errors.length === 0) {
+        setImportBanner({ rows: result.created, employees: importErrors.filter(e => e.issue_type === "missing_employee").length, positions: importErrors.filter(e => e.issue_type === "missing_position").length });
+        toast.success(`Successfully imported ${result.created} rows`);
+      } else {
+        toast.error(`Import completed with ${result.errors.length} errors`);
+      }
+      setPendingImportData(null);
+      setImportErrors([]);
+      handleImportComplete();
+    } catch (err: any) {
+      toast.error(err.message || "Import failed");
+    }
+  };
+
+  const handleCancelImport = () => {
+    setImportErrorDialogOpen(false);
+    setPendingImportData(null);
+    setImportErrors([]);
+  };
+
   // ---- List view hooks (must be before any early return) ----
   const submittedSubs = submissions.filter(s => s.status === "submitted");
 
@@ -1139,6 +1247,13 @@ export default function DeploymentSchedulePage() {
     return (
       <AppLayout>
         <div className="animate-fade-in">
+          {/* Import success banner */}
+          {importBanner && (
+            <div className="mb-4 flex items-center justify-between gap-2 px-4 py-2 rounded-md bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 text-sm">
+              <span>Successfully imported {importBanner.rows} rows. Added {importBanner.employees} new employee(s) and {importBanner.positions} new position(s).</span>
+              <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setImportBanner(null)}>Dismiss</Button>
+            </div>
+          )}
           <div className="page-header">
             <div>
               <h1 className="page-title">
@@ -1372,6 +1487,19 @@ export default function DeploymentSchedulePage() {
             <span>{projectColumns.length} project column(s)</span>
           </div>
         </div>
+
+        {/* Import Error Correction Dialog */}
+        <ImportErrorCorrectionDialog
+          open={importErrorDialogOpen}
+          errors={importErrors}
+          consultantId={consultantId}
+          positions={positions.map(p => ({ id: p.id, position_id: p.position_id, position_name: p.position_name, consultant_id: p.consultant_id }))}
+          serviceOrders={serviceOrders.map(s => ({ id: s.id, so_number: s.so_number }))}
+          onErrorResolved={handleErrorResolved}
+          onAllResolved={() => {}}
+          onCancelImport={handleCancelImport}
+          onRetryImport={handleRetryImport}
+        />
       </AppLayout>
     );
   }
