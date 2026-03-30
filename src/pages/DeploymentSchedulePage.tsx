@@ -1057,11 +1057,12 @@ export default function DeploymentSchedulePage() {
   const submittedSubs = submissions.filter(s => s.status === "submitted");
 
   const filteredSubs = submissions.filter((s) => {
+    const monthLabel = formatMonthLabel(s.month).toLowerCase();
     if (subSearch) {
       const q = subSearch.toLowerCase();
-      if (!s.month.includes(q) && !s.schedule_type.includes(q) && !s.status.includes(q)) return false;
+      if (!s.month.includes(q) && !monthLabel.includes(q) && !s.schedule_type.includes(q) && !s.status.includes(q)) return false;
     }
-    if (subColFilters.month && !s.month.toLowerCase().includes(subColFilters.month.toLowerCase())) return false;
+    if (subColFilters.month && !s.month.toLowerCase().includes(subColFilters.month.toLowerCase()) && !monthLabel.includes(subColFilters.month.toLowerCase())) return false;
     if (subColFilters.type && !s.schedule_type.toLowerCase().includes(subColFilters.type.toLowerCase())) return false;
     if (subColFilters.status && !s.status.toLowerCase().includes(subColFilters.status.toLowerCase())) return false;
     return true;

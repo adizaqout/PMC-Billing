@@ -63,7 +63,7 @@ export function useAnalyticsData() {
         supabase.from("consultants").select("id, name, short_name, status"),
         supabase.from("projects").select("id, project_name, latest_budget, latest_pmc_budget, previous_pmc_budget, previous_pmc_actual, actual_pmc_to_date, portfolio, status"),
         supabase.from("employees").select("id, employee_name, consultant_id, position_id, status"),
-        supabase.from("positions").select("id, position_name, consultant_id, so_id, year_1_rate, year_2_rate, year_3_rate, year_4_rate, year_5_rate"),
+        supabase.from("positions").select("id, position_name, consultant_id, so_id, year_1_rate, year_2_rate, year_3_rate, year_4_rate, year_5_rate, function"),
         supabase.from("service_orders").select("id, so_number, consultant_id, so_value"),
         supabase.from("purchase_orders").select("id, po_number, consultant_id, so_id, project_id, po_value, amount, revision_number"),
         supabase.from("invoices").select("id, consultant_id, po_id, billed_amount_no_vat, invoice_month, status, invoice_number"),
