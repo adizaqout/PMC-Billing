@@ -990,7 +990,143 @@ export default function DeploymentSchedulePage() {
       // Position
       const posIdCode = get("position id");
       const pos = posIdCode ? currentPositions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
-...
+
+      // Parse rate year: handle "Year 1", "Year 2", etc. and plain numbers
+      const rateYearRaw = get("rate year");
+      const rateYear = parseInt(rateYearRaw.replace(/[^0-9]/g, "")) || 1;
+      if (rateYear < 1 || rateYear > 5) { progress.errors.push({ row: rowNum, message: "Invalid rate year" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
+
+      const manMonths = parseFloat(get("man-months") || get("man_months") || get("manmonths")) || 0;
+      if (manMonths > 1) { progress.errors.push({ row: rowNum, message: "Man-months exceeds 1.0" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
+
+      // Project allocations
+      const projEntries: [string, number][] = [];
+      headers.forEach((h, colIdx) => {
+        if (h.startsWith("% ") || h.startsWith("%")) {
+          const projPart = h.replace(/^%\s*/, "");
+          const proj = projectColumns.find(p =>
+            projLabel(p).toLowerCase() === projPart.toLowerCase() ||
+            p.project_name.toLowerCase() === projPart.toLowerCase() ||
+            (p.project_number && p.project_number.toLowerCase() === projPart.toLowerCase())
+          );
+          if (proj) {
+            const val = parseFloat(String(row[colIdx] || "")) || 0;
+            if (val > 0) projEntries.push([proj.id, val]);
+          }
+        }
+      });
+
+      // Store employee code + month + position in notes for proper row grouping & display
+      let effectiveEmpCode = empIdCode;
+      if (!empIdCode && allowEmptyEmployee) {
+        placeholderSerial++;
+        effectiveEmpCode = `PH-${placeholderSerial}`;
+      } else if (empIdCode) {
+        effectiveEmpCode = empIdCode;
+      }
+      const posId = pos?.id || "";
+      const groupNote = `emp:${effectiveEmpCode || ""}|month:${rowMonth}|posId:${posId}`;
+
+      // Build DB records directly
+      if (projEntries.length === 0) {
+        pendingInserts.push({
+          submission_id: selectedSubmission.id,
+          employee_id: emp?.id || null,
+          worked_project_id: null, billed_project_id: null,
+          po_id: null, po_item_id: null, so_id: null,
+          allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
+          notes: groupNote,
+        });
+      } else {
+        projEntries.forEach(([projId, pct]) => {
+          const poItemId = poItemByProject[projId] || null;
+          const poId = poItemId ? (poByItem[poItemId] || null) : null;
+          pendingInserts.push({
+            submission_id: selectedSubmission.id,
+            employee_id: emp?.id || null,
+            worked_project_id: projId, billed_project_id: projId,
+            po_id: poId, po_item_id: poItemId, so_id: null,
+            allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
+            notes: groupNote,
+          });
+        });
+      }
+
+      pendingRowNums.push(rowNum);
+      progress.processed++;
+
+      // Flush batch when full
+      if (pendingInserts.length >= BATCH_SIZE) {
+        try {
+          await flushBatch();
+        } catch (err) {
+          progress.errors.push({ row: rowNum, message: `DB batch insert failed (rows may be lost): ${err instanceof Error ? err.message : "Unknown error"}` });
+        }
+      }
+
+      if (i % 100 === 0) onProgress({ ...progress });
+    }
+
+    // Flush remaining
+    try {
+      await flushBatch();
+    } catch (err) {
+      progress.errors.push({ row: 0, message: `Final batch insert failed: ${err instanceof Error ? err.message : "Unknown error"}` });
+    }
+
+    // Reload data into UI BEFORE returning so rows appear before "done" dialog
+    if (selectedSubmission) {
+      const allLines: DeploymentLine[] = [];
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      while (true) {
+        const { data } = await supabase
+          .from("deployment_lines")
+          .select("*")
+          .eq("submission_id", selectedSubmission.id)
+          .range(from, from + PAGE_SIZE - 1);
+        if (!data || data.length === 0) break;
+        allLines.push(...(data as DeploymentLine[]));
+        if (data.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      setRows(buildUIRows(allLines));
+    }
+
+    onProgress({ ...progress });
+    return progress;
+  };
+
+  const handleImportComplete = () => {
+    queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+    // Reload all rows from DB (paginate past 1000-row limit)
+    if (selectedSubmission) {
+      (async () => {
+        const allLines: DeploymentLine[] = [];
+        const PAGE_SIZE = 1000;
+        let from = 0;
+        while (true) {
+          const { data } = await supabase
+            .from("deployment_lines")
+            .select("*")
+            .eq("submission_id", selectedSubmission.id)
+            .range(from, from + PAGE_SIZE - 1);
+          if (!data || data.length === 0) break;
+          allLines.push(...(data as DeploymentLine[]));
+          if (data.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+        }
+        setRows(buildUIRows(allLines));
+      })();
+    }
+  };
+
+  // Import error correction handlers
+  const handleErrorResolved = (_error: ImportErrorRow, _newRecordId: string) => {
+    queryClient.invalidateQueries({ queryKey: ["deployment-employees", consultantId] });
+    queryClient.invalidateQueries({ queryKey: ["deployment-positions", consultantId] });
+  };
+
   const handleRetryImport = async () => {
     if (!pendingImportData || !selectedSubmission) return;
     setImportErrorDialogOpen(false);
