@@ -1131,13 +1131,37 @@ export default function DeploymentSchedulePage() {
     if (!pendingImportData || !selectedSubmission) return;
     setImportErrorDialogOpen(false);
 
-    await Promise.all([
-      queryClient.refetchQueries({ queryKey: ["deployment-employees", consultantId], exact: true }),
-      queryClient.refetchQueries({ queryKey: ["deployment-positions", consultantId], exact: true }),
-    ]);
+    let latestEmployees: Employee[] = employees;
+    let latestPositions: Position[] = positions;
 
-    const latestEmployees = (queryClient.getQueryData(["deployment-employees", consultantId]) as Employee[] | undefined) ?? employees;
-    const latestPositions = (queryClient.getQueryData(["deployment-positions", consultantId]) as Position[] | undefined) ?? positions;
+    try {
+      const [employeesResult, positionsResult] = await Promise.all([
+        supabase
+          .from("employees")
+          .select("*, positions(position_name)")
+          .eq("consultant_id", consultantId)
+          .in("status", ["active", "mobilized"])
+          .order("employee_name"),
+        supabase
+          .from("positions")
+          .select("*")
+          .eq("consultant_id", consultantId)
+          .order("position_name"),
+      ]);
+
+      if (employeesResult.error) throw employeesResult.error;
+      if (positionsResult.error) throw positionsResult.error;
+
+      latestEmployees = (employeesResult.data || []) as Employee[];
+      latestPositions = (positionsResult.data || []) as Position[];
+
+      queryClient.setQueryData(["deployment-employees", consultantId], latestEmployees);
+      queryClient.setQueryData(["deployment-positions", consultantId], latestPositions);
+    } catch (refreshError: any) {
+      setImportErrorDialogOpen(true);
+      toast.error(refreshError.message || "Could not refresh employees/positions. Please try again.");
+      return;
+    }
 
     const revalidationErrors = validateImportData(pendingImportData, latestEmployees, latestPositions);
     if (revalidationErrors.length > 0) {

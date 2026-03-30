@@ -170,55 +170,98 @@ export default function ImportErrorCorrectionDialog({
     setIsBatchProcessing(true);
     setBatchProgress(0);
     let addedEmps = 0, addedPos = 0, fixedMaps = 0;
+    const failedRows: number[] = [];
+    const createdEmployeeCodes = new Set<string>();
+    const createdPositionCodes = new Set<string>();
     const today = new Date().toISOString().split("T")[0];
 
     for (let i = 0; i < remainingErrors.length; i++) {
       const err = remainingErrors[i];
       const errKey = getErrorKey(err);
+      let resolved = false;
+
       try {
         if (err.issue_type === "missing_employee") {
-          const matchedPos = positions.find(p => p.position_id.toLowerCase() === err.position_id_code.toLowerCase());
-          await supabase.from("employees").insert({
-            consultant_id: consultantId,
-            employee_id: err.employee_id_code,
-            employee_name: err.employee_name || err.employee_id_code,
-            position_id: matchedPos?.id || null,
-            start_date: today,
-            status: "active",
-          });
-          addedEmps++;
+          const empCode = err.employee_id_code.toLowerCase();
+          if (createdEmployeeCodes.has(empCode)) {
+            resolved = true;
+          } else {
+            const matchedPos = positions.find(p => p.position_id.toLowerCase() === err.position_id_code.toLowerCase());
+            const { error: insertEmployeeError } = await supabase.from("employees").insert({
+              consultant_id: consultantId,
+              employee_id: err.employee_id_code,
+              employee_name: err.employee_name || err.employee_id_code,
+              position_id: matchedPos?.id || null,
+              start_date: today,
+              status: "active",
+            });
+            if (insertEmployeeError) throw insertEmployeeError;
+            createdEmployeeCodes.add(empCode);
+            addedEmps++;
+            resolved = true;
+          }
         } else if (err.issue_type === "missing_position") {
-          await supabase.from("positions").insert({
-            consultant_id: consultantId,
-            position_id: err.position_id_code,
-            position_name: err.position_name || err.position_id_code,
-            year_1_rate: 0,
-          });
-          addedPos++;
+          const posCode = err.position_id_code.toLowerCase();
+          if (createdPositionCodes.has(posCode)) {
+            resolved = true;
+          } else {
+            const { error: insertPositionError } = await supabase.from("positions").insert({
+              consultant_id: consultantId,
+              position_id: err.position_id_code,
+              position_name: err.position_name || err.position_id_code,
+              year_1_rate: 0,
+            });
+            if (insertPositionError) throw insertPositionError;
+            createdPositionCodes.add(posCode);
+            addedPos++;
+            resolved = true;
+          }
         } else {
           const matchedPos = positions.find(p => p.position_id.toLowerCase() === err.position_id_code.toLowerCase());
-          if (matchedPos) {
-            const { data: emp } = await supabase.from("employees")
-              .select("id").eq("consultant_id", consultantId)
-              .eq("employee_id", err.employee_id_code).single();
-            if (emp) {
-              await supabase.from("employees").update({ position_id: matchedPos.id }).eq("id", emp.id);
-              fixedMaps++;
-            }
-          }
+          if (!matchedPos) throw new Error(`Position ${err.position_id_code} not found`);
+
+          const { data: emp, error: selectEmployeeError } = await supabase.from("employees")
+            .select("id")
+            .eq("consultant_id", consultantId)
+            .eq("employee_id", err.employee_id_code)
+            .single();
+          if (selectEmployeeError) throw selectEmployeeError;
+          if (!emp) throw new Error(`Employee ${err.employee_id_code} not found`);
+
+          const { error: updateEmployeeError } = await supabase
+            .from("employees")
+            .update({ position_id: matchedPos.id })
+            .eq("id", emp.id);
+          if (updateEmployeeError) throw updateEmployeeError;
+
+          fixedMaps++;
+          resolved = true;
         }
-        setResolvedRows(prev => new Set(prev).add(errKey));
       } catch (e) {
-        // Continue with next error
+        failedRows.push(err.row);
       }
+
+      if (resolved) {
+        setResolvedRows(prev => new Set(prev).add(errKey));
+      }
+
       setBatchProgress(Math.round(((i + 1) / remainingErrors.length) * 100));
     }
+
     setIsBatchProcessing(false);
+
     const parts: string[] = [];
     if (addedEmps > 0) parts.push(`${addedEmps} employees`);
     if (addedPos > 0) parts.push(`${addedPos} positions`);
     if (fixedMaps > 0) parts.push(`${fixedMaps} mappings`);
-    toast.success(`Added ${parts.join(" and ")}`);
+
+    if (parts.length > 0) {
+      toast.success(`Added ${parts.join(" and ")}`);
+    }
+
+    if (failedRows.length > 0) {
+      toast.error(`Could not resolve ${failedRows.length} row(s): ${failedRows.slice(0, 5).join(", ")}${failedRows.length > 5 ? "..." : ""}`);
+    }
   };
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
