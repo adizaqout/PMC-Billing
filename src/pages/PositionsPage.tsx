@@ -23,8 +23,8 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 
 type Position = Tables<"positions"> & { consultants?: { short_name: string } | null; service_orders?: { so_number: string } | null };
-interface PosForm { position_id: string; position_name: string; consultant_id: string; so_id: string | null; total_years_of_exp: number | null; year_1_rate: number | null; year_2_rate: number | null; year_3_rate: number | null; year_4_rate: number | null; year_5_rate: number | null; effective_from: string | null; effective_to: string | null; notes: string | null; }
-const emptyForm: PosForm = { position_id: "", position_name: "", consultant_id: "", so_id: null, total_years_of_exp: null, year_1_rate: null, year_2_rate: null, year_3_rate: null, year_4_rate: null, year_5_rate: null, effective_from: null, effective_to: null, notes: null };
+interface PosForm { position_id: string; position_name: string; consultant_id: string; so_id: string | null; total_years_of_exp: number | null; year_1_rate: number | null; year_2_rate: number | null; year_3_rate: number | null; year_4_rate: number | null; year_5_rate: number | null; effective_from: string | null; effective_to: string | null; notes: string | null; function: string | null; }
+const emptyForm: PosForm = { position_id: "", position_name: "", consultant_id: "", so_id: null, total_years_of_exp: null, year_1_rate: null, year_2_rate: null, year_3_rate: null, year_4_rate: null, year_5_rate: null, effective_from: null, effective_to: null, notes: null, function: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -32,6 +32,7 @@ const exportCols = [
   { header: "Position ID", key: "position_id", width: 14 },
   { header: "System ID", key: "system_id", width: 18 },
   { header: "Position Name", key: "position_name", width: 25 },
+  { header: "Function", key: "function", width: 20 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Service Order", key: "so_number", width: 18 },
   { header: "Exp (Yrs)", key: "total_years_of_exp", width: 10 },
@@ -47,6 +48,7 @@ const exportCols = [
 const importCols = [
   { header: "Position ID", key: "position_id", width: 14 },
   { header: "Position Name", key: "position_name", width: 25 },
+  { header: "Function", key: "function", width: 20 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Service Order", key: "so_number", width: 18 },
   { header: "Exp (Yrs)", key: "total_years_of_exp", width: 10 },
@@ -68,6 +70,7 @@ export default function PositionsPage() {
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const posTableCols: ColumnDef[] = [
     { key: "pos_id", label: "Position ID" }, { key: "sys_id", label: "System ID" }, { key: "name", label: "Position" },
+    { key: "function", label: "Function" },
     { key: "consultant", label: "Consultant" }, { key: "so", label: "SO" }, { key: "exp", label: "Exp" },
     { key: "y1", label: "Y1 Rate" }, { key: "y2", label: "Y2 Rate" }, { key: "y3", label: "Y3 Rate" },
     { key: "y4", label: "Y4 Rate" }, { key: "y5", label: "Y5 Rate" },
@@ -85,7 +88,7 @@ export default function PositionsPage() {
 
   const upsertMutation = useMutation({
     mutationFn: async (values: PosForm & { id?: string }) => {
-      const payload: any = { position_id: values.position_id.trim() || null, position_name: values.position_name, consultant_id: values.consultant_id, so_id: values.so_id || null, total_years_of_exp: values.total_years_of_exp, year_1_rate: values.year_1_rate, year_2_rate: values.year_2_rate, year_3_rate: values.year_3_rate, year_4_rate: values.year_4_rate, year_5_rate: values.year_5_rate, effective_from: values.effective_from || null, effective_to: values.effective_to || null, notes: values.notes || null };
+      const payload: any = { position_id: values.position_id.trim() || null, position_name: values.position_name, consultant_id: values.consultant_id, so_id: values.so_id || null, total_years_of_exp: values.total_years_of_exp, year_1_rate: values.year_1_rate, year_2_rate: values.year_2_rate, year_3_rate: values.year_3_rate, year_4_rate: values.year_4_rate, year_5_rate: values.year_5_rate, effective_from: values.effective_from || null, effective_to: values.effective_to || null, notes: values.notes || null, "function": values.function ? values.function.substring(0, 50) : null };
       if (values.id) { const { error } = await supabase.from("positions").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("positions").insert(payload as TablesInsert<"positions">); if (error) throw error; }
     },
@@ -95,7 +98,7 @@ export default function PositionsPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("positions").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["positions"] }); toast.success("Deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (item: Position) => { setEditing(item); setForm({ position_id: item.position_id || "", position_name: item.position_name, consultant_id: item.consultant_id, so_id: item.so_id, total_years_of_exp: item.total_years_of_exp, year_1_rate: item.year_1_rate, year_2_rate: item.year_2_rate, year_3_rate: item.year_3_rate, year_4_rate: item.year_4_rate, year_5_rate: item.year_5_rate, effective_from: item.effective_from, effective_to: item.effective_to, notes: item.notes }); setDialogOpen(true); };
+  const openEdit = (item: Position) => { setEditing(item); setForm({ position_id: item.position_id || "", position_name: item.position_name, consultant_id: item.consultant_id, so_id: item.so_id, total_years_of_exp: item.total_years_of_exp, year_1_rate: item.year_1_rate, year_2_rate: item.year_2_rate, year_3_rate: item.year_3_rate, year_4_rate: item.year_4_rate, year_5_rate: item.year_5_rate, effective_from: item.effective_from, effective_to: item.effective_to, notes: item.notes, function: (item as any).function || null }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); };
   const handleConsultantChange = (v: string) => { setForm({ ...form, consultant_id: v, so_id: null }); };
 
@@ -121,6 +124,7 @@ export default function PositionsPage() {
       if (key === "position_id" && !(i.position_id || "").toLowerCase().includes(v)) return false;
       if (key === "system_id" && !((i as any).system_id || "").toLowerCase().includes(v)) return false;
       if (key === "position_name" && !i.position_name.toLowerCase().includes(v)) return false;
+      if (key === "function" && !((i as any).function || "").toLowerCase().includes(v)) return false;
       if (key === "consultant" && !(i.consultants?.short_name || "").toLowerCase().includes(v)) return false;
       if (key === "so" && !(i.service_orders?.so_number || "").toLowerCase().includes(v)) return false;
     }
@@ -129,7 +133,7 @@ export default function PositionsPage() {
   const { sorted, sort, toggleSort } = useSort(filtered, "position_name", "asc");
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
-  const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", function: (i as any).function || "", consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("positions-template.xlsx", importCols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
   const handleImportWithProgress = useCallback(async (
@@ -143,13 +147,14 @@ export default function PositionsPage() {
       const row = rows[i];
       const posId = row[0] != null ? String(row[0]).trim() : null;
       const name = row[1] != null ? String(row[1]).trim() : "";
-      const consultantName = row[2] != null ? String(row[2]).trim() : "";
-      const soNum = row[3] != null ? String(row[3]).trim() : "";
-      const exp = row[4] != null ? String(row[4]).trim() : "";
-      const y1 = row[5], y2 = row[6], y3 = row[7], y4 = row[8], y5 = row[9];
-      const from = row[10] != null ? String(row[10]).trim() : "";
-      const to = row[11] != null ? String(row[11]).trim() : "";
-      const notes = row[12] != null ? String(row[12]).trim() : "";
+      const fnVal = row[2] != null ? String(row[2]).trim().substring(0, 50) : "";
+      const consultantName = row[3] != null ? String(row[3]).trim() : "";
+      const soNum = row[4] != null ? String(row[4]).trim() : "";
+      const exp = row[5] != null ? String(row[5]).trim() : "";
+      const y1 = row[6], y2 = row[7], y3 = row[8], y4 = row[9], y5 = row[10];
+      const from = row[11] != null ? String(row[11]).trim() : "";
+      const to = row[12] != null ? String(row[12]).trim() : "";
+      const notes = row[13] != null ? String(row[13]).trim() : "";
       if (!name) { result.processed++; onProgress({ ...result }); continue; }
       const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
@@ -160,7 +165,7 @@ export default function PositionsPage() {
         year_1_rate: y1 != null ? parseFloat(String(y1)) : null, year_2_rate: y2 != null ? parseFloat(String(y2)) : null,
         year_3_rate: y3 != null ? parseFloat(String(y3)) : null, year_4_rate: y4 != null ? parseFloat(String(y4)) : null,
         year_5_rate: y5 != null ? parseFloat(String(y5)) : null,
-        effective_from: from || null, effective_to: to || null, notes: notes || null,
+        effective_from: from || null, effective_to: to || null, notes: notes || null, "function": fnVal || null,
       } as TablesInsert<"positions">);
       if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
       result.processed++;
@@ -195,6 +200,7 @@ export default function PositionsPage() {
                 {visibleColumns.has("pos_id") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position ID" sortKey="position_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position_id || ""} onChange={(v) => setColFilter("position_id", v)} label="Position ID" /></SortableHeader></th>}
                 {visibleColumns.has("sys_id") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="System ID" sortKey="system_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.system_id || ""} onChange={(v) => setColFilter("system_id", v)} label="System ID" /></SortableHeader></th>}
                 {visibleColumns.has("name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position" sortKey="position_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position_name || ""} onChange={(v) => setColFilter("position_name", v)} label="Position" /></SortableHeader></th>}
+                {visibleColumns.has("function") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Function" sortKey="function" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.function || ""} onChange={(v) => setColFilter("function", v)} label="Function" /></SortableHeader></th>}
                 {visibleColumns.has("consultant") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.short_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>}
                 {visibleColumns.has("so") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="SO" sortKey="service_orders.so_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.so || ""} onChange={(v) => setColFilter("so", v)} label="SO" /></SortableHeader></th>}
                 {visibleColumns.has("exp") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Exp" sortKey="total_years_of_exp" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
@@ -212,6 +218,7 @@ export default function PositionsPage() {
                   {visibleColumns.has("pos_id") && <td className="px-4 py-2.5 font-mono text-xs text-primary">{item.position_id || "—"}</td>}
                   {visibleColumns.has("sys_id") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{(item as any).system_id || "—"}</td>}
                   {visibleColumns.has("name") && <td className="px-4 py-2.5 font-medium">{item.position_name}</td>}
+                  {visibleColumns.has("function") && <td className="px-4 py-2.5 text-muted-foreground">{(item as any).function || "—"}</td>}
                   {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("so") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.service_orders?.so_number || "—"}</td>}
                   {visibleColumns.has("exp") && <td className="px-4 py-2.5 text-center font-mono">{item.total_years_of_exp ?? "—"}</td>}
@@ -240,6 +247,7 @@ export default function PositionsPage() {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5"><Label>Position ID</Label><Input value={form.position_id} onChange={(e) => setForm({ ...form, position_id: e.target.value })} placeholder="e.g. SE-01" /></div>
               <div className="col-span-2 space-y-1.5"><Label>Position Name *</Label><Input value={form.position_name} onChange={(e) => setForm({ ...form, position_name: e.target.value })} /></div>
+              <div className="col-span-3 space-y-1.5"><Label>Function</Label><Input value={form.function || ""} onChange={(e) => setForm({ ...form, function: e.target.value || null })} maxLength={50} placeholder="e.g. Project Manager" /></div>
               <div className="space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Service Order</Label><Select value={form.so_id || "none"} onValueChange={(v) => setForm({ ...form, so_id: v === "none" ? null : v })} disabled={!form.consultant_id}><SelectTrigger><SelectValue placeholder={form.consultant_id ? "Select" : "Select consultant first"} /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{filteredSOs.map((s) => <SelectItem key={s.id} value={s.id}>{s.so_number}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Total Exp (Yrs)</Label><Input type="number" value={form.total_years_of_exp ?? ""} onChange={(e) => numSet("total_years_of_exp", e.target.value)} /></div>
