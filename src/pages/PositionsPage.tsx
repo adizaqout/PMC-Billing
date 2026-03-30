@@ -124,6 +124,7 @@ export default function PositionsPage() {
       if (key === "position_id" && !(i.position_id || "").toLowerCase().includes(v)) return false;
       if (key === "system_id" && !((i as any).system_id || "").toLowerCase().includes(v)) return false;
       if (key === "position_name" && !i.position_name.toLowerCase().includes(v)) return false;
+      if (key === "function" && !((i as any).function || "").toLowerCase().includes(v)) return false;
       if (key === "consultant" && !(i.consultants?.short_name || "").toLowerCase().includes(v)) return false;
       if (key === "so" && !(i.service_orders?.so_number || "").toLowerCase().includes(v)) return false;
     }
