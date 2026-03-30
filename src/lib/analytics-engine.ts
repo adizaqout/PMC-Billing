@@ -10,7 +10,7 @@ import {
 
 export type AppSettingRow = Pick<Tables<"app_settings">, "setting_key" | "setting_value">;
 export type ProfileSummary = Pick<Tables<"profiles">, "full_name" | "consultant_id"> | null;
-export type ConsultantRow = Pick<Tables<"consultants">, "id" | "name" | "status">;
+export type ConsultantRow = Pick<Tables<"consultants">, "id" | "name" | "short_name" | "status">;
 export type ProjectRow = Pick<Tables<"projects">, "id" | "project_name" | "latest_budget" | "latest_pmc_budget" | "previous_pmc_budget" | "previous_pmc_actual" | "actual_pmc_to_date" | "portfolio" | "status">;
 export type EmployeeRow = Pick<Tables<"employees">, "id" | "employee_name" | "consultant_id" | "position_id" | "status">;
 export type PositionRow = Pick<Tables<"positions">, "id" | "position_name" | "consultant_id" | "so_id" | "year_1_rate" | "year_2_rate" | "year_3_rate" | "year_4_rate" | "year_5_rate">;
@@ -477,7 +477,7 @@ export function buildAnalyticsModel(
       { value: ALL_FILTER_VALUE, label: `Open period · ${formatMonthLabel(openMonth)}` },
       ...months.map((month) => ({ value: month, label: formatMonthLabel(month) })),
     ],
-    consultantOptions: [{ value: ALL_FILTER_VALUE, label: "All companies" }, ...data.consultants.map((consultant) => ({ value: consultant.id, label: consultant.name }))],
+    consultantOptions: [{ value: ALL_FILTER_VALUE, label: "All companies" }, ...data.consultants.map((consultant) => ({ value: consultant.id, label: consultant.short_name }))],
     projectOptions: [{ value: ALL_FILTER_VALUE, label: "All projects" }, ...data.projects.map((project) => ({ value: project.id, label: project.project_name }))],
     soOptions: [{ value: ALL_FILTER_VALUE, label: "All SOs" }, ...data.serviceOrders.map((so) => ({ value: so.id, label: so.so_number }))],
     poOptions: [{ value: ALL_FILTER_VALUE, label: "All POs" }, ...uniquePurchaseOrders.map((po) => ({ value: po.po_number, label: po.po_number }))],

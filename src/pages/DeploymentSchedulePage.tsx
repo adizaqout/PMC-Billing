@@ -46,7 +46,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
-type Submission = Tables<"deployment_submissions"> & { consultants?: { name: string } | null };
+type Submission = Tables<"deployment_submissions"> & { consultants?: { short_name: string } | null };
 type DeploymentLine = Tables<"deployment_lines">;
 type Period = Tables<"period_control">;
 type Employee = Tables<"employees"> & { positions?: { position_name: string } | null };
@@ -139,7 +139,7 @@ export default function DeploymentSchedulePage() {
   const { data: consultants = [] } = useQuery({
     queryKey: ["consultants-list"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name");
+      const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name");
       if (error) throw error;
       return data;
     },
@@ -155,7 +155,7 @@ export default function DeploymentSchedulePage() {
       if (!consultantId) return [];
       const { data, error } = await supabase
         .from("deployment_submissions")
-        .select("*, consultants(name)")
+        .select("*, consultants(short_name)")
         .eq("consultant_id", consultantId)
         .order("month", { ascending: false })
         .order("schedule_type")
@@ -450,7 +450,7 @@ export default function DeploymentSchedulePage() {
           revision_no: newRevision,
           created_by: user?.id || null,
         })
-        .select("*, consultants(name)")
+        .select("*, consultants(short_name)")
         .single();
       if (error) throw error;
 
@@ -1141,7 +1141,7 @@ export default function DeploymentSchedulePage() {
               <h1 className="page-title">
                 {selectedSubmission.schedule_type.charAt(0).toUpperCase() + selectedSubmission.schedule_type.slice(1)} — {selectedSubmission.month}
               </h1>
-              <p className="page-subtitle">Revision #{selectedSubmission.revision_no} · {consultants.find(c => c.id === consultantId)?.name}</p>
+              <p className="page-subtitle">Revision #{selectedSubmission.revision_no} · {consultants.find(c => c.id === consultantId)?.short_name}</p>
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge status={selectedSubmission.status} />
@@ -1396,7 +1396,7 @@ export default function DeploymentSchedulePage() {
           <Select value={consultantId} onValueChange={setConsultantId}>
             <SelectTrigger className="w-48 h-8 text-sm"><SelectValue placeholder="Select consultant" /></SelectTrigger>
             <SelectContent>
-              {consultants.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              {consultants.map(c => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}
             </SelectContent>
           </Select>
 

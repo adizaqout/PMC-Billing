@@ -24,7 +24,7 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 
 type Invoice = Tables<"invoices"> & {
-  consultants?: { name: string } | null;
+  consultants?: { short_name: string } | null;
   purchase_orders?: { po_number: string; revision_number: number | null; po_reference: string | null; po_value: number | null; project_id: string | null } | null;
 };
 type PORecord = { id: string; po_number: string; consultant_id: string; revision_number: number | null; po_reference: string | null; po_value: number | null; project_id: string | null };
@@ -76,7 +76,7 @@ export default function InvoicesPage() {
     queryKey: ["invoices"],
     queryFn: async () => {
       const { data, error } = await supabase.from("invoices")
-        .select("*, consultants(name), purchase_orders(po_number, revision_number, po_reference, po_value, project_id)")
+        .select("*, consultants(short_name), purchase_orders(po_number, revision_number, po_reference, po_value, project_id)")
         .order("invoice_month", { ascending: false });
       if (error) throw error;
       return data as Invoice[];
@@ -86,9 +86,9 @@ export default function InvoicesPage() {
   const { data: consultants = [] } = useQuery({
     queryKey: ["consultants-list"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("consultants").select("id, name").eq("status", "active").order("name");
+      const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name");
       if (error) throw error;
-      return data as { id: string; name: string }[];
+      return data as { id: string; short_name: string }[];
     }
   });
 
@@ -247,10 +247,10 @@ export default function InvoicesPage() {
   };
 
   const filtered = items.filter((i) => {
-    if (search && !i.invoice_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !i.invoice_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.invoice_number && !i.invoice_number.toLowerCase().includes(colFilters.invoice_number.toLowerCase())) return false;
     if (colFilters.month && !i.invoice_month.toLowerCase().includes(colFilters.month.toLowerCase())) return false;
-    if (colFilters.consultant && !(i.consultants?.name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
+    if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
     if (colFilters.po && !(i.purchase_orders?.po_number || "").toLowerCase().includes(colFilters.po.toLowerCase())) return false;
     if (colFilters.status && !i.status.toLowerCase().includes(colFilters.status.toLowerCase())) return false;
     return true;
@@ -262,7 +262,7 @@ export default function InvoicesPage() {
   const handleExport = () => {
     exportToExcel("invoices.xlsx", cols, filtered.map(i => ({
       ...i,
-      consultant_name: i.consultants?.name || "",
+      consultant_name: i.consultants?.short_name || "",
       po_number: i.purchase_orders?.po_number || "",
       po_revision: i.purchase_orders?.revision_number ?? "",
       po_value: getPoRevTotal(i) ?? "",
@@ -271,7 +271,7 @@ export default function InvoicesPage() {
     toast.success("Exported");
   };
 
-  const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.name) }); toast.success("Template downloaded"); };
+  const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
 
   const handleImportWithProgress = useCallback(async (
     rows: string[][], onProgress: (p: ImportProgress) => void
@@ -281,7 +281,7 @@ export default function InvoicesPage() {
     for (let i = 1; i < rows.length; i++) {
       const [invNum, month, consultantName, poNum, rev, lineRef, , billed, , paid, status, desc] = rows[i];
       if (!invNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.name.toLowerCase() === consultantName?.trim()?.toLowerCase());
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName?.trim()?.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       const po = poNum ? allPOs.find(p =>
         p.po_number === String(poNum).trim() &&
@@ -324,7 +324,7 @@ export default function InvoicesPage() {
               <table className="w-full text-sm"><thead><tr className="border-b">
                 {visibleColumns.has("inv_no") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Invoice No." sortKey="invoice_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.invoice_number || ""} onChange={(v) => setColFilter("invoice_number", v)} label="Invoice No." /></SortableHeader></th>}
                 {visibleColumns.has("month") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Month" sortKey="invoice_month" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.month || ""} onChange={(v) => setColFilter("month", v)} label="Month" /></SortableHeader></th>}
-                {visibleColumns.has("consultant") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>}
+                {visibleColumns.has("consultant") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.short_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>}
                 {visibleColumns.has("po") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="PO" sortKey="purchase_orders.po_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.po || ""} onChange={(v) => setColFilter("po", v)} label="PO" /></SortableHeader></th>}
                 {visibleColumns.has("rev") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Rev" sortKey="purchase_orders.revision_number" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("po_value") && <th className="data-table-header text-right px-4 py-2.5"><SortableHeader label="PO Value" sortKey="purchase_orders.po_value" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
@@ -338,7 +338,7 @@ export default function InvoicesPage() {
                 <tr key={item.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   {visibleColumns.has("inv_no") && <td className="px-4 py-2.5 font-mono font-medium">{item.invoice_number}</td>}
                   {visibleColumns.has("month") && <td className="px-4 py-2.5 font-mono text-xs">{item.invoice_month}</td>}
-                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.name || "—"}</td>}
+                  {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{item.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("po") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{item.purchase_orders?.po_number || "—"}</td>}
                   {visibleColumns.has("rev") && <td className="px-4 py-2.5 text-center font-mono text-xs">{item.purchase_orders?.revision_number ?? "—"}</td>}
                   {visibleColumns.has("po_value") && <td className="px-4 py-2.5 text-right font-mono text-xs text-muted-foreground">{fmt(getPoRevTotal(item))}</td>}
@@ -365,7 +365,7 @@ export default function InvoicesPage() {
               <div className="space-y-1.5"><Label>Invoice Number *</Label><Input value={form.invoice_number} onChange={(e) => setForm({ ...form, invoice_number: e.target.value })} /></div>
               <div className="space-y-1.5"><Label>Invoice Month * (YYYY-MM)</Label><Input value={form.invoice_month} onChange={(e) => setForm({ ...form, invoice_month: e.target.value })} placeholder="2026-02" /></div>
               <div className="space-y-1.5"><Label>Consultant *</Label>
-                <Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select>
+                <Select value={form.consultant_id} onValueChange={handleConsultantChange}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}</SelectContent></Select>
               </div>
               <div className="space-y-1.5"><Label>PO + Revision</Label>
                 <Select value={form._po_key || "none"} onValueChange={handlePORevChange} disabled={!form.consultant_id}>

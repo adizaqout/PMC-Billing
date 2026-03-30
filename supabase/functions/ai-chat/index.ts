@@ -43,7 +43,7 @@ async function fetchDatabaseSnapshot(supabaseClient: any) {
   // Consultants with employee counts
   const { data: consultants } = await supabaseClient
     .from("consultants")
-    .select("id, name, status, contact_email, contact_phone");
+    .select("id, short_name, name, status, contact_email, contact_phone");
   
   if (consultants) {
     const consultantSummaries = [];
