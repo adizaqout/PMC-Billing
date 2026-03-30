@@ -107,6 +107,8 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
       if (sub.schedule_type === "baseline") baselineByMonth.set(lineMonth, (baselineByMonth.get(lineMonth) || 0) + cost);
     }
 
+    const openMonth = data.openPeriod?.month || null;
+
     let months = allMonths;
     if (startMonth !== ALL_FILTER_VALUE) months = months.filter((m) => m >= startMonth);
     if (endMonth !== ALL_FILTER_VALUE) months = months.filter((m) => m <= endMonth);
@@ -119,10 +121,16 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
       cumActual += actualByMonth.get(month) || 0;
       cumForecast += forecastByMonth.get(month) || 0;
       cumBaseline += baselineByMonth.get(month) || 0;
+
+      // Actual: only up to and including the open period
+      const showActual = openMonth ? month <= openMonth : true;
+      // Forecast: only from the open period onward
+      const showForecast = openMonth ? month >= openMonth : true;
+
       return {
         month: formatMonthLabel(month),
-        Actual: cumActual,
-        Forecast: cumForecast,
+        Actual: showActual ? cumActual : null,
+        Forecast: showForecast ? cumForecast : null,
         Baseline: cumBaseline,
       };
     });
