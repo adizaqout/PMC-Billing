@@ -832,11 +832,14 @@ export default function DeploymentSchedulePage() {
     toast.success("Template downloaded");
   };
 
-  const validateImportData = (rawRows: string[][]): ImportErrorRow[] => {
+  const validateImportData = (
+    rawRows: string[][],
+    employeeSnapshot: Employee[] = employees,
+    positionSnapshot: Position[] = positions,
+  ): ImportErrorRow[] => {
     const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
     const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
     const errorRows: ImportErrorRow[] = [];
-    const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
 
     const get = (row: string[], key: string) => {
       const idx = headers.findIndex(h => h.includes(key));
@@ -853,10 +856,9 @@ export default function DeploymentSchedulePage() {
       const excelData: Record<string, string> = {};
       headers.forEach((h, idx) => { excelData[h] = String(row[idx] || "").trim(); });
 
-      const emp = empIdCode ? employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : null;
-      const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+      const emp = empIdCode ? employeeSnapshot.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : null;
+      const pos = posIdCode ? positionSnapshot.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
 
-      // Always flag missing employee when an ID is provided (even for baseline/forecast)
       if (empIdCode && !emp) {
         errorRows.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_employee", excel_data: excelData });
       }
@@ -876,24 +878,27 @@ export default function DeploymentSchedulePage() {
   ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
     if (!selectedSubmission) throw new Error("No submission selected");
 
-    // Pre-validate for missing employees/positions
-    const validationErrors = validateImportData(rawRows);
+    const validationErrors = validateImportData(rawRows, employees, positions);
     if (validationErrors.length > 0) {
       setImportErrors(validationErrors);
       setPendingImportData(rawRows);
       setImportErrorDialogOpen(true);
-      // Return a "paused" progress — the actual import will happen after corrections
       return { total: 0, processed: 0, created: 0, errors: [{ row: 0, message: `Found ${validationErrors.length} data issues. Please resolve them in the correction dialog.` }] };
     }
 
-    return executeImport(rawRows, onProgress);
+    return executeImport(rawRows, onProgress, employees, positions);
   };
 
   const executeImport = async (
     rawRows: string[][],
-    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void
+    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void,
+    employeeSnapshot: Employee[] = employees,
+    positionSnapshot: Position[] = positions,
   ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
     if (!selectedSubmission) throw new Error("No submission selected");
+
+    const currentEmployees = employeeSnapshot;
+    const currentPositions = positionSnapshot;
 
     const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
     const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
