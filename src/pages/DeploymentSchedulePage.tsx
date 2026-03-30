@@ -1073,18 +1073,20 @@ export default function DeploymentSchedulePage() {
   // ---- Detail view filtering & pagination (must be before any early return) ----
   const filteredDetailRows = useMemo(() => {
     return rows.filter(row => {
+      const monthLabel = formatMonthLabel(row.month || "").toLowerCase();
       if (detailSearch) {
         const q = detailSearch.toLowerCase();
         const emp = employees.find(e => e.id === row.employee_id);
         const pos = positions.find(p => p.id === row.position_id);
         const match = (row.month || "").includes(q) ||
+          monthLabel.includes(q) ||
           ((emp as any)?.employee_id || "").toLowerCase().includes(q) ||
           (emp?.employee_name || "").toLowerCase().includes(q) ||
           (pos?.position_id || "").toLowerCase().includes(q) ||
           (pos?.position_name || "").toLowerCase().includes(q);
         if (!match) return false;
       }
-      if (detailColFilters.month && !(row.month || "").toLowerCase().includes(detailColFilters.month.toLowerCase())) return false;
+      if (detailColFilters.month && !(row.month || "").toLowerCase().includes(detailColFilters.month.toLowerCase()) && !monthLabel.includes(detailColFilters.month.toLowerCase())) return false;
       if (detailColFilters.emp_id) {
         const emp = employees.find(e => e.id === row.employee_id);
         if (!((emp as any)?.employee_id || "").toLowerCase().includes(detailColFilters.emp_id.toLowerCase())) return false;
