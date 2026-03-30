@@ -24,13 +24,16 @@ import {
 
 interface CumulativeTrendGadgetProps {
   onRemove?: () => void;
+  filterMonth?: string;
+  filterConsultantId?: string;
 }
 
-export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadgetProps) {
+export default function CumulativeTrendGadget({ onRemove, filterMonth, filterConsultantId }: CumulativeTrendGadgetProps) {
   const { data } = useAnalyticsData();
-  const [selectedCompany, setSelectedCompany] = useState<string>(ALL_FILTER_VALUE);
-  const [startMonth, setStartMonth] = useState<string>(ALL_FILTER_VALUE);
-  const [endMonth, setEndMonth] = useState<string>(ALL_FILTER_VALUE);
+  const ALL = ALL_FILTER_VALUE;
+  const [selectedCompany, setSelectedCompany] = useState<string>(ALL);
+  const [startMonth, setStartMonth] = useState<string>(ALL);
+  const [endMonth, setEndMonth] = useState<string>(ALL);
 
   // Extract months from deployment line notes (format: "month:YYYY-MM|...")
   const getLineMonth = (notes: string | null, fallbackMonth: string) => {
@@ -59,9 +62,12 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
 
     const latestIds = getLatestSubmissionIds(data.submissions, false);
 
+    // Apply dashboard-level consultant filter, then local company override
+    const effectiveCompany = filterConsultantId && filterConsultantId !== ALL ? filterConsultantId : selectedCompany;
+
     const filteredSubmissions = data.submissions.filter((s) => {
       if (!latestIds.has(s.id)) return false;
-      if (selectedCompany !== ALL_FILTER_VALUE && s.consultant_id !== selectedCompany) return false;
+      if (effectiveCompany !== ALL && s.consultant_id !== effectiveCompany) return false;
       return true;
     });
 
@@ -134,7 +140,7 @@ export default function CumulativeTrendGadget({ onRemove }: CumulativeTrendGadge
         Baseline: cumBaseline,
       };
     });
-  }, [data, selectedCompany, startMonth, endMonth, allMonths]);
+  }, [data, selectedCompany, startMonth, endMonth, allMonths, filterConsultantId]);
 
   return (
     <Card>

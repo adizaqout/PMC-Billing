@@ -29,26 +29,30 @@ const COLORS = [
 
 interface StaffAllocationGadgetProps {
   onRemove?: () => void;
+  filterMonth?: string;
+  filterConsultantId?: string;
 }
 
-export default function StaffAllocationGadget({ onRemove }: StaffAllocationGadgetProps) {
+export default function StaffAllocationGadget({ onRemove, filterMonth, filterConsultantId }: StaffAllocationGadgetProps) {
   const { data } = useAnalyticsData();
   const [scheduleType, setScheduleType] = useState<string>("actual");
 
   const chartData = useMemo(() => {
     if (!data) return { rows: [], functions: [] };
 
-    const openMonth = data.openPeriod?.month;
-    if (!openMonth) return { rows: [], functions: [] };
+    const ALL = "all";
+    const effectiveMonth = filterMonth && filterMonth !== ALL ? filterMonth : data.openPeriod?.month;
+    if (!effectiveMonth) return { rows: [], functions: [] };
 
     const latestIds = getLatestSubmissionIds(data.submissions, false);
 
-    // Find submissions for the open month and selected schedule type
+    // Find submissions for the target month and selected schedule type
     const relevantSubs = data.submissions.filter(
       (s) =>
         latestIds.has(s.id) &&
-        s.month === openMonth &&
-        s.schedule_type === scheduleType,
+        s.month === effectiveMonth &&
+        s.schedule_type === scheduleType &&
+        (filterConsultantId && filterConsultantId !== ALL ? s.consultant_id === filterConsultantId : true),
     );
     const subIds = new Set(relevantSubs.map((s) => s.id));
 
@@ -108,9 +112,11 @@ export default function StaffAllocationGadget({ onRemove }: StaffAllocationGadge
     });
 
     return { rows, functions };
-  }, [data, scheduleType]);
+  }, [data, scheduleType, filterMonth, filterConsultantId]);
 
-  const openMonthLabel = data?.openPeriod?.month
+  const ALL = "all";
+  const effectiveMonth = filterMonth && filterMonth !== ALL ? filterMonth : data?.openPeriod?.month;
+  const openMonthLabel = effectiveMonth
     ? new Intl.DateTimeFormat("en", { month: "short", year: "numeric" }).format(
         new Date(
           Number(data.openPeriod.month.split("-")[0]),
