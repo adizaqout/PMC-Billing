@@ -236,7 +236,7 @@ export default function ConsultantsPage() {
                           <DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEdit(c)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(c.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem>
+                            {isAdmin && <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(c)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem>}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
