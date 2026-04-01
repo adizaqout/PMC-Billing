@@ -285,7 +285,61 @@ export default function InvoicesPage() {
 
   const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
 
-
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Invoices",
+    columns: invImportColumns,
+    businessKeys: ["invoice_number", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("invoices").select("*, consultants(short_name), purchase_orders(po_number, revision_number)").order("invoice_month", { ascending: false });
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, invoice_number: i.invoice_number || "", invoice_month: i.invoice_month || "",
+        consultant_name: i.consultants?.short_name || "",
+        po_number: i.purchase_orders?.po_number || "",
+        po_revision: i.purchase_orders?.revision_number != null ? String(i.purchase_orders.revision_number) : "",
+        billed_amount_no_vat: i.billed_amount_no_vat != null ? String(i.billed_amount_no_vat) : "",
+        paid_amount: i.paid_amount != null ? String(i.paid_amount) : "",
+        status: i.status || "", description: i.description || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const po = rec.po_number ? allPOs.find(p =>
+        p.po_number === rec.po_number.trim() &&
+        (p.revision_number ?? 0) === (rec.po_revision ? parseInt(rec.po_revision) : 0) &&
+        p.consultant_id === consultant.id
+      ) : null;
+      const { error } = await supabase.from("invoices").insert({
+        invoice_number: rec.invoice_number.trim(), invoice_month: rec.invoice_month.trim(),
+        consultant_id: consultant.id, po_id: po?.id || null,
+        billed_amount_no_vat: rec.billed_amount_no_vat ? parseFloat(rec.billed_amount_no_vat) : null,
+        paid_amount: rec.paid_amount ? parseFloat(rec.paid_amount) : null,
+        status: (["paid", "cancelled"].includes(rec.status?.trim()?.toLowerCase() || "") ? rec.status.trim().toLowerCase() : "pending") as any,
+        description: rec.description?.trim() || null,
+      } as TablesInsert<"invoices">);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const po = rec.po_number ? allPOs.find(p =>
+        p.po_number === rec.po_number.trim() &&
+        (p.revision_number ?? 0) === (rec.po_revision ? parseInt(rec.po_revision) : 0) &&
+        p.consultant_id === consultant.id
+      ) : null;
+      const { error } = await supabase.from("invoices").update({
+        invoice_number: rec.invoice_number.trim(), invoice_month: rec.invoice_month.trim(),
+        consultant_id: consultant.id, po_id: po?.id || null,
+        billed_amount_no_vat: rec.billed_amount_no_vat ? parseFloat(rec.billed_amount_no_vat) : null,
+        paid_amount: rec.paid_amount ? parseFloat(rec.paid_amount) : null,
+        status: (["paid", "cancelled"].includes(rec.status?.trim()?.toLowerCase() || "") ? rec.status.trim().toLowerCase() : "pending") as any,
+        description: rec.description?.trim() || null,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); },
+  }), [consultants, allPOs, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
