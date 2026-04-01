@@ -100,11 +100,20 @@ function excelSerialDateToIso(serial: number): string {
   return dateInfo.toISOString().split("T")[0];
 }
 
-function normalizeImportedCell(value: unknown): string {
+function isDateFormattedCell(cell: ExcelJS.Cell): boolean {
+  const format = cell.numFmt?.toLowerCase() ?? "";
+  return /(^|[^a-z])(d|dd|ddd|dddd|m|mm|mmm|mmmm|yy|yyyy|h|hh|ss)([^a-z]|$)/.test(format);
+}
+
+function normalizeImportedCell(cell: ExcelJS.Cell): string {
+  const value = cell.value;
   if (value === null || value === undefined) return "";
   if (value instanceof Date) return value.toISOString().split("T")[0];
-  if (typeof value === "number") return String(value);
+  if (typeof value === "number") {
+    return isDateFormattedCell(cell) ? excelSerialDateToIso(value) : String(value);
+  }
   if (typeof value === "boolean") return value ? "true" : "false";
+  if (cell.text) return cell.text.trim();
   return String(value).trim();
 }
 
@@ -118,8 +127,10 @@ async function parseExcelWorkbook(file: File): Promise<string[][]> {
 
   const rows: string[][] = [];
   worksheet.eachRow({ includeEmpty: false }, (row) => {
-    const values = row.values as Array<unknown>;
-    const cells = values.slice(1).map(normalizeImportedCell);
+    const cells: string[] = [];
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cells[colNumber - 1] = normalizeImportedCell(cell);
+    });
     const hasContent = cells.some((cell) => cell !== "");
     if (hasContent) rows.push(cells);
   });
