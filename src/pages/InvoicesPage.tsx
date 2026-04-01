@@ -315,7 +315,6 @@ export default function InvoicesPage() {
         invoice_number: rec.invoice_number.trim(), invoice_month: rec.invoice_month.trim(),
         consultant_id: consultant.id, po_id: po?.id || null,
         billed_amount_no_vat: rec.billed_amount_no_vat ? parseFloat(rec.billed_amount_no_vat) : null,
-        cum_billed_amount_no_vat: rec.cum_billed_amount_no_vat ? parseFloat(rec.cum_billed_amount_no_vat) : null,
         paid_amount: rec.paid_amount ? parseFloat(rec.paid_amount) : null,
         status: (["paid", "cancelled"].includes(rec.status?.trim()?.toLowerCase() || "") ? rec.status.trim().toLowerCase() : "pending") as any,
         description: rec.description?.trim() || null,
