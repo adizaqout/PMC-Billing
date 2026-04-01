@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -13,7 +13,7 @@ import SortableHeader from "@/components/SortableHeader";
 import { usePagination } from "@/hooks/usePagination";
 import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
-import type { ImportProgress } from "@/components/ExcelToolbar";
+import type { SmartImportConfig, ImportColumnDef } from "@/components/import/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,12 +30,10 @@ type Position = { id: string; position_id: string; position_name: string; consul
 interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; }
 const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", position_id: "", experience_years: null, start_date: null, end_date: null, status: "active" };
 
-/** Convert Excel serial number or date string to YYYY-MM-DD */
 function parseImportDate(val: any): string | null {
   if (val == null || String(val).trim() === "") return null;
   const n = Number(val);
   if (!isNaN(n) && n > 10000) {
-    // Excel serial date: days since 1899-12-30
     const d = new Date(Math.round((n - 25569) * 86400 * 1000));
     return d.toISOString().slice(0, 10);
   }
@@ -56,6 +54,18 @@ const excelCols = [
   { header: "Start Date", key: "start_date", width: 14 },
   { header: "End Date", key: "end_date", width: 14 },
   { header: "Status", key: "status", width: 12 },
+];
+
+const importColumns: ImportColumnDef[] = [
+  { header: "Employee ID", key: "employee_id", required: true },
+  { header: "Employee Name", key: "employee_name", required: true },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Position ID", key: "position_id_code" },
+  { header: "Position Name", key: "position_name" },
+  { header: "Exp (Years)", key: "experience_years", type: "number" },
+  { header: "Start Date", key: "start_date", type: "date" },
+  { header: "End Date", key: "end_date", type: "date" },
+  { header: "Status", key: "status" },
 ];
 
 export default function EmployeesPage() {
@@ -130,35 +140,64 @@ export default function EmployeesPage() {
 
   const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.short_name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
-  const handleImportWithProgress = useCallback(async (
-    rows: string[][], onProgress: (p: ImportProgress) => void
-  ): Promise<ImportProgress> => {
-    const total = rows.length - 1;
-    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
-    for (let i = 1; i < rows.length; i++) {
-      const [empId, name, consultantName, positionIdCode, , exp, startDate, endDate, status] = rows[i];
-      if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName?.trim()?.toLowerCase());
-      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
-      // Resolve position by position_id code
-      const posIdStr = positionIdCode != null ? String(positionIdCode).trim() : "";
+
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Employees",
+    columns: importColumns,
+    businessKeys: ["employee_id", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("employees").select("*, consultants(short_name), positions(position_id, position_name)").order("employee_name");
+      if (error) throw error;
+      return (data || []).map((e: any) => ({
+        _id: e.id,
+        employee_id: e.employee_id || "",
+        employee_name: e.employee_name || "",
+        consultant_name: e.consultants?.short_name || "",
+        position_id_code: e.positions?.position_id || "",
+        position_name: e.positions?.position_name || "",
+        experience_years: e.experience_years != null ? String(e.experience_years) : "",
+        start_date: e.start_date || "",
+        end_date: e.end_date || "",
+        status: e.status || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const posIdStr = rec.position_id_code?.trim() || "";
       const pos = posIdStr ? allPositions.find(p => p.position_id.toLowerCase() === posIdStr.toLowerCase() && p.consultant_id === consultant.id) : null;
-      if (posIdStr && !pos) { result.errors.push({ row: i + 1, message: `Position ID "${posIdStr}" not found for this consultant` }); result.processed++; onProgress({ ...result }); continue; }
+      if (posIdStr && !pos) return `Position ID "${posIdStr}" not found for this consultant`;
       const { error } = await supabase.from("employees").insert({
-        employee_id: empId != null ? String(empId).trim() || null : null,
-        employee_name: String(name).trim(), consultant_id: consultant.id,
+        employee_id: rec.employee_id?.trim() || null,
+        employee_name: rec.employee_name?.trim() || "",
+        consultant_id: consultant.id,
         position_id: pos?.id || null,
-        experience_years: exp ? parseInt(String(exp)) : null,
-        start_date: parseImportDate(startDate), end_date: parseImportDate(endDate),
-        status: status ? String(status).trim().toLowerCase() : "active",
+        experience_years: rec.experience_years ? parseInt(rec.experience_years) : null,
+        start_date: parseImportDate(rec.start_date),
+        end_date: parseImportDate(rec.end_date),
+        status: rec.status?.trim()?.toLowerCase() || "active",
       } as any);
-      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
-      result.processed++;
-      onProgress({ ...result });
-    }
-    return result;
-  }, [consultants, allPositions]);
-  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["employees"] }); }, [queryClient]);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const posIdStr = rec.position_id_code?.trim() || "";
+      const pos = posIdStr ? allPositions.find(p => p.position_id.toLowerCase() === posIdStr.toLowerCase() && p.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("employees").update({
+        employee_id: rec.employee_id?.trim() || null,
+        employee_name: rec.employee_name?.trim() || "",
+        consultant_id: consultant.id,
+        position_id: pos?.id || null,
+        experience_years: rec.experience_years ? parseInt(rec.experience_years) : null,
+        start_date: parseImportDate(rec.start_date),
+        end_date: parseImportDate(rec.end_date),
+        status: rec.status?.trim()?.toLowerCase() || "active",
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["employees"] }); },
+  }), [consultants, allPositions, queryClient]);
 
   return (
     <AppLayout>
@@ -166,7 +205,7 @@ export default function EmployeesPage() {
         <div className="page-header">
           <div><h1 className="page-title">Employees</h1><p className="page-subtitle">Manage PMC consultant employees</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={empTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Employee</Button>
           </div>
