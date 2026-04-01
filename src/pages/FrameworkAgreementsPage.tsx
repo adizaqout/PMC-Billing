@@ -119,6 +119,41 @@ export default function FrameworkAgreementsPage() {
   const handleExport = () => { exportToExcel("framework-agreements.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("fa-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
 
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Framework Agreements",
+    columns: importColumns,
+    businessKeys: ["framework_agreement_no", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("framework_agreements").select("*, consultants(short_name)").order("framework_agreement_no");
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, framework_agreement_no: i.framework_agreement_no || "",
+        consultant_name: i.consultants?.short_name || "",
+        start_date: i.start_date || "", end_date: i.end_date || "", status: i.status || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const { error } = await supabase.from("framework_agreements").insert({
+        framework_agreement_no: rec.framework_agreement_no.trim(), consultant_id: consultant.id,
+        start_date: parseImportDate(rec.start_date), end_date: parseImportDate(rec.end_date),
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      } as FAInsert);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const { error } = await supabase.from("framework_agreements").update({
+        framework_agreement_no: rec.framework_agreement_no.trim(), consultant_id: consultant.id,
+        start_date: parseImportDate(rec.start_date), end_date: parseImportDate(rec.end_date),
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["framework_agreements"] }); },
+  }), [consultants, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
