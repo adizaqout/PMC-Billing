@@ -1,21 +1,25 @@
 import { useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Upload, FileSpreadsheet } from "lucide-react";
+import { Download, FileSpreadsheet } from "lucide-react";
 import ImportProgressDialog, { type ImportProgress, type ImportError } from "@/components/ImportProgressDialog";
+import SmartImportWizard from "@/components/import/SmartImportWizard";
+import type { SmartImportConfig } from "@/components/import/types";
 
 interface ExcelToolbarProps {
   onExport: () => void;
   onTemplate: () => void;
-  onImport: (file: File) => void;
-  /** When provided, the import button uses the progress dialog instead of direct import */
+  onImport?: (file: File) => void;
+  /** Legacy: row-by-row progress import */
   onImportWithProgress?: (
     rows: string[][],
     onProgress: (progress: ImportProgress) => void
   ) => Promise<ImportProgress>;
   onImportComplete?: () => void;
+  /** New: smart import wizard config (takes precedence over legacy) */
+  smartImportConfig?: SmartImportConfig;
 }
 
-export default function ExcelToolbar({ onExport, onTemplate, onImport, onImportWithProgress, onImportComplete }: ExcelToolbarProps) {
+export default function ExcelToolbar({ onExport, onTemplate, onImport, onImportWithProgress, onImportComplete, smartImportConfig }: ExcelToolbarProps) {
   const ref = useRef<HTMLInputElement>(null);
 
   return (
@@ -26,9 +30,11 @@ export default function ExcelToolbar({ onExport, onTemplate, onImport, onImportW
       <Button variant="outline" size="sm" onClick={onTemplate}>
         <FileSpreadsheet size={14} className="mr-1.5" />Template
       </Button>
-      {onImportWithProgress ? (
+      {smartImportConfig ? (
+        <SmartImportWizard config={smartImportConfig} />
+      ) : onImportWithProgress ? (
         <ImportProgressDialog onImport={onImportWithProgress} onComplete={onImportComplete} />
-      ) : (
+      ) : onImport ? (
         <>
           <input
             type="file"
@@ -42,10 +48,10 @@ export default function ExcelToolbar({ onExport, onTemplate, onImport, onImportW
             }}
           />
           <Button variant="outline" size="sm" onClick={() => ref.current?.click()}>
-            <Upload size={14} className="mr-1.5" />Import
+            Import
           </Button>
         </>
-      )}
+      ) : null}
     </div>
   );
 }
