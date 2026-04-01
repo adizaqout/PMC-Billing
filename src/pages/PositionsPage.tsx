@@ -165,7 +165,65 @@ export default function PositionsPage() {
   const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", function: (i as any).function || "", consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("positions-template.xlsx", importCols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
-
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Positions",
+    columns: posImportColumns,
+    businessKeys: ["position_name", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("positions").select("*, consultants(short_name), service_orders(so_number)").order("position_name");
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, position_id: i.position_id || "", position_name: i.position_name || "",
+        function: i.function || "", consultant_name: i.consultants?.short_name || "",
+        so_number: i.service_orders?.so_number || "",
+        total_years_of_exp: i.total_years_of_exp != null ? String(i.total_years_of_exp) : "",
+        year_1_rate: i.year_1_rate != null ? String(i.year_1_rate) : "",
+        year_2_rate: i.year_2_rate != null ? String(i.year_2_rate) : "",
+        year_3_rate: i.year_3_rate != null ? String(i.year_3_rate) : "",
+        year_4_rate: i.year_4_rate != null ? String(i.year_4_rate) : "",
+        year_5_rate: i.year_5_rate != null ? String(i.year_5_rate) : "",
+        effective_from: i.effective_from || "", effective_to: i.effective_to || "",
+        notes: i.notes || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const so = rec.so_number ? allServiceOrders.find(s => s.so_number.toLowerCase() === rec.so_number.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("positions").insert({
+        position_id: rec.position_id?.trim() || null, position_name: rec.position_name.trim(),
+        consultant_id: consultant.id, so_id: so?.id || null,
+        total_years_of_exp: rec.total_years_of_exp ? parseInt(rec.total_years_of_exp) : null,
+        year_1_rate: rec.year_1_rate ? parseFloat(rec.year_1_rate) : null,
+        year_2_rate: rec.year_2_rate ? parseFloat(rec.year_2_rate) : null,
+        year_3_rate: rec.year_3_rate ? parseFloat(rec.year_3_rate) : null,
+        year_4_rate: rec.year_4_rate ? parseFloat(rec.year_4_rate) : null,
+        year_5_rate: rec.year_5_rate ? parseFloat(rec.year_5_rate) : null,
+        effective_from: parseImportDate(rec.effective_from), effective_to: parseImportDate(rec.effective_to),
+        notes: rec.notes?.trim() || null, function: rec.function?.trim()?.substring(0, 50) || null,
+      } as TablesInsert<"positions">);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const so = rec.so_number ? allServiceOrders.find(s => s.so_number.toLowerCase() === rec.so_number.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("positions").update({
+        position_id: rec.position_id?.trim() || null, position_name: rec.position_name.trim(),
+        consultant_id: consultant.id, so_id: so?.id || null,
+        total_years_of_exp: rec.total_years_of_exp ? parseInt(rec.total_years_of_exp) : null,
+        year_1_rate: rec.year_1_rate ? parseFloat(rec.year_1_rate) : null,
+        year_2_rate: rec.year_2_rate ? parseFloat(rec.year_2_rate) : null,
+        year_3_rate: rec.year_3_rate ? parseFloat(rec.year_3_rate) : null,
+        year_4_rate: rec.year_4_rate ? parseFloat(rec.year_4_rate) : null,
+        year_5_rate: rec.year_5_rate ? parseFloat(rec.year_5_rate) : null,
+        effective_from: parseImportDate(rec.effective_from), effective_to: parseImportDate(rec.effective_to),
+        notes: rec.notes?.trim() || null, function: rec.function?.trim()?.substring(0, 50) || null,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["positions"] }); },
+  }), [consultants, allServiceOrders, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
