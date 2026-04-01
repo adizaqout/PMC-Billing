@@ -122,6 +122,44 @@ export default function ServiceOrdersPage() {
   const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
 
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Service Orders",
+    columns: importColumns,
+    businessKeys: ["so_number", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("service_orders").select("*, consultants(short_name), framework_agreements(framework_agreement_no)").order("so_number");
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, so_number: i.so_number || "", consultant_name: i.consultants?.short_name || "",
+        framework_no: i.framework_agreements?.framework_agreement_no || "",
+        so_start_date: i.so_start_date || "", so_end_date: i.so_end_date || "",
+        so_value: i.so_value != null ? String(i.so_value) : "", comments: i.comments || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const fw = rec.framework_no ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === rec.framework_no.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("service_orders").insert({
+        so_number: rec.so_number.trim(), consultant_id: consultant.id, framework_id: fw?.id || null,
+        so_start_date: parseImportDate(rec.so_start_date), so_end_date: parseImportDate(rec.so_end_date),
+        so_value: rec.so_value ? parseFloat(rec.so_value) : null, comments: rec.comments?.trim() || null,
+      } as TablesInsert<"service_orders">);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const fw = rec.framework_no ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === rec.framework_no.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("service_orders").update({
+        so_number: rec.so_number.trim(), consultant_id: consultant.id, framework_id: fw?.id || null,
+        so_start_date: parseImportDate(rec.so_start_date), so_end_date: parseImportDate(rec.so_end_date),
+        so_value: rec.so_value ? parseFloat(rec.so_value) : null, comments: rec.comments?.trim() || null,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["service_orders"] }); },
+  }), [consultants, frameworks, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
