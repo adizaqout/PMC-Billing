@@ -179,6 +179,49 @@ export default function ProjectsPage() {
     toast.success("Template downloaded");
   };
 
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Projects",
+    columns: importColumns,
+    businessKeys: ["project_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("projects").select("*").order("project_name");
+      if (error) throw error;
+      return (data || []).map((p: any) => ({
+        _id: p.id, project_number: p.project_number || "", project_name: p.project_name || "",
+        entity: p.entity || "", portfolio: p.portfolio || "", project_type: p.project_type || "",
+        classification: p.classification || "",
+        start_date: p.start_date || "", end_date: p.end_date || "",
+        latest_budget: p.latest_budget != null ? String(p.latest_budget) : "",
+        latest_pmc_budget: p.latest_pmc_budget != null ? String(p.latest_pmc_budget) : "",
+        status: p.status || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const { error } = await supabase.from("projects").insert({
+        project_number: rec.project_number?.trim() || null, project_name: rec.project_name.trim(),
+        entity: rec.entity?.trim() || null, portfolio: rec.portfolio?.trim() || null,
+        project_type: rec.project_type?.trim() || null, classification: rec.classification?.trim() || null,
+        start_date: excelDateToISO(rec.start_date), end_date: excelDateToISO(rec.end_date),
+        latest_budget: rec.latest_budget ? parseFloat(rec.latest_budget) : null,
+        latest_pmc_budget: rec.latest_pmc_budget ? parseFloat(rec.latest_pmc_budget) : null,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      } as ProjectInsert);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const { error } = await supabase.from("projects").update({
+        project_number: rec.project_number?.trim() || null, project_name: rec.project_name.trim(),
+        entity: rec.entity?.trim() || null, portfolio: rec.portfolio?.trim() || null,
+        project_type: rec.project_type?.trim() || null, classification: rec.classification?.trim() || null,
+        start_date: excelDateToISO(rec.start_date), end_date: excelDateToISO(rec.end_date),
+        latest_budget: rec.latest_budget ? parseFloat(rec.latest_budget) : null,
+        latest_pmc_budget: rec.latest_pmc_budget ? parseFloat(rec.latest_pmc_budget) : null,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["projects"] }); },
+  }), [queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
