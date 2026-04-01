@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
+import CurrencyInput from "@/components/CurrencyInput";
 import ExcelToolbar from "@/components/ExcelToolbar";
 import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import TablePagination from "@/components/TablePagination";
