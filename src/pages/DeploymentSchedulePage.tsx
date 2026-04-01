@@ -91,11 +91,6 @@ export default function DeploymentSchedulePage() {
   const [reviewComment, setReviewComment] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
   const [subSearch, setSubSearch] = useState("");
-  // Import error correction state
-  const [importErrors, setImportErrors] = useState<DistinctImportError[]>([]);
-  const [importErrorDialogOpen, setImportErrorDialogOpen] = useState(false);
-  const [pendingImportData, setPendingImportData] = useState<string[][] | null>(null);
-  const [importBanner, setImportBanner] = useState<{ rows: number; employees: number; positions: number } | null>(null);
   const [subColFilters, setSubColFilters] = useState<Record<string, string>>({});
   const setSubColFilter = (key: string, value: string) => setSubColFilters(prev => ({ ...prev, [key]: value }));
   const subTableCols: ColumnDef[] = [
