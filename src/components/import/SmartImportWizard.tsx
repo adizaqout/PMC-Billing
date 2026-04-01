@@ -33,11 +33,11 @@ function mapHeaders(headerRow: string[], columns: ImportColumnDef[]): Map<string
   return map;
 }
 
-function parseRows(rawRows: string[][], columns: ImportColumnDef[], headerMap: Map<string, number>): ImportRecord[] {
+function parseRows(rawRows: string[][], columns: ImportColumnDef[], headerMap: Map<string, number>, config: SmartImportConfig): ImportRecord[] {
   const records: ImportRecord[] = [];
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i];
-    const values: Record<string, string> = {};
+    let values: Record<string, string> = {};
     let hasAnyValue = false;
     for (const col of columns) {
       const idx = headerMap.get(col.key);
@@ -46,13 +46,23 @@ function parseRows(rawRows: string[][], columns: ImportColumnDef[], headerMap: M
       if (val) hasAnyValue = true;
     }
     if (!hasAnyValue) continue;
+    // Apply optional value transformation
+    if (config.transformValues) {
+      values = config.transformValues(values);
+    }
     const validationErrors: Record<string, string> = {};
     for (const col of columns) {
       if (col.required && !values[col.key]) {
         validationErrors[col.key] = `${col.header} is required`;
       }
     }
-    records.push({ rowIndex: i + 1, values, validationErrors });
+    const record: ImportRecord = { rowIndex: i + 1, values, validationErrors };
+    // Apply optional custom validation
+    if (config.customValidate) {
+      const customErrors = config.customValidate(record);
+      Object.assign(record.validationErrors, customErrors);
+    }
+    records.push(record);
   }
   return records;
 }
