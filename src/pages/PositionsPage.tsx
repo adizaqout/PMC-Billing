@@ -29,6 +29,33 @@ const emptyForm: PosForm = { position_id: "", position_name: "", consultant_id: 
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+const posImportColumns: ImportColumnDef[] = [
+  { header: "Position ID", key: "position_id" },
+  { header: "Position Name", key: "position_name", required: true },
+  { header: "Function", key: "function" },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Service Order", key: "so_number" },
+  { header: "Exp (Yrs)", key: "total_years_of_exp", type: "number" },
+  { header: "Year 1 Rate", key: "year_1_rate", type: "number", aliases: ["Y1 Rate"] },
+  { header: "Year 2 Rate", key: "year_2_rate", type: "number", aliases: ["Y2 Rate"] },
+  { header: "Year 3 Rate", key: "year_3_rate", type: "number", aliases: ["Y3 Rate"] },
+  { header: "Year 4 Rate", key: "year_4_rate", type: "number", aliases: ["Y4 Rate"] },
+  { header: "Year 5 Rate", key: "year_5_rate", type: "number", aliases: ["Y5 Rate"] },
+  { header: "Effective From", key: "effective_from", type: "date", aliases: ["From"] },
+  { header: "Effective To", key: "effective_to", type: "date", aliases: ["To"] },
+  { header: "Notes", key: "notes" },
+];
+
 const exportCols = [
   { header: "Position ID", key: "position_id", width: 14 },
   { header: "System ID", key: "system_id", width: 18 },
