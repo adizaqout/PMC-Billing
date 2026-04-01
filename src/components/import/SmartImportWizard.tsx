@@ -218,14 +218,19 @@ export default function SmartImportWizard({ config }: Props) {
     setRecords(prev => prev.map(r => {
       if (r.rowIndex !== rowIndex) return r;
       const newValues = { ...r.values, [key]: value };
-      const newErrors = { ...r.validationErrors };
-      const col = config.columns.find(c => c.key === key);
-      if (col?.required && !value.trim()) {
-        newErrors[key] = `${col.header} is required`;
-      } else {
-        delete newErrors[key];
+      // Re-run basic validation
+      const newErrors: Record<string, string> = {};
+      for (const col of config.columns) {
+        if (col.required && !newValues[col.key]?.trim()) {
+          newErrors[col.key] = `${col.header} is required`;
+        }
       }
-      return { ...r, values: newValues, validationErrors: newErrors };
+      // Re-run custom validation
+      const updatedRecord = { ...r, values: newValues, validationErrors: newErrors };
+      if (config.customValidate) {
+        Object.assign(updatedRecord.validationErrors, config.customValidate(updatedRecord));
+      }
+      return updatedRecord;
     }));
   };
 
