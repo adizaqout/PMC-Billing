@@ -409,13 +409,15 @@ export default function DeploymentSchedulePage() {
       });
       // Extract position from notes for rows without matched employees
       const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
+      // Take max man_months across all lines in the group (they should be equal but legacy data may differ)
+      const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
       return {
         _key: newRowKey(),
         month: monthFromNotes || selectedSubmission?.month || first.submission_id,
         employee_id: empId,
         position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
-        rate_year: (first as any).rate_year || 1,
-        man_months: (first as any).man_months ?? 0,
+        rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
+        man_months: maxManMonths,
         so_id: first.so_id || "",
         po_id: first.po_id || "",
         allocations,
