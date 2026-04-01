@@ -100,28 +100,6 @@ export default function FrameworkAgreementsPage() {
 
   const handleExport = () => { exportToExcel("framework-agreements.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("fa-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
-  const handleImportWithProgress = useCallback(async (
-    rows: string[][], onProgress: (p: ImportProgress) => void
-  ): Promise<ImportProgress> => {
-    const total = rows.length - 1;
-    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
-    for (let i = 1; i < rows.length; i++) {
-      const [faNo, consultantName, startDate, endDate, status] = rows[i];
-      if (!faNo?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName?.trim()?.toLowerCase());
-      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
-      const { error } = await supabase.from("framework_agreements").insert({
-        framework_agreement_no: faNo.trim(), consultant_id: consultant.id,
-        start_date: startDate?.trim() || null, end_date: endDate?.trim() || null,
-        status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-      } as FAInsert);
-      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
-      result.processed++;
-      onProgress({ ...result });
-    }
-    return result;
-  }, [consultants]);
-  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["framework_agreements"] }); }, [queryClient]);
 
   return (
     <AppLayout>
