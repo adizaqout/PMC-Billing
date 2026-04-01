@@ -135,7 +135,7 @@ export default function SmartImportWizard({ config }: Props) {
       const rawRows = await parseExcelFile(file);
       if (rawRows.length < 2) { toast.error("File is empty"); setIsProcessing(false); return; }
       const headerMap = mapHeaders(rawRows[0], config.columns);
-      const parsed = parseRows(rawRows, config.columns, headerMap);
+      const parsed = parseRows(rawRows, config.columns, headerMap, config);
       if (parsed.length === 0) { toast.error("No valid rows found"); setIsProcessing(false); return; }
       setRecords(parsed);
       const hasErrors = parsed.some(r => Object.keys(r.validationErrors).length > 0);
