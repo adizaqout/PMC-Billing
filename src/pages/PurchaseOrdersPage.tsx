@@ -30,6 +30,32 @@ const emptyForm: POForm = { po_number: "", consultant_id: "", so_id: null, po_re
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+const poImportColumns: ImportColumnDef[] = [
+  { header: "PO Number", key: "po_number", required: true },
+  { header: "Revision No.", key: "revision_number", type: "number" },
+  { header: "PO Line Item", key: "po_reference" },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Service Order", key: "so_number" },
+  { header: "Project Number", key: "project_number" },
+  { header: "Project Name", key: "project_name" },
+  { header: "Start Date", key: "po_start_date", type: "date" },
+  { header: "End Date", key: "po_end_date", type: "date" },
+  { header: "Amount (AED)", key: "po_value", type: "number" },
+  { header: "Portfolio", key: "portfolio" },
+  { header: "Type", key: "type" },
+  { header: "Status", key: "status" },
+];
+
 const cols = [
   { header: "PO Number", key: "po_number", width: 18 },
   { header: "Revision No.", key: "revision_number", width: 10 },
