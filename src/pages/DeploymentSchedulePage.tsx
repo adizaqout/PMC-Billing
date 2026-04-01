@@ -178,6 +178,18 @@ export default function DeploymentSchedulePage() {
     enabled: !!consultantId,
   });
 
+  // All employees (any status) for import validation — so "pending" employees are also recognized
+  const { data: allEmployees = [] } = useQuery({
+    queryKey: ["deployment-all-employees", consultantId],
+    queryFn: async () => {
+      if (!consultantId) return [];
+      const { data, error } = await supabase.from("employees").select("*, positions(position_name)").eq("consultant_id", consultantId).order("employee_name");
+      if (error) throw error;
+      return data as Employee[];
+    },
+    enabled: !!consultantId,
+  });
+
   const { data: positions = [] } = useQuery({
     queryKey: ["deployment-positions", consultantId],
     queryFn: async () => {
@@ -876,7 +888,7 @@ export default function DeploymentSchedulePage() {
         const errors: Record<string, string> = {};
         const empId = record.values.employee_id?.trim();
         if (empId) {
-          const emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empId.toLowerCase());
+          const emp = allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empId.toLowerCase());
           if (!emp) errors.employee_id = `Employee ID "${empId}" not found`;
         }
         const posId = record.values.position_id?.trim();
@@ -965,12 +977,12 @@ export default function DeploymentSchedulePage() {
         }
       },
     };
-  }, [selectedSubmission, scheduleType, employees, positions, projectColumns, rows, poItemByProject, poByItem]);
+  }, [selectedSubmission, scheduleType, allEmployees, employees, positions, projectColumns, rows, poItemByProject, poByItem]);
 
   const insertDeploymentRow = async (rec: Record<string, string>): Promise<string | null> => {
     if (!selectedSubmission) return "No submission selected";
     const empIdCode = rec.employee_id?.trim();
-    const emp = empIdCode ? employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
+    const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
     const posIdCode = rec.position_id?.trim();
     const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
     const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
