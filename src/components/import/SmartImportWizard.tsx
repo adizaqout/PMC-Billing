@@ -190,25 +190,63 @@ export default function SmartImportWizard({ config }: Props) {
 
   const activeActions = useMemo(() => actions.filter(a => a.type !== "skip"), [actions]);
 
-  // Step 5: Execute
+  // Step 5: Execute (batch-aware)
   const handleExecute = async () => {
     setStage("executing");
-    const total = activeActions.length;
+    const inserts = activeActions.filter(a => a.type === "insert");
+    const updates = activeActions.filter(a => a.type === "update" && a.existingId);
+    const total = inserts.length + updates.length;
     const prog = { total, done: 0, created: 0, updated: 0, errors: [] as { row: number; message: string }[] };
     setProgress(prog);
-    for (const action of activeActions) {
-      let err: string | null = null;
-      if (action.type === "insert") {
-        err = await config.executeInsert(action.record.values);
-        if (!err) prog.created++;
-      } else if (action.type === "update" && action.existingId) {
-        err = await config.executeUpdate(action.existingId, action.record.values);
-        if (!err) prog.updated++;
+
+    const CHUNK = 200;
+
+    // Batch inserts
+    if (inserts.length > 0 && config.executeBatchInsert) {
+      for (let i = 0; i < inserts.length; i += CHUNK) {
+        const chunk = inserts.slice(i, i + CHUNK);
+        const errs = await config.executeBatchInsert(chunk.map(a => a.record.values));
+        for (const e of errs) {
+          prog.errors.push({ row: chunk[e.index]?.record.rowIndex ?? 0, message: e.message });
+        }
+        prog.created += chunk.length - errs.length;
+        prog.done += chunk.length;
+        setProgress({ ...prog });
       }
-      if (err) prog.errors.push({ row: action.record.rowIndex, message: err });
-      prog.done++;
-      setProgress({ ...prog });
+    } else {
+      for (const action of inserts) {
+        const err = await config.executeInsert(action.record.values);
+        if (err) prog.errors.push({ row: action.record.rowIndex, message: err });
+        else prog.created++;
+        prog.done++;
+        setProgress({ ...prog });
+      }
     }
+
+    // Batch updates
+    if (updates.length > 0 && config.executeBatchUpdate) {
+      for (let i = 0; i < updates.length; i += CHUNK) {
+        const chunk = updates.slice(i, i + CHUNK);
+        const errs = await config.executeBatchUpdate(
+          chunk.map(a => ({ existingId: a.existingId!, record: a.record.values }))
+        );
+        for (const e of errs) {
+          prog.errors.push({ row: chunk[e.index]?.record.rowIndex ?? 0, message: e.message });
+        }
+        prog.updated += chunk.length - errs.length;
+        prog.done += chunk.length;
+        setProgress({ ...prog });
+      }
+    } else {
+      for (const action of updates) {
+        const err = await config.executeUpdate(action.existingId!, action.record.values);
+        if (err) prog.errors.push({ row: action.record.rowIndex, message: err });
+        else prog.updated++;
+        prog.done++;
+        setProgress({ ...prog });
+      }
+    }
+
     setStage("done");
     config.onComplete();
   };
