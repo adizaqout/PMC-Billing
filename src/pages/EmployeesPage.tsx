@@ -58,7 +58,7 @@ const excelCols = [
 
 const importColumns: ImportColumnDef[] = [
   { header: "Employee ID", key: "employee_id", required: true },
-  { header: "Employee Name", key: "employee_name", required: true },
+  { header: "Employee Name", key: "employee_name" },
   { header: "Consultant", key: "consultant_name", required: true },
   { header: "Position ID", key: "position_id_code" },
   { header: "Position Name", key: "position_name" },
