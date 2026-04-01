@@ -1337,18 +1337,6 @@ export default function DeploymentSchedulePage() {
           </div>
         </div>
 
-        {/* Import Error Correction Dialog */}
-        <ImportErrorCorrectionDialog
-          open={importErrorDialogOpen}
-          errors={importErrors}
-          consultantId={consultantId}
-          totalImportRows={(pendingImportData?.slice(1).filter((r) => r[0] && !String(r[0]).startsWith("---")).length) ?? 0}
-          positions={positions.map(p => ({ id: p.id, position_id: p.position_id, position_name: p.position_name, consultant_id: p.consultant_id }))}
-          serviceOrders={serviceOrders.map(s => ({ id: s.id, so_number: s.so_number }))}
-          onErrorResolved={handleErrorResolved}
-          onCancelImport={handleCancelImport}
-          onRetryImport={handleRetryImport}
-        />
       </AppLayout>
     );
   }
