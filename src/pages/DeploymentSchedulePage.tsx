@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -45,7 +45,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import ImportErrorCorrectionDialog, { type DistinctImportError } from "@/components/ImportErrorCorrectionDialog";
+import type { SmartImportConfig, ImportColumnDef, ImportRecord } from "@/components/import/types";
 
 type Submission = Tables<"deployment_submissions"> & { consultants?: { short_name: string } | null };
 type DeploymentLine = Tables<"deployment_lines">;
