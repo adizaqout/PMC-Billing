@@ -857,6 +857,51 @@ export default function DeploymentSchedulePage() {
     return raw;
   };
 
+  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string) => {
+    const empIdCode = rec.employee_id?.trim();
+    const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
+    const posIdCode = rec.position_id?.trim();
+    const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+    const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
+    const manMonths = parseFloat(rec.man_months || "") || 0;
+    const rowMonth = rec.month || "";
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const posId = pos?.id || "";
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
+
+    const projEntries: [string, number][] = [];
+    projectColumns.forEach(p => {
+      const val = parseFloat(rec[`proj_${p.id}`] || "") || 0;
+      if (val > 0) projEntries.push([p.id, val]);
+    });
+
+    const lines: any[] = [];
+    if (projEntries.length === 0) {
+      lines.push({
+        submission_id: submissionId,
+        employee_id: emp?.id || null,
+        worked_project_id: null, billed_project_id: null,
+        po_id: null, po_item_id: null, so_id: null,
+        allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
+        notes: groupNote,
+      });
+    } else {
+      projEntries.forEach(([projId, pct]) => {
+        const poItemId = poItemByProject[projId] || null;
+        const poId = poItemId ? (poByItem[poItemId] || null) : null;
+        lines.push({
+          submission_id: submissionId,
+          employee_id: emp?.id || null,
+          worked_project_id: projId, billed_project_id: projId,
+          po_id: poId, po_item_id: poItemId, so_id: null,
+          allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
+          notes: groupNote,
+        });
+      });
+    }
+    return lines;
+  };
+
   const deploymentSmartImportConfig: SmartImportConfig | undefined = useMemo(() => {
     if (!selectedSubmission) return undefined;
     const isBaseline = scheduleType === "baseline";
