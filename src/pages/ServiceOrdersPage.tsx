@@ -108,7 +108,7 @@ export default function ServiceOrdersPage() {
         <div className="page-header">
           <div><h1 className="page-title">Service Orders</h1><p className="page-subtitle">Track service orders per consultant</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
             <ColumnVisibilityToggle columns={soTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Service Order</Button>
           </div>
