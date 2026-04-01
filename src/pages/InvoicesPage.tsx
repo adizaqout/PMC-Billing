@@ -273,35 +273,6 @@ export default function InvoicesPage() {
 
   const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
 
-  const handleImportWithProgress = useCallback(async (
-    rows: string[][], onProgress: (p: ImportProgress) => void
-  ): Promise<ImportProgress> => {
-    const total = rows.length - 1;
-    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
-    for (let i = 1; i < rows.length; i++) {
-      const [invNum, month, consultantName, poNum, rev, lineRef, , billed, , paid, status, desc] = rows[i];
-      if (!invNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName?.trim()?.toLowerCase());
-      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
-      const po = poNum ? allPOs.find(p =>
-        p.po_number === String(poNum).trim() &&
-        (p.revision_number ?? 0) === (rev ? parseInt(String(rev)) : 0) &&
-        p.consultant_id === consultant.id
-      ) : null;
-      const safeTrim = (v: any) => v == null ? "" : String(v).trim();
-      const { error } = await supabase.from("invoices").insert({
-        invoice_number: safeTrim(invNum), invoice_month: safeTrim(month), consultant_id: consultant.id, po_id: po?.id || null,
-        billed_amount_no_vat: billed ? parseFloat(String(billed)) : null, paid_amount: paid ? parseFloat(String(paid)) : null,
-        status: (["paid", "cancelled"].includes(safeTrim(status).toLowerCase()) ? safeTrim(status).toLowerCase() : "pending") as any,
-        description: safeTrim(desc) || null,
-      } as TablesInsert<"invoices">);
-      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
-      result.processed++;
-      onProgress({ ...result });
-    }
-    return result;
-  }, [consultants, allPOs]);
-  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); }, [queryClient]);
 
   return (
     <AppLayout>
@@ -309,7 +280,7 @@ export default function InvoicesPage() {
         <div className="page-header">
           <div><h1 className="page-title">Invoices</h1><p className="page-subtitle">Track and validate invoices</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
             <ColumnVisibilityToggle columns={invTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Invoice</Button>
           </div>

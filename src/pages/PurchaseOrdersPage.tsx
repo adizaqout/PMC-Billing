@@ -124,44 +124,6 @@ export default function PurchaseOrdersPage() {
 
   const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("po-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
-  const handleImportWithProgress = useCallback(async (
-    rows: string[][], onProgress: (p: ImportProgress) => void
-  ): Promise<ImportProgress> => {
-    const total = rows.length - 1;
-    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
-    for (let i = 1; i < rows.length; i++) {
-      const raw = rows[i];
-      const str = (v: any) => v == null ? "" : String(v).trim();
-      const padded = Array.from({ length: 13 }, (_, idx) => str(raw[idx]));
-      const [poNum, rev, poRef, consultantName, soNum, projNum, projName, startDate, endDate, amount, portfolio, type, status] = padded;
-      if (!poNum) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName.toLowerCase());
-      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
-      const so = soNum ? allServiceOrders.find(s => s.so_number.toLowerCase() === soNum.toLowerCase() && s.consultant_id === consultant.id) : null;
-      const project = projNum ? allProjects.find(p => p.project_number?.toLowerCase() === projNum.toLowerCase()) : null;
-      const excelDateToISO = (v: any): string | null => {
-        if (v == null || String(v).trim() === "") return null;
-        const s = String(v).trim();
-        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-        const n = Number(s);
-        if (!isNaN(n) && n > 0) { const d = new Date(Math.round((n - 25569) * 86400000)); return d.toISOString().slice(0, 10); }
-        const parsed = new Date(s);
-        return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
-      };
-      const { error } = await supabase.from("purchase_orders").insert({
-        po_number: poNum, consultant_id: consultant.id, so_id: so?.id || null,
-        po_reference: poRef || null, po_start_date: excelDateToISO(startDate), po_end_date: excelDateToISO(endDate),
-        po_value: amount ? parseFloat(amount) : null, portfolio: portfolio || null, type: type || null,
-        revision_number: rev ? parseInt(rev) : 0, status: (status.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-        project_id: project?.id || null,
-      } as TablesInsert<"purchase_orders">);
-      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
-      result.processed++;
-      onProgress({ ...result });
-    }
-    return result;
-  }, [consultants, allServiceOrders, allProjects]);
-  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["purchase_orders"] }); }, [queryClient]);
 
   return (
     <AppLayout>
@@ -169,7 +131,7 @@ export default function PurchaseOrdersPage() {
         <div className="page-header">
           <div><h1 className="page-title">Purchase Orders</h1><p className="page-subtitle">Manage POs and PO line items</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
             <ColumnVisibilityToggle columns={poTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add PO</Button>
           </div>
