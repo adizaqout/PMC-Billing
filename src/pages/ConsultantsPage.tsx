@@ -58,8 +58,12 @@ export default function ConsultantsPage() {
   const [editing, setEditing] = useState<Consultant | null>(null);
   const [form, setForm] = useState<Partial<ConsultantInsert>>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const [deleteTarget, setDeleteTarget] = useState<Consultant | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { visibleColumns, setVisibleColumns } = useColumnVisibility(tableCols);
   const queryClient = useQueryClient();
+  const { isSuperAdmin, roles } = useAuth();
+  const isAdmin = isSuperAdmin || roles.includes("admin");
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
   const v = (key: string) => visibleColumns.has(key);
