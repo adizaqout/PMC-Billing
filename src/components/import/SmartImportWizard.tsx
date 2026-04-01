@@ -341,7 +341,7 @@ export default function SmartImportWizard({ config }: Props) {
                   <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setAllConflictResolutions("import")}>Replace All with New</Button>
                 </div>
               </div>
-              <ScrollArea className="max-h-[50vh] border rounded-md">
+              <div className="max-h-[50vh] overflow-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -387,7 +387,7 @@ export default function SmartImportWizard({ config }: Props) {
                     ))}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
               <DialogFooter className="mt-3">
                 <Button variant="outline" onClick={() => setStage("validate")}><ArrowLeft size={14} className="mr-1.5" />Back</Button>
                 <Button onClick={handleConflictsNext}><ArrowRight size={14} className="mr-1.5" />Next: Preview</Button>
