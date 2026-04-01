@@ -291,7 +291,7 @@ export default function SmartImportWizard({ config }: Props) {
                 <Badge variant="destructive">{validationErrorRecords.length} row(s) with errors</Badge>
                 <span className="text-xs text-muted-foreground">Fix the highlighted fields below</span>
               </div>
-              <ScrollArea className="flex-1 min-h-0 border rounded-md">
+              <ScrollArea className="max-h-[50vh] border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
