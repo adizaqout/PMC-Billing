@@ -247,7 +247,7 @@ export default function SmartImportWizard({ config }: Props) {
       </Button>
 
       <Dialog open={open} onOpenChange={(v) => { if (!v && stage !== "executing") handleClose(); }}>
-        <DialogContent className={stage === "validate" || stage === "conflicts" || stage === "preview" ? "sm:max-w-4xl max-h-[85vh] flex flex-col overflow-hidden" : "sm:max-w-md"}>
+        <DialogContent className={stage === "validate" || stage === "conflicts" || stage === "preview" ? "sm:max-w-4xl h-[85vh] max-h-[85vh] !flex !flex-col overflow-hidden" : "sm:max-w-md"}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet size={18} />
@@ -291,7 +291,7 @@ export default function SmartImportWizard({ config }: Props) {
                 <Badge variant="destructive">{validationErrorRecords.length} row(s) with errors</Badge>
                 <span className="text-xs text-muted-foreground">Fix the highlighted fields below</span>
               </div>
-              <ScrollArea className="max-h-[50vh] border rounded-md">
+              <div className="max-h-[50vh] overflow-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -319,7 +319,7 @@ export default function SmartImportWizard({ config }: Props) {
                     ))}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
               <DialogFooter className="mt-3">
                 <Button variant="outline" onClick={() => setStage("upload")}><ArrowLeft size={14} className="mr-1.5" />Back</Button>
                 <Button onClick={handleValidationNext} disabled={isProcessing}>
@@ -341,7 +341,7 @@ export default function SmartImportWizard({ config }: Props) {
                   <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setAllConflictResolutions("import")}>Replace All with New</Button>
                 </div>
               </div>
-              <ScrollArea className="max-h-[50vh] border rounded-md">
+              <div className="max-h-[50vh] overflow-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -387,7 +387,7 @@ export default function SmartImportWizard({ config }: Props) {
                     ))}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
               <DialogFooter className="mt-3">
                 <Button variant="outline" onClick={() => setStage("validate")}><ArrowLeft size={14} className="mr-1.5" />Back</Button>
                 <Button onClick={handleConflictsNext}><ArrowRight size={14} className="mr-1.5" />Next: Preview</Button>
@@ -413,7 +413,7 @@ export default function SmartImportWizard({ config }: Props) {
                 </div>
               </div>
               {activeActions.length > 0 && (
-                <ScrollArea className="max-h-[50vh] border rounded-md">
+                <div className="max-h-[50vh] overflow-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -440,7 +440,7 @@ export default function SmartImportWizard({ config }: Props) {
                       ))}
                     </TableBody>
                   </Table>
-                </ScrollArea>
+                </div>
               )}
               {activeActions.length === 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">No changes to apply. All conflicts resolved to keep existing records.</div>
