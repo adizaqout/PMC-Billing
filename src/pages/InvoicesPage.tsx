@@ -41,6 +41,18 @@ interface InvoiceForm {
 const emptyForm: InvoiceForm = { invoice_number: "", invoice_month: "", consultant_id: "", po_id: null, billed_amount_no_vat: null, paid_amount: null, status: "pending", description: null, _po_key: "" };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(v) : "—";
 
+const invImportColumns: ImportColumnDef[] = [
+  { header: "Invoice Number", key: "invoice_number", required: true },
+  { header: "Month", key: "invoice_month", required: true },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "PO Number", key: "po_number" },
+  { header: "Rev", key: "po_revision", type: "number" },
+  { header: "Billed (excl VAT)", key: "billed_amount_no_vat", type: "number" },
+  { header: "Paid Amount", key: "paid_amount", type: "number" },
+  { header: "Status", key: "status" },
+  { header: "Description", key: "description" },
+];
+
 const cols = [
   { header: "Invoice Number", key: "invoice_number", width: 18 },
   { header: "Month", key: "invoice_month", width: 12 },
