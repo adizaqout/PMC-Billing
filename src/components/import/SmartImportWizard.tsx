@@ -291,7 +291,7 @@ export default function SmartImportWizard({ config }: Props) {
                 <Badge variant="destructive">{validationErrorRecords.length} row(s) with errors</Badge>
                 <span className="text-xs text-muted-foreground">Fix the highlighted fields below</span>
               </div>
-              <ScrollArea className="max-h-[50vh] border rounded-md">
+              <div className="max-h-[50vh] overflow-auto rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -319,7 +319,7 @@ export default function SmartImportWizard({ config }: Props) {
                     ))}
                   </TableBody>
                 </Table>
-              </ScrollArea>
+              </div>
               <DialogFooter className="mt-3">
                 <Button variant="outline" onClick={() => setStage("upload")}><ArrowLeft size={14} className="mr-1.5" />Back</Button>
                 <Button onClick={handleValidationNext} disabled={isProcessing}>
