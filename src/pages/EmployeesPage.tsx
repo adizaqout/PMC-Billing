@@ -184,15 +184,17 @@ export default function EmployeesPage() {
       if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
       const posIdStr = rec.position_id_code?.trim() || "";
       const pos = posIdStr ? allPositions.find(p => p.position_id.toLowerCase() === posIdStr.toLowerCase() && p.consultant_id === consultant.id) : null;
+      const nameUpd = rec.employee_name?.trim() || "";
+      const isTbaUpd = !nameUpd;
       const { error } = await supabase.from("employees").update({
         employee_id: rec.employee_id?.trim() || null,
-        employee_name: rec.employee_name?.trim() || "",
+        employee_name: isTbaUpd ? "TBA" : nameUpd,
         consultant_id: consultant.id,
         position_id: pos?.id || null,
         experience_years: rec.experience_years ? parseInt(rec.experience_years) : null,
-        start_date: parseImportDate(rec.start_date),
-        end_date: parseImportDate(rec.end_date),
-        status: rec.status?.trim()?.toLowerCase() || "active",
+        start_date: isTbaUpd ? null : parseImportDate(rec.start_date),
+        end_date: isTbaUpd ? null : parseImportDate(rec.end_date),
+        status: isTbaUpd ? "pending" : (rec.status?.trim()?.toLowerCase() || "active"),
       }).eq("id", id);
       return error?.message || null;
     },
