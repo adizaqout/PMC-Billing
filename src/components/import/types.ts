@@ -56,4 +56,14 @@ export interface SmartImportConfig {
   executeUpdate: (existingId: string, record: Record<string, string>) => Promise<string | null>;
   /** Called after import completes to refresh data */
   onComplete: () => void;
+  /**
+   * Optional: transform raw parsed values (e.g. normalize dates).
+   * Called after parsing, before validation and conflict detection.
+   */
+  transformValues?: (values: Record<string, string>) => Record<string, string>;
+  /**
+   * Optional: return additional validation errors beyond required-field checks.
+   * Called per record after basic validation.
+   */
+  customValidate?: (record: ImportRecord) => Record<string, string>;
 }

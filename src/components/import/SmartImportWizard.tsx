@@ -33,11 +33,11 @@ function mapHeaders(headerRow: string[], columns: ImportColumnDef[]): Map<string
   return map;
 }
 
-function parseRows(rawRows: string[][], columns: ImportColumnDef[], headerMap: Map<string, number>): ImportRecord[] {
+function parseRows(rawRows: string[][], columns: ImportColumnDef[], headerMap: Map<string, number>, config: SmartImportConfig): ImportRecord[] {
   const records: ImportRecord[] = [];
   for (let i = 1; i < rawRows.length; i++) {
     const row = rawRows[i];
-    const values: Record<string, string> = {};
+    let values: Record<string, string> = {};
     let hasAnyValue = false;
     for (const col of columns) {
       const idx = headerMap.get(col.key);
@@ -46,13 +46,23 @@ function parseRows(rawRows: string[][], columns: ImportColumnDef[], headerMap: M
       if (val) hasAnyValue = true;
     }
     if (!hasAnyValue) continue;
+    // Apply optional value transformation
+    if (config.transformValues) {
+      values = config.transformValues(values);
+    }
     const validationErrors: Record<string, string> = {};
     for (const col of columns) {
       if (col.required && !values[col.key]) {
         validationErrors[col.key] = `${col.header} is required`;
       }
     }
-    records.push({ rowIndex: i + 1, values, validationErrors });
+    const record: ImportRecord = { rowIndex: i + 1, values, validationErrors };
+    // Apply optional custom validation
+    if (config.customValidate) {
+      const customErrors = config.customValidate(record);
+      Object.assign(record.validationErrors, customErrors);
+    }
+    records.push(record);
   }
   return records;
 }
@@ -125,7 +135,7 @@ export default function SmartImportWizard({ config }: Props) {
       const rawRows = await parseExcelFile(file);
       if (rawRows.length < 2) { toast.error("File is empty"); setIsProcessing(false); return; }
       const headerMap = mapHeaders(rawRows[0], config.columns);
-      const parsed = parseRows(rawRows, config.columns, headerMap);
+      const parsed = parseRows(rawRows, config.columns, headerMap, config);
       if (parsed.length === 0) { toast.error("No valid rows found"); setIsProcessing(false); return; }
       setRecords(parsed);
       const hasErrors = parsed.some(r => Object.keys(r.validationErrors).length > 0);
@@ -208,14 +218,19 @@ export default function SmartImportWizard({ config }: Props) {
     setRecords(prev => prev.map(r => {
       if (r.rowIndex !== rowIndex) return r;
       const newValues = { ...r.values, [key]: value };
-      const newErrors = { ...r.validationErrors };
-      const col = config.columns.find(c => c.key === key);
-      if (col?.required && !value.trim()) {
-        newErrors[key] = `${col.header} is required`;
-      } else {
-        delete newErrors[key];
+      // Re-run basic validation
+      const newErrors: Record<string, string> = {};
+      for (const col of config.columns) {
+        if (col.required && !newValues[col.key]?.trim()) {
+          newErrors[col.key] = `${col.header} is required`;
+        }
       }
-      return { ...r, values: newValues, validationErrors: newErrors };
+      // Re-run custom validation
+      const updatedRecord = { ...r, values: newValues, validationErrors: newErrors };
+      if (config.customValidate) {
+        Object.assign(updatedRecord.validationErrors, config.customValidate(updatedRecord));
+      }
+      return updatedRecord;
     }));
   };
 
