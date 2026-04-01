@@ -151,6 +151,59 @@ export default function PurchaseOrdersPage() {
   const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("po-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Purchase Orders",
+    columns: poImportColumns,
+    businessKeys: ["po_number", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("purchase_orders").select("*, consultants(short_name), service_orders(so_number), projects(project_name, project_number)").order("po_number");
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, po_number: i.po_number || "", revision_number: i.revision_number != null ? String(i.revision_number) : "0",
+        po_reference: i.po_reference || "", consultant_name: i.consultants?.short_name || "",
+        so_number: i.service_orders?.so_number || "",
+        project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "",
+        po_start_date: i.po_start_date || "", po_end_date: i.po_end_date || "",
+        po_value: i.po_value != null ? String(i.po_value) : "",
+        portfolio: i.portfolio || "", type: i.type || "", status: i.status || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const so = rec.so_number ? allServiceOrders.find(s => s.so_number.toLowerCase() === rec.so_number.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+      const project = rec.project_number ? allProjects.find(p => p.project_number?.toLowerCase() === rec.project_number.trim().toLowerCase()) : null;
+      const { error } = await supabase.from("purchase_orders").insert({
+        po_number: rec.po_number.trim(), consultant_id: consultant.id, so_id: so?.id || null,
+        po_reference: rec.po_reference?.trim() || null,
+        po_start_date: parseImportDate(rec.po_start_date), po_end_date: parseImportDate(rec.po_end_date),
+        po_value: rec.po_value ? parseFloat(rec.po_value) : null,
+        portfolio: rec.portfolio?.trim() || null, type: rec.type?.trim() || null,
+        revision_number: rec.revision_number ? parseInt(rec.revision_number) : 0,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        project_id: project?.id || null,
+      } as TablesInsert<"purchase_orders">);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const so = rec.so_number ? allServiceOrders.find(s => s.so_number.toLowerCase() === rec.so_number.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+      const project = rec.project_number ? allProjects.find(p => p.project_number?.toLowerCase() === rec.project_number.trim().toLowerCase()) : null;
+      const { error } = await supabase.from("purchase_orders").update({
+        po_number: rec.po_number.trim(), consultant_id: consultant.id, so_id: so?.id || null,
+        po_reference: rec.po_reference?.trim() || null,
+        po_start_date: parseImportDate(rec.po_start_date), po_end_date: parseImportDate(rec.po_end_date),
+        po_value: rec.po_value ? parseFloat(rec.po_value) : null,
+        portfolio: rec.portfolio?.trim() || null, type: rec.type?.trim() || null,
+        revision_number: rec.revision_number ? parseInt(rec.revision_number) : 0,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        project_id: project?.id || null,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["purchase_orders"] }); },
+  }), [consultants, allServiceOrders, allProjects, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
