@@ -95,17 +95,30 @@ export default function ConsultantsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("consultants").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-consultant`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ consultant_id: deleteTarget.id }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Delete failed");
       queryClient.invalidateQueries({ queryKey: ["consultants"] });
-      toast.success("Consultant deleted");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+      toast.success(`Consultant "${deleteTarget.name}" and all linked data deleted`);
+      setDeleteTarget(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (c: Consultant) => {
