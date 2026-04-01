@@ -42,6 +42,20 @@ const excelDateToISO = (v: any): string | null => {
   return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 };
 
+const importColumns: ImportColumnDef[] = [
+  { header: "Project Number", key: "project_number" },
+  { header: "Project Name", key: "project_name", required: true },
+  { header: "Entity", key: "entity" },
+  { header: "Portfolio", key: "portfolio" },
+  { header: "Type", key: "project_type" },
+  { header: "Classification", key: "classification" },
+  { header: "Start Date", key: "start_date", type: "date" },
+  { header: "End Date", key: "end_date", type: "date" },
+  { header: "Latest Budget", key: "latest_budget", type: "number" },
+  { header: "PMC Budget", key: "latest_pmc_budget", type: "number" },
+  { header: "Status", key: "status" },
+];
+
 const columns = [
   { header: "Project Number", key: "project_number", width: 18 },
   { header: "Project Name", key: "project_name", width: 30 },
