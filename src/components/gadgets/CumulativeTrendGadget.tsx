@@ -91,6 +91,9 @@ export default function CumulativeTrendGadget({ onRemove, filterMonth, filterCon
     }
 
     function computeCost(line: typeof data.lines[0]) {
+      if (line.derived_cost != null && Number(line.derived_cost) !== 0) {
+        return Number(line.derived_cost);
+      }
       const positionId = line.employee_id ? employeePositionMap.get(line.employee_id) : undefined;
       const rate = getRate(positionId, line.rate_year);
       const pct = Number(line.allocation_pct || 0) / 100;

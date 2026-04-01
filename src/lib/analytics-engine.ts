@@ -342,7 +342,7 @@ export function buildAnalyticsModel(
     .map((project) => {
       const actual = actualByProject.get(project.id) || 0;
       const forecast = forecastCostByProject.get(project.id) || 0;
-      const budget = numeric(project.latest_pmc_budget || project.latest_budget);
+      const budget = numeric(project.latest_pmc_budget);
       const remaining = budget - actual;
       const remainingPct = budget > 0 ? (remaining / budget) * 100 : 0;
       const risk = computeRiskStatus(budget, actual, forecast, amberThreshold);
