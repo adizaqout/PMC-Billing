@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import AppLayout from "@/components/AppLayout";
+import CurrencyInput from "@/components/CurrencyInput";
 import StatusBadge from "@/components/StatusBadge";
 import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/components/ColumnVisibilityToggle";
 import ExcelToolbar from "@/components/ExcelToolbar";
@@ -422,8 +423,8 @@ export default function InvoicesPage() {
                   <div className="space-y-1.5"><Label>Billed To Date (AED)</Label><Input value={fmt(billedToDate)} disabled className="bg-muted font-semibold" /></div>
                 </>
               )}
-              <div className="space-y-1.5"><Label>Billed Amount (AED)</Label><Input type="number" step="0.01" value={form.billed_amount_no_vat ?? ""} onChange={(e) => setForm({ ...form, billed_amount_no_vat: e.target.value ? parseFloat(e.target.value) : null })} /></div>
-              <div className="space-y-1.5"><Label>Paid Amount (AED)</Label><Input type="number" step="0.01" value={form.paid_amount ?? ""} onChange={(e) => setForm({ ...form, paid_amount: e.target.value ? parseFloat(e.target.value) : null })} /></div>
+              <div className="space-y-1.5"><Label>Billed Amount (AED)</Label><CurrencyInput value={form.billed_amount_no_vat} onChange={(v) => setForm({ ...form, billed_amount_no_vat: v })} /></div>
+              <div className="space-y-1.5"><Label>Paid Amount (AED)</Label><CurrencyInput value={form.paid_amount} onChange={(v) => setForm({ ...form, paid_amount: v })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="pending">Pending</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select></div>
               <div className="col-span-2 space-y-1.5"><Label>Description</Label><Textarea value={form.description || ""} onChange={(e) => setForm({ ...form, description: e.target.value || null })} rows={2} /></div>
             </div>
