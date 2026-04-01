@@ -341,7 +341,7 @@ export default function SmartImportWizard({ config }: Props) {
                   <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setAllConflictResolutions("import")}>Replace All with New</Button>
                 </div>
               </div>
-              <ScrollArea className="flex-1 min-h-0 border rounded-md">
+              <ScrollArea className="max-h-[50vh] border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
