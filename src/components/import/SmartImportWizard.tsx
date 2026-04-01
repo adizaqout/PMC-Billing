@@ -413,7 +413,7 @@ export default function SmartImportWizard({ config }: Props) {
                 </div>
               </div>
               {activeActions.length > 0 && (
-                <ScrollArea className="flex-1 min-h-0 border rounded-md">
+                <ScrollArea className="max-h-[50vh] border rounded-md">
                   <Table>
                     <TableHeader>
                       <TableRow>

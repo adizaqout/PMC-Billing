@@ -48,7 +48,7 @@ const invImportColumns: ImportColumnDef[] = [
   { header: "PO Number", key: "po_number" },
   { header: "Rev", key: "po_revision", type: "number" },
   { header: "Billed Amount", key: "billed_amount_no_vat", type: "number", aliases: ["Billed (excl VAT)", "Billed (Excl VAT)", "Billed"] },
-  { header: "Billed To Date", key: "cum_billed_amount_no_vat", type: "number", aliases: ["Cum Billed", "Cumulative Billed"] },
+  { header: "Paid Amount", key: "paid_amount", type: "number" },
   { header: "Paid Amount", key: "paid_amount", type: "number" },
   { header: "Status", key: "status" },
   { header: "Description", key: "description" },
