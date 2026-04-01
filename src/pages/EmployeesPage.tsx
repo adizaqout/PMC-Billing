@@ -165,15 +165,17 @@ export default function EmployeesPage() {
       const posIdStr = rec.position_id_code?.trim() || "";
       const pos = posIdStr ? allPositions.find(p => p.position_id.toLowerCase() === posIdStr.toLowerCase() && p.consultant_id === consultant.id) : null;
       if (posIdStr && !pos) return `Position ID "${posIdStr}" not found for this consultant`;
+      const nameTrimmed = rec.employee_name?.trim() || "";
+      const isTba = !nameTrimmed;
       const { error } = await supabase.from("employees").insert({
         employee_id: rec.employee_id?.trim() || null,
-        employee_name: rec.employee_name?.trim() || "",
+        employee_name: isTba ? "TBA" : nameTrimmed,
         consultant_id: consultant.id,
         position_id: pos?.id || null,
         experience_years: rec.experience_years ? parseInt(rec.experience_years) : null,
-        start_date: parseImportDate(rec.start_date),
-        end_date: parseImportDate(rec.end_date),
-        status: rec.status?.trim()?.toLowerCase() || "active",
+        start_date: isTba ? null : parseImportDate(rec.start_date),
+        end_date: isTba ? null : parseImportDate(rec.end_date),
+        status: isTba ? "pending" : (rec.status?.trim()?.toLowerCase() || "active"),
       } as any);
       return error?.message || null;
     },
