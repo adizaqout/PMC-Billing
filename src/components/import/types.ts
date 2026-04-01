@@ -54,6 +54,16 @@ export interface SmartImportConfig {
    * Execute a single update. Return error message or null on success.
    */
   executeUpdate: (existingId: string, record: Record<string, string>) => Promise<string | null>;
+  /**
+   * Optional: Execute inserts in bulk. Return array of { index, message } errors.
+   * When provided, the wizard uses this instead of row-by-row executeInsert.
+   */
+  executeBatchInsert?: (records: Record<string, string>[]) => Promise<{ index: number; message: string }[]>;
+  /**
+   * Optional: Execute updates in bulk. Return array of { index, message } errors.
+   * When provided, the wizard uses this instead of row-by-row executeUpdate.
+   */
+  executeBatchUpdate?: (updates: { existingId: string; record: Record<string, string> }[]) => Promise<{ index: number; message: string }[]>;
   /** Called after import completes to refresh data */
   onComplete: () => void;
   /**

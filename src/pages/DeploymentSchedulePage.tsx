@@ -857,6 +857,51 @@ export default function DeploymentSchedulePage() {
     return raw;
   };
 
+  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string) => {
+    const empIdCode = rec.employee_id?.trim();
+    const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
+    const posIdCode = rec.position_id?.trim();
+    const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+    const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
+    const manMonths = parseFloat(rec.man_months || "") || 0;
+    const rowMonth = rec.month || "";
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const posId = pos?.id || "";
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
+
+    const projEntries: [string, number][] = [];
+    projectColumns.forEach(p => {
+      const val = parseFloat(rec[`proj_${p.id}`] || "") || 0;
+      if (val > 0) projEntries.push([p.id, val]);
+    });
+
+    const lines: any[] = [];
+    if (projEntries.length === 0) {
+      lines.push({
+        submission_id: submissionId,
+        employee_id: emp?.id || null,
+        worked_project_id: null, billed_project_id: null,
+        po_id: null, po_item_id: null, so_id: null,
+        allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
+        notes: groupNote,
+      });
+    } else {
+      projEntries.forEach(([projId, pct]) => {
+        const poItemId = poItemByProject[projId] || null;
+        const poId = poItemId ? (poByItem[poItemId] || null) : null;
+        lines.push({
+          submission_id: submissionId,
+          employee_id: emp?.id || null,
+          worked_project_id: projId, billed_project_id: projId,
+          po_id: poId, po_item_id: poItemId, so_id: null,
+          allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
+          notes: groupNote,
+        });
+      });
+    }
+    return lines;
+  };
+
   const deploymentSmartImportConfig: SmartImportConfig | undefined = useMemo(() => {
     if (!selectedSubmission) return undefined;
     const isBaseline = scheduleType === "baseline";
@@ -953,6 +998,91 @@ export default function DeploymentSchedulePage() {
           }
         }
         return insertDeploymentRow(rec);
+      },
+      executeBatchInsert: async (records) => {
+        if (!selectedSubmission) return records.map((_, i) => ({ index: i, message: "No submission selected" }));
+        const allLines: any[] = [];
+        const recIndexMap: number[] = []; // maps each line back to its source record index
+        for (let ri = 0; ri < records.length; ri++) {
+          const rec = records[ri];
+          const lines = buildDeploymentLines(rec, selectedSubmission.id);
+          for (const line of lines) {
+            allLines.push(line);
+            recIndexMap.push(ri);
+          }
+        }
+        const errors: { index: number; message: string }[] = [];
+        const BATCH = 500;
+        for (let i = 0; i < allLines.length; i += BATCH) {
+          const chunk = allLines.slice(i, i + BATCH);
+          const { error } = await supabase.from("deployment_lines").insert(chunk);
+          if (error) {
+            // Mark all records in this chunk as failed
+            const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
+            for (const idx of failedIndices) {
+              if (!errors.find(e => e.index === idx)) {
+                errors.push({ index: idx, message: error.message });
+              }
+            }
+          }
+        }
+        return errors;
+      },
+      executeBatchUpdate: async (updates) => {
+        if (!selectedSubmission) return updates.map((_, i) => ({ index: i, message: "No submission selected" }));
+        // Delete existing lines for all affected employee-month combos in one go
+        const { data: allExistingLines } = await supabase
+          .from("deployment_lines")
+          .select("id, notes")
+          .eq("submission_id", selectedSubmission.id);
+        if (allExistingLines) {
+          const idsToDelete: string[] = [];
+          for (const upd of updates) {
+            const existingRow = rows.find(r => r._key === upd.existingId);
+            if (existingRow) {
+              const emp = employees.find(e => e.id === existingRow.employee_id);
+              const empCode = (emp as any)?.employee_id || "";
+              const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
+              if (empCode && existingRow.month) {
+                for (const l of allExistingLines) {
+                  if ((l.notes || "").includes(notesPattern) && !idsToDelete.includes(l.id)) {
+                    idsToDelete.push(l.id);
+                  }
+                }
+              }
+            }
+          }
+          if (idsToDelete.length > 0) {
+            for (let i = 0; i < idsToDelete.length; i += 500) {
+              await supabase.from("deployment_lines").delete().in("id", idsToDelete.slice(i, i + 500));
+            }
+          }
+        }
+        // Now batch insert all replacement lines
+        const allLines: any[] = [];
+        const recIndexMap: number[] = [];
+        for (let ri = 0; ri < updates.length; ri++) {
+          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id);
+          for (const line of lines) {
+            allLines.push(line);
+            recIndexMap.push(ri);
+          }
+        }
+        const errors: { index: number; message: string }[] = [];
+        const BATCH = 500;
+        for (let i = 0; i < allLines.length; i += BATCH) {
+          const chunk = allLines.slice(i, i + BATCH);
+          const { error } = await supabase.from("deployment_lines").insert(chunk);
+          if (error) {
+            const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
+            for (const idx of failedIndices) {
+              if (!errors.find(e => e.index === idx)) {
+                errors.push({ index: idx, message: error.message });
+              }
+            }
+          }
+        }
+        return errors;
       },
       onComplete: () => {
         queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
