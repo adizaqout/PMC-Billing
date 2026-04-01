@@ -954,6 +954,91 @@ export default function DeploymentSchedulePage() {
         }
         return insertDeploymentRow(rec);
       },
+      executeBatchInsert: async (records) => {
+        if (!selectedSubmission) return records.map((_, i) => ({ index: i, message: "No submission selected" }));
+        const allLines: any[] = [];
+        const recIndexMap: number[] = []; // maps each line back to its source record index
+        for (let ri = 0; ri < records.length; ri++) {
+          const rec = records[ri];
+          const lines = buildDeploymentLines(rec, selectedSubmission.id);
+          for (const line of lines) {
+            allLines.push(line);
+            recIndexMap.push(ri);
+          }
+        }
+        const errors: { index: number; message: string }[] = [];
+        const BATCH = 500;
+        for (let i = 0; i < allLines.length; i += BATCH) {
+          const chunk = allLines.slice(i, i + BATCH);
+          const { error } = await supabase.from("deployment_lines").insert(chunk);
+          if (error) {
+            // Mark all records in this chunk as failed
+            const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
+            for (const idx of failedIndices) {
+              if (!errors.find(e => e.index === idx)) {
+                errors.push({ index: idx, message: error.message });
+              }
+            }
+          }
+        }
+        return errors;
+      },
+      executeBatchUpdate: async (updates) => {
+        if (!selectedSubmission) return updates.map((_, i) => ({ index: i, message: "No submission selected" }));
+        // Delete existing lines for all affected employee-month combos in one go
+        const { data: allExistingLines } = await supabase
+          .from("deployment_lines")
+          .select("id, notes")
+          .eq("submission_id", selectedSubmission.id);
+        if (allExistingLines) {
+          const idsToDelete: string[] = [];
+          for (const upd of updates) {
+            const existingRow = rows.find(r => r._key === upd.existingId);
+            if (existingRow) {
+              const emp = employees.find(e => e.id === existingRow.employee_id);
+              const empCode = (emp as any)?.employee_id || "";
+              const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
+              if (empCode && existingRow.month) {
+                for (const l of allExistingLines) {
+                  if ((l.notes || "").includes(notesPattern) && !idsToDelete.includes(l.id)) {
+                    idsToDelete.push(l.id);
+                  }
+                }
+              }
+            }
+          }
+          if (idsToDelete.length > 0) {
+            for (let i = 0; i < idsToDelete.length; i += 500) {
+              await supabase.from("deployment_lines").delete().in("id", idsToDelete.slice(i, i + 500));
+            }
+          }
+        }
+        // Now batch insert all replacement lines
+        const allLines: any[] = [];
+        const recIndexMap: number[] = [];
+        for (let ri = 0; ri < updates.length; ri++) {
+          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id);
+          for (const line of lines) {
+            allLines.push(line);
+            recIndexMap.push(ri);
+          }
+        }
+        const errors: { index: number; message: string }[] = [];
+        const BATCH = 500;
+        for (let i = 0; i < allLines.length; i += BATCH) {
+          const chunk = allLines.slice(i, i + BATCH);
+          const { error } = await supabase.from("deployment_lines").insert(chunk);
+          if (error) {
+            const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
+            for (const idx of failedIndices) {
+              if (!errors.find(e => e.index === idx)) {
+                errors.push({ index: idx, message: error.message });
+              }
+            }
+          }
+        }
+        return errors;
+      },
       onComplete: () => {
         queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
         if (selectedSubmission) {
