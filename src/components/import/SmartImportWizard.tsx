@@ -413,7 +413,7 @@ export default function SmartImportWizard({ config }: Props) {
                 </div>
               </div>
               {activeActions.length > 0 && (
-                <ScrollArea className="max-h-[50vh] border rounded-md">
+                <div className="max-h-[50vh] overflow-auto rounded-md border">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -440,7 +440,7 @@ export default function SmartImportWizard({ config }: Props) {
                       ))}
                     </TableBody>
                   </Table>
-                </ScrollArea>
+                </div>
               )}
               {activeActions.length === 0 && (
                 <div className="text-center py-8 text-sm text-muted-foreground">No changes to apply. All conflicts resolved to keep existing records.</div>
