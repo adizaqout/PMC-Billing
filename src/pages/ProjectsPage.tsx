@@ -144,12 +144,9 @@ export default function ProjectsPage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.project_name?.trim()) { toast.error("Project name is required"); return; }
-    const dup = projects.find(p => p.project_name.toLowerCase() === form.project_name!.toLowerCase().trim() && p.id !== editing?.id);
-    if (dup) { toast.error("A project with this name already exists"); return; }
-    if (form.project_number) {
-      const numDup = projects.find(p => (p as any).project_number?.toLowerCase() === form.project_number!.toLowerCase().trim() && p.id !== editing?.id);
-      if (numDup) { toast.error("A project with this number already exists"); return; }
-    }
+    if (!form.project_number?.trim()) { toast.error("Project number is required"); return; }
+    const numDup = projects.find(p => p.project_number?.toLowerCase() === form.project_number!.toLowerCase().trim() && p.id !== editing?.id);
+    if (numDup) { toast.error("A project with this number already exists"); return; }
     if (form.start_date && form.end_date && form.end_date < form.start_date) { toast.error("End date must be after start date"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
