@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -12,7 +12,7 @@ import ColumnVisibilityToggle, { useColumnVisibility, type ColumnDef } from "@/c
 import { usePagination } from "@/hooks/usePagination";
 import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
-import type { ImportProgress } from "@/components/ExcelToolbar";
+import type { SmartImportConfig, ImportColumnDef } from "@/components/import/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +50,17 @@ const tableCols: ColumnDef[] = [
   { key: "email", label: "Email" },
   { key: "phone", label: "Phone" },
   { key: "status", label: "Status" },
+];
+
+const importColumns: ImportColumnDef[] = [
+  { header: "Short Name", key: "short_name", required: true },
+  { header: "Name", key: "name", required: true, aliases: ["Long Name", "Name (Long)"] },
+  { header: "CR No.", key: "commercial_registration_no", aliases: ["Commercial Registration No."] },
+  { header: "Tax No.", key: "tax_registration_no", aliases: ["Tax Registration No."] },
+  { header: "Email", key: "contact_email", aliases: ["Contact Email"] },
+  { header: "Phone", key: "contact_phone", aliases: ["Contact Phone"] },
+  { header: "Address", key: "address" },
+  { header: "Status", key: "status" },
 ];
 
 export default function ConsultantsPage() {
@@ -102,10 +113,7 @@ export default function ConsultantsPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-consultant`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token}` },
         body: JSON.stringify({ consultant_id: deleteTarget.id }),
       });
       const result = await res.json();
@@ -158,26 +166,53 @@ export default function ConsultantsPage() {
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns); toast.success("Template downloaded"); };
-  const handleImportWithProgress = useCallback(async (
-    rows: string[][], onProgress: (p: ImportProgress) => void
-  ): Promise<ImportProgress> => {
-    const total = rows.length - 1;
-    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
-    for (let i = 1; i < rows.length; i++) {
-      const [shortName, name, crNo, taxNo, email, phone, address, status] = rows[i];
-      if (!name?.trim()) { result.processed++; onProgress({ ...result }); continue; }
+
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Consultants",
+    columns: importColumns,
+    businessKeys: ["short_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("consultants").select("*").order("name");
+      if (error) throw error;
+      return (data || []).map(c => ({
+        _id: c.id,
+        short_name: c.short_name || "",
+        name: c.name || "",
+        commercial_registration_no: c.commercial_registration_no || "",
+        tax_registration_no: c.tax_registration_no || "",
+        contact_email: c.contact_email || "",
+        contact_phone: c.contact_phone || "",
+        address: c.address || "",
+        status: c.status || "",
+      }));
+    },
+    executeInsert: async (rec) => {
       const { error } = await supabase.from("consultants").insert({
-        short_name: shortName?.trim() || null, name: name.trim(), commercial_registration_no: crNo?.trim() || null, tax_registration_no: taxNo?.trim() || null,
-        contact_email: email?.trim() || null, contact_phone: phone?.trim() || null, address: address?.trim() || null,
-        status: (status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        short_name: rec.short_name?.trim() || "", name: rec.name?.trim() || "",
+        commercial_registration_no: rec.commercial_registration_no?.trim() || null,
+        tax_registration_no: rec.tax_registration_no?.trim() || null,
+        contact_email: rec.contact_email?.trim() || null,
+        contact_phone: rec.contact_phone?.trim() || null,
+        address: rec.address?.trim() || null,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
       });
-      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
-      result.processed++;
-      onProgress({ ...result });
-    }
-    return result;
-  }, []);
-  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["consultants"] }); }, [queryClient]);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const { error } = await supabase.from("consultants").update({
+        short_name: rec.short_name?.trim() || undefined,
+        name: rec.name?.trim() || undefined,
+        commercial_registration_no: rec.commercial_registration_no?.trim() || null,
+        tax_registration_no: rec.tax_registration_no?.trim() || null,
+        contact_email: rec.contact_email?.trim() || null,
+        contact_phone: rec.contact_phone?.trim() || null,
+        address: rec.address?.trim() || null,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["consultants"] }); },
+  }), [queryClient]);
 
   return (
     <AppLayout>
@@ -188,7 +223,7 @@ export default function ConsultantsPage() {
             <p className="page-subtitle">Manage PMC consultant companies</p>
           </div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={tableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Consultant</Button>
           </div>
@@ -285,15 +320,12 @@ export default function ConsultantsPage() {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Consultant</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete <strong>{deleteTarget?.name}</strong> and <strong>all linked data</strong> including employees, positions, service orders, purchase orders, invoices, deployment schedules, and framework agreements. This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogDescription>This will permanently delete <strong>{deleteTarget?.name}</strong> and ALL linked data (employees, positions, service orders, POs, invoices, deployment data). This action cannot be undone.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              {isDeleting ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
-              Delete Everything
+              {isDeleting ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}Delete Everything
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
