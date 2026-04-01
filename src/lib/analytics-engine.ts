@@ -330,7 +330,7 @@ export function buildAnalyticsModel(
   const totalBaselineCost = filteredSubmissions
     .filter((submission) => submission.schedule_type === "baseline")
     .reduce((sum, submission) => sum + (lineCostBySubmission.get(submission.id) || 0), 0);
-  const totalBudget = data.projects.reduce((sum, project) => sum + numeric(project.latest_pmc_budget || project.latest_budget), 0);
+  const totalBudget = data.projects.reduce((sum, project) => sum + numeric(project.latest_pmc_budget), 0);
   const remainingBudget = totalBudget - totalActualBilled;
   const forecastRemaining = totalBudget - totalForecastCost;
   const varianceToBaseline = totalForecastCost - totalBaselineCost;
@@ -342,7 +342,7 @@ export function buildAnalyticsModel(
     .map((project) => {
       const actual = actualByProject.get(project.id) || 0;
       const forecast = forecastCostByProject.get(project.id) || 0;
-      const budget = numeric(project.latest_pmc_budget || project.latest_budget);
+      const budget = numeric(project.latest_pmc_budget);
       const remaining = budget - actual;
       const remainingPct = budget > 0 ? (remaining / budget) * 100 : 0;
       const risk = computeRiskStatus(budget, actual, forecast, amberThreshold);
