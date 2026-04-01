@@ -291,7 +291,7 @@ export default function SmartImportWizard({ config }: Props) {
                 <Badge variant="destructive">{validationErrorRecords.length} row(s) with errors</Badge>
                 <span className="text-xs text-muted-foreground">Fix the highlighted fields below</span>
               </div>
-              <ScrollArea className="flex-1 min-h-0 border rounded-md">
+              <ScrollArea className="max-h-[50vh] border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -341,7 +341,7 @@ export default function SmartImportWizard({ config }: Props) {
                   <Button variant="outline" size="sm" className="text-xs h-7" onClick={() => setAllConflictResolutions("import")}>Replace All with New</Button>
                 </div>
               </div>
-              <ScrollArea className="flex-1 min-h-0 border rounded-md">
+              <ScrollArea className="max-h-[50vh] border rounded-md">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -413,7 +413,7 @@ export default function SmartImportWizard({ config }: Props) {
                 </div>
               </div>
               {activeActions.length > 0 && (
-                <ScrollArea className="flex-1 min-h-0 border rounded-md">
+                <ScrollArea className="max-h-[50vh] border rounded-md">
                   <Table>
                     <TableHeader>
                       <TableRow>
