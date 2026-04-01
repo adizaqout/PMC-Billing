@@ -178,6 +178,18 @@ export default function DeploymentSchedulePage() {
     enabled: !!consultantId,
   });
 
+  // All employees (any status) for import validation — so "pending" employees are also recognized
+  const { data: allEmployees = [] } = useQuery({
+    queryKey: ["deployment-all-employees", consultantId],
+    queryFn: async () => {
+      if (!consultantId) return [];
+      const { data, error } = await supabase.from("employees").select("*, positions(position_name)").eq("consultant_id", consultantId).order("employee_name");
+      if (error) throw error;
+      return data as Employee[];
+    },
+    enabled: !!consultantId,
+  });
+
   const { data: positions = [] } = useQuery({
     queryKey: ["deployment-positions", consultantId],
     queryFn: async () => {
