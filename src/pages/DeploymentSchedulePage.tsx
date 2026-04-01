@@ -888,7 +888,7 @@ export default function DeploymentSchedulePage() {
         const errors: Record<string, string> = {};
         const empId = record.values.employee_id?.trim();
         if (empId) {
-          const emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empId.toLowerCase());
+          const emp = allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empId.toLowerCase());
           if (!emp) errors.employee_id = `Employee ID "${empId}" not found`;
         }
         const posId = record.values.position_id?.trim();
