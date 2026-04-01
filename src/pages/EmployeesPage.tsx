@@ -116,8 +116,6 @@ export default function EmployeesPage() {
       if (dupId) { toast.error("This Employee ID already exists for this consultant"); return; }
     }
     if (form.start_date && form.end_date && form.end_date < form.start_date) { toast.error("End date must be after start date"); return; }
-    const dup = employees.find(i => i.employee_name.toLowerCase() === form.employee_name.toLowerCase().trim() && i.consultant_id === form.consultant_id && i.id !== editing?.id);
-    if (dup) { toast.error("This employee name already exists for this consultant"); return; }
     upsertMutation.mutate(editing ? { ...form, id: editing.id } : form);
   };
 
