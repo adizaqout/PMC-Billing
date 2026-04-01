@@ -927,6 +927,19 @@ export default function DeploymentSchedulePage() {
       businessKeys: ["employee_id", "month"],
       transformValues: (values) => {
         values.month = normalizeMonth(values.month);
+        // Normalize allocations: if values look like decimals (sum <= 1), convert to percentages
+        const projKeys = projectColumns.map(p => `proj_${p.id}`);
+        const allocValues = projKeys.map(k => parseFloat(values[k] || "") || 0).filter(v => v > 0);
+        if (allocValues.length > 0) {
+          const sum = allocValues.reduce((a, b) => a + b, 0);
+          if (sum <= 1.0 + 0.005) {
+            // All values are decimals (e.g. 0.5 = 50%), multiply by 100
+            for (const k of projKeys) {
+              const v = parseFloat(values[k] || "") || 0;
+              if (v > 0) values[k] = String(Math.round(v * 100 * 100) / 100);
+            }
+          }
+        }
         return values;
       },
       customValidate: (record) => {
