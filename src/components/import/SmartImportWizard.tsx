@@ -247,7 +247,7 @@ export default function SmartImportWizard({ config }: Props) {
       </Button>
 
       <Dialog open={open} onOpenChange={(v) => { if (!v && stage !== "executing") handleClose(); }}>
-        <DialogContent className={stage === "validate" || stage === "conflicts" || stage === "preview" ? "sm:max-w-4xl max-h-[85vh] flex flex-col overflow-hidden" : "sm:max-w-md"}>
+        <DialogContent className={stage === "validate" || stage === "conflicts" || stage === "preview" ? "sm:max-w-4xl h-[85vh] max-h-[85vh] !flex !flex-col overflow-hidden" : "sm:max-w-md"}>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileSpreadsheet size={18} />
