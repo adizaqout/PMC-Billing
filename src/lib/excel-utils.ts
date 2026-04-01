@@ -103,12 +103,7 @@ function excelSerialDateToIso(serial: number): string {
 function normalizeImportedCell(value: unknown): string {
   if (value === null || value === undefined) return "";
   if (value instanceof Date) return value.toISOString().split("T")[0];
-  if (typeof value === "number") {
-    if (value > 20000 && value < 80000) {
-      return excelSerialDateToIso(value);
-    }
-    return String(value);
-  }
+  if (typeof value === "number") return String(value);
   if (typeof value === "boolean") return value ? "true" : "false";
   return String(value).trim();
 }
