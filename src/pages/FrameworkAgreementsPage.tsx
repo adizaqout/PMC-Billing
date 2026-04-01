@@ -28,6 +28,24 @@ type FAInsert = TablesInsert<"framework_agreements">;
 interface FAForm { framework_agreement_no: string; consultant_id: string; start_date: string | null; end_date: string | null; status: "active" | "inactive"; }
 const emptyForm: FAForm = { framework_agreement_no: "", consultant_id: "", start_date: null, end_date: null, status: "active" };
 
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+const importColumns: ImportColumnDef[] = [
+  { header: "Agreement No.", key: "framework_agreement_no", required: true },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Start Date", key: "start_date", type: "date" },
+  { header: "End Date", key: "end_date", type: "date" },
+  { header: "Status", key: "status" },
+];
+
 const cols = [
   { header: "Agreement No.", key: "framework_agreement_no", width: 22 },
   { header: "Consultant", key: "consultant_name", width: 25 },
