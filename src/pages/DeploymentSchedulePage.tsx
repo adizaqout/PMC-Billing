@@ -827,413 +827,193 @@ export default function DeploymentSchedulePage() {
     toast.success("Template downloaded");
   };
 
-  const validateImportData = (
-    rawRows: string[][],
-    employeeSnapshot: Employee[] = employees,
-    positionSnapshot: Position[] = positions,
-  ): DistinctImportError[] => {
-    type RawImportIssue = {
-      row: number;
-      employee_id_code: string;
-      employee_name: string;
-      position_id_code: string;
-      position_name: string;
-      issue_type: "missing_employee" | "missing_position" | "invalid_mapping";
-      excel_data: Record<string, string>;
-    };
-
-    const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
-    const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
-    const rawIssues: RawImportIssue[] = [];
-
-    const get = (row: string[], key: string) => {
-      const idx = headers.findIndex(h => h.includes(key));
-      return idx >= 0 ? String(row[idx] || "").trim() : "";
-    };
-
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
-      const rowNum = i + 2;
-      const empIdCode = get(row, "employee id");
-      const empName = get(row, "employee name");
-      const posIdCode = get(row, "position id");
-      const posName = get(row, "position name");
-      const excelData: Record<string, string> = {};
-      headers.forEach((h, idx) => { excelData[h] = String(row[idx] || "").trim(); });
-
-      const emp = empIdCode ? employeeSnapshot.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : null;
-      const pos = posIdCode ? positionSnapshot.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
-
-      if (empIdCode && !emp) {
-        rawIssues.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_employee", excel_data: excelData });
-      }
-      if (posIdCode && !pos) {
-        rawIssues.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "missing_position", excel_data: excelData });
-      }
-      if (emp && posIdCode && pos && emp.position_id !== pos.id) {
-        rawIssues.push({ row: rowNum, employee_id_code: empIdCode, employee_name: empName, position_id_code: posIdCode, position_name: posName, issue_type: "invalid_mapping", excel_data: excelData });
-      }
+  // ---- Smart Import Config ----
+  const normalizeMonth = (raw: string): string => {
+    if (!raw) return "";
+    const num = Number(raw);
+    if (!isNaN(num) && num > 10000) {
+      const d = new Date(Math.round((num - 25569) * 86400 * 1000));
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     }
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 7);
+    if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(raw)) {
+      const parts = raw.split("/");
+      let year = parseInt(parts[2]);
+      if (year < 100) year += 2000;
+      return `${year}-${parts[0].padStart(2, "0")}`;
+    }
+    return raw;
+  };
 
-    const distinctIssues = new Map<string, DistinctImportError>();
+  const deploymentSmartImportConfig: SmartImportConfig | undefined = useMemo(() => {
+    if (!selectedSubmission) return undefined;
+    const isBaseline = scheduleType === "baseline";
+    const isForecast = scheduleType === "forecast";
+    const allowEmptyEmployee = isBaseline || isForecast;
 
-    rawIssues.forEach((issue) => {
-      const employeeCode = issue.employee_id_code || "unknown_employee";
-      const positionCode = issue.position_id_code || "unknown_position";
+    const columns: ImportColumnDef[] = [
+      { header: "Month", key: "month", required: true },
+      { header: "Employee ID", key: "employee_id", required: !allowEmptyEmployee, aliases: ["Emp ID"] },
+      { header: "Employee Name", key: "employee_name", aliases: ["Emp Name"] },
+      { header: "Position ID", key: "position_id", aliases: ["Pos ID"] },
+      { header: "Position Name", key: "position_name", aliases: ["Pos Name"] },
+      { header: "Rate Year (1-5)", key: "rate_year", aliases: ["Rate Year"] },
+      { header: "Man-Months (max 1.0)", key: "man_months", aliases: ["Man-Months", "Man Months", "ManMonths"] },
+    ];
+    projectColumns.forEach(p => {
+      columns.push({ header: `% ${projLabel(p)}`, key: `proj_${p.id}` });
+    });
 
-      const key = issue.issue_type === "missing_position"
-        ? `pos_${positionCode.toLowerCase()}`
-        : issue.issue_type === "missing_employee"
-          ? `emp_${employeeCode.toLowerCase()}`
-          : `map_${employeeCode.toLowerCase()}`;
-
-      const existing = distinctIssues.get(key);
-
-      if (!existing) {
-        distinctIssues.set(key, {
-          key,
-          employee_id_code: issue.employee_id_code,
-          employee_name: issue.employee_name,
-          position_id_code: issue.position_id_code,
-          position_name: issue.position_name,
-          issue_type: issue.issue_type,
-          affected_rows: [issue.row],
-          affected_count: 1,
-          excel_data: issue.excel_data,
+    return {
+      entityName: "Deployment Lines",
+      columns,
+      businessKeys: ["employee_id", "month"],
+      transformValues: (values) => {
+        values.month = normalizeMonth(values.month);
+        return values;
+      },
+      customValidate: (record) => {
+        const errors: Record<string, string> = {};
+        const empId = record.values.employee_id?.trim();
+        if (empId) {
+          const emp = employees.find(e => (e as any).employee_id?.toLowerCase() === empId.toLowerCase());
+          if (!emp) errors.employee_id = `Employee ID "${empId}" not found`;
+        }
+        const posId = record.values.position_id?.trim();
+        if (posId) {
+          const pos = positions.find(p => p.position_id.toLowerCase() === posId.toLowerCase());
+          if (!pos) errors.position_id = `Position ID "${posId}" not found`;
+        }
+        const rateYear = parseInt((record.values.rate_year || "").replace(/[^0-9]/g, ""));
+        if (record.values.rate_year && (isNaN(rateYear) || rateYear < 1 || rateYear > 5)) {
+          errors.rate_year = "Rate Year must be 1-5";
+        }
+        const mm = parseFloat(record.values.man_months || "");
+        if (record.values.man_months && !isNaN(mm) && mm > 1) {
+          errors.man_months = "Man-Months cannot exceed 1.0";
+        }
+        return errors;
+      },
+      fetchExisting: async () => {
+        return rows.map(row => {
+          const emp = employees.find(e => e.id === row.employee_id);
+          const pos = positions.find(p => p.id === row.position_id);
+          const rec: Record<string, string> = {
+            _id: row._key,
+            month: row.month,
+            employee_id: (emp as any)?.employee_id || "",
+            employee_name: emp?.employee_name || "",
+            position_id: pos?.position_id || "",
+            position_name: pos?.position_name || "",
+            rate_year: String(row.rate_year),
+            man_months: String(row.man_months),
+          };
+          projectColumns.forEach(p => {
+            rec[`proj_${p.id}`] = row.allocations[p.id] ? String(row.allocations[p.id]) : "";
+          });
+          return rec;
         });
-      } else {
-        existing.affected_rows.push(issue.row);
-        existing.affected_count += 1;
-      }
-    });
-
-    return Array.from(distinctIssues.values()).sort((a, b) => {
-      const aMinRow = Math.min(...a.affected_rows);
-      const bMinRow = Math.min(...b.affected_rows);
-      return aMinRow - bMinRow;
-    });
-  };
-
-  const handleImportWithProgress = async (
-    rawRows: string[][],
-    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void
-  ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
-    if (!selectedSubmission) throw new Error("No submission selected");
-
-    const validationErrors = validateImportData(rawRows, employees, positions);
-    if (validationErrors.length > 0) {
-      setImportErrors(validationErrors);
-      setPendingImportData(rawRows);
-      setImportErrorDialogOpen(true);
-      return { total: 0, processed: 0, created: 0, errors: [{ row: 0, message: `Found ${validationErrors.length} distinct data issues. Please resolve them in the correction dialog.` }] };
-    }
-
-    return executeImport(rawRows, onProgress, employees, positions);
-  };
-
-  const executeImport = async (
-    rawRows: string[][],
-    onProgress: (progress: import("@/components/ImportProgressDialog").ImportProgress) => void,
-    employeeSnapshot: Employee[] = employees,
-    positionSnapshot: Position[] = positions,
-  ): Promise<import("@/components/ImportProgressDialog").ImportProgress> => {
-    if (!selectedSubmission) throw new Error("No submission selected");
-
-    const currentEmployees = employeeSnapshot;
-    const currentPositions = positionSnapshot;
-
-    const headers = rawRows[0].map(h => String(h).trim().toLowerCase());
-    const dataRows = rawRows.slice(1).filter(r => r[0] && !String(r[0]).startsWith("---"));
-    const progress: import("@/components/ImportProgressDialog").ImportProgress = {
-      total: dataRows.length, processed: 0, created: 0, errors: [],
-    };
-    onProgress({ ...progress });
-
-    // Clear existing lines before importing
-    const { error: deleteError } = await supabase
-      .from("deployment_lines")
-      .delete()
-      .eq("submission_id", selectedSubmission.id);
-    if (deleteError) {
-      progress.errors.push({ row: 0, message: `Failed to clear existing data: ${deleteError.message}` });
-      onProgress({ ...progress });
-      return progress;
-    }
-
-    // Parse all rows into DB-ready records
-    const BATCH_SIZE = 200;
-    let pendingInserts: any[] = [];
-    let pendingRowNums: number[] = [];
-
-    const flushBatch = async () => {
-      if (pendingInserts.length === 0) return;
-      const batch = [...pendingInserts];
-      const rowCount = pendingRowNums.length;
-      pendingInserts = [];
-      pendingRowNums = [];
-      const { error } = await supabase.from("deployment_lines").insert(batch);
-      if (error) {
-        // Rows lost — adjust count won't include them
-        throw error;
-      }
-      progress.created += rowCount;
-    };
-    let placeholderSerial = 0;
-
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i];
-      const rowNum = i + 2;
-      const get = (key: string) => {
-        const idx = headers.findIndex(h => h.includes(key));
-        return idx >= 0 ? String(row[idx] || "").trim() : "";
-      };
-
-      // Month
-      let rowMonth = get("month");
-      if (!rowMonth) {
-        progress.errors.push({ row: rowNum, message: "Month is missing" });
-        progress.processed++;
-        if (i % 100 === 0) onProgress({ ...progress });
-        continue;
-      }
-      const monthNum = Number(rowMonth);
-      if (!isNaN(monthNum) && monthNum > 10000) {
-        // Excel serial number
-        const d = new Date(Math.round((monthNum - 25569) * 86400 * 1000));
-        rowMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      } else if (/^\d{4}-\d{2}-\d{2}/.test(rowMonth)) {
-        rowMonth = rowMonth.slice(0, 7);
-      } else if (/^\d{1,2}\/\d{1,2}\/\d{2,4}$/.test(rowMonth)) {
-        // Handle M/D/YY or M/D/YYYY format
-        const parts = rowMonth.split("/");
-        let year = parseInt(parts[2]);
-        if (year < 100) year += 2000;
-        rowMonth = `${year}-${parts[0].padStart(2, "0")}`;
-      }
-
-      // Employee
-      const empIdCode = get("employee id");
-      const isBaseline = scheduleType === "baseline";
-      const isForecast = scheduleType === "forecast";
-      const allowEmptyEmployee = isBaseline || isForecast;
-      let emp: Employee | undefined = undefined;
-      if (!empIdCode) {
-        if (!allowEmptyEmployee) {
-          progress.errors.push({ row: rowNum, message: "Employee ID is missing" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue;
-        }
-        // For baseline/forecast, allow missing employee ID — will insert as null
-      } else {
-        emp = currentEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase());
-        if (!emp && !allowEmptyEmployee) {
-          progress.errors.push({ row: rowNum, message: `Employee ID "${empIdCode}" not found` }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue;
-        }
-      }
-
-      // Position
-      const posIdCode = get("position id");
-      const pos = posIdCode ? currentPositions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
-
-      // Parse rate year: handle "Year 1", "Year 2", etc. and plain numbers
-      const rateYearRaw = get("rate year");
-      const rateYear = parseInt(rateYearRaw.replace(/[^0-9]/g, "")) || 1;
-      if (rateYear < 1 || rateYear > 5) { progress.errors.push({ row: rowNum, message: "Invalid rate year" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
-
-      const manMonths = parseFloat(get("man-months") || get("man_months") || get("manmonths")) || 0;
-      if (manMonths > 1) { progress.errors.push({ row: rowNum, message: "Man-months exceeds 1.0" }); progress.processed++; if (i % 100 === 0) onProgress({ ...progress }); continue; }
-
-      // Project allocations
-      const projEntries: [string, number][] = [];
-      headers.forEach((h, colIdx) => {
-        if (h.startsWith("% ") || h.startsWith("%")) {
-          const projPart = h.replace(/^%\s*/, "");
-          const proj = projectColumns.find(p =>
-            projLabel(p).toLowerCase() === projPart.toLowerCase() ||
-            p.project_name.toLowerCase() === projPart.toLowerCase() ||
-            (p.project_number && p.project_number.toLowerCase() === projPart.toLowerCase())
-          );
-          if (proj) {
-            const val = parseFloat(String(row[colIdx] || "")) || 0;
-            if (val > 0) projEntries.push([proj.id, val]);
+      },
+      executeInsert: async (rec) => {
+        if (!selectedSubmission) return "No submission selected";
+        return insertDeploymentRow(rec);
+      },
+      executeUpdate: async (existingId, rec) => {
+        if (!selectedSubmission) return "No submission selected";
+        const existingRow = rows.find(r => r._key === existingId);
+        if (existingRow) {
+          const emp = employees.find(e => e.id === existingRow.employee_id);
+          const empCode = (emp as any)?.employee_id || "";
+          const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
+          if (empCode && existingRow.month) {
+            const { data: matchingLines } = await supabase
+              .from("deployment_lines")
+              .select("id, notes")
+              .eq("submission_id", selectedSubmission.id);
+            if (matchingLines) {
+              const idsToDelete = matchingLines
+                .filter(l => (l.notes || "").includes(notesPattern))
+                .map(l => l.id);
+              if (idsToDelete.length > 0) {
+                await supabase.from("deployment_lines").delete().in("id", idsToDelete);
+              }
+            }
           }
         }
+        return insertDeploymentRow(rec);
+      },
+      onComplete: () => {
+        queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+        if (selectedSubmission) {
+          (async () => {
+            const allLines: DeploymentLine[] = [];
+            const PAGE_SIZE = 1000;
+            let from = 0;
+            while (true) {
+              const { data } = await supabase
+                .from("deployment_lines")
+                .select("*")
+                .eq("submission_id", selectedSubmission.id)
+                .range(from, from + PAGE_SIZE - 1);
+              if (!data || data.length === 0) break;
+              allLines.push(...(data as DeploymentLine[]));
+              if (data.length < PAGE_SIZE) break;
+              from += PAGE_SIZE;
+            }
+            setRows(buildUIRows(allLines));
+          })();
+        }
+      },
+    };
+  }, [selectedSubmission, scheduleType, employees, positions, projectColumns, rows, poItemByProject, poByItem]);
+
+  const insertDeploymentRow = async (rec: Record<string, string>): Promise<string | null> => {
+    if (!selectedSubmission) return "No submission selected";
+    const empIdCode = rec.employee_id?.trim();
+    const emp = empIdCode ? employees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
+    const posIdCode = rec.position_id?.trim();
+    const pos = posIdCode ? positions.find(p => p.position_id.toLowerCase() === posIdCode.toLowerCase()) : null;
+    const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
+    const manMonths = parseFloat(rec.man_months || "") || 0;
+    const rowMonth = rec.month || "";
+
+    const projEntries: [string, number][] = [];
+    projectColumns.forEach(p => {
+      const val = parseFloat(rec[`proj_${p.id}`] || "") || 0;
+      if (val > 0) projEntries.push([p.id, val]);
+    });
+
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const posId = pos?.id || "";
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
+
+    const linesToInsert: any[] = [];
+    if (projEntries.length === 0) {
+      linesToInsert.push({
+        submission_id: selectedSubmission.id,
+        employee_id: emp?.id || null,
+        worked_project_id: null, billed_project_id: null,
+        po_id: null, po_item_id: null, so_id: null,
+        allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
+        notes: groupNote,
       });
-
-      // Store employee code + month + position in notes for proper row grouping & display
-      let effectiveEmpCode = empIdCode;
-      if (!empIdCode && allowEmptyEmployee) {
-        placeholderSerial++;
-        effectiveEmpCode = `PH-${placeholderSerial}`;
-      } else if (empIdCode) {
-        effectiveEmpCode = empIdCode;
-      }
-      const posId = pos?.id || "";
-      const groupNote = `emp:${effectiveEmpCode || ""}|month:${rowMonth}|posId:${posId}`;
-
-      // Build DB records directly
-      if (projEntries.length === 0) {
-        pendingInserts.push({
+    } else {
+      projEntries.forEach(([projId, pct]) => {
+        const poItemId = poItemByProject[projId] || null;
+        const poId = poItemId ? (poByItem[poItemId] || null) : null;
+        linesToInsert.push({
           submission_id: selectedSubmission.id,
           employee_id: emp?.id || null,
-          worked_project_id: null, billed_project_id: null,
-          po_id: null, po_item_id: null, so_id: null,
-          allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
+          worked_project_id: projId, billed_project_id: projId,
+          po_id: poId, po_item_id: poItemId, so_id: null,
+          allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
           notes: groupNote,
         });
-      } else {
-        projEntries.forEach(([projId, pct]) => {
-          const poItemId = poItemByProject[projId] || null;
-          const poId = poItemId ? (poByItem[poItemId] || null) : null;
-          pendingInserts.push({
-            submission_id: selectedSubmission.id,
-            employee_id: emp?.id || null,
-            worked_project_id: projId, billed_project_id: projId,
-            po_id: poId, po_item_id: poItemId, so_id: null,
-            allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
-            notes: groupNote,
-          });
-        });
-      }
-
-      pendingRowNums.push(rowNum);
-      progress.processed++;
-
-      // Flush batch when full
-      if (pendingInserts.length >= BATCH_SIZE) {
-        try {
-          await flushBatch();
-        } catch (err) {
-          progress.errors.push({ row: rowNum, message: `DB batch insert failed (rows may be lost): ${err instanceof Error ? err.message : "Unknown error"}` });
-        }
-      }
-
-      if (i % 100 === 0) onProgress({ ...progress });
+      });
     }
 
-    // Flush remaining
-    try {
-      await flushBatch();
-    } catch (err) {
-      progress.errors.push({ row: 0, message: `Final batch insert failed: ${err instanceof Error ? err.message : "Unknown error"}` });
-    }
-
-    // Reload data into UI BEFORE returning so rows appear before "done" dialog
-    if (selectedSubmission) {
-      const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 1000;
-      let from = 0;
-      while (true) {
-        const { data } = await supabase
-          .from("deployment_lines")
-          .select("*")
-          .eq("submission_id", selectedSubmission.id)
-          .range(from, from + PAGE_SIZE - 1);
-        if (!data || data.length === 0) break;
-        allLines.push(...(data as DeploymentLine[]));
-        if (data.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
-      }
-      setRows(buildUIRows(allLines));
-    }
-
-    onProgress({ ...progress });
-    return progress;
-  };
-
-  const handleImportComplete = () => {
-    queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
-    // Reload all rows from DB (paginate past 1000-row limit)
-    if (selectedSubmission) {
-      (async () => {
-        const allLines: DeploymentLine[] = [];
-        const PAGE_SIZE = 1000;
-        let from = 0;
-        while (true) {
-          const { data } = await supabase
-            .from("deployment_lines")
-            .select("*")
-            .eq("submission_id", selectedSubmission.id)
-            .range(from, from + PAGE_SIZE - 1);
-          if (!data || data.length === 0) break;
-          allLines.push(...(data as DeploymentLine[]));
-          if (data.length < PAGE_SIZE) break;
-          from += PAGE_SIZE;
-        }
-        setRows(buildUIRows(allLines));
-      })();
-    }
-  };
-
-  // Import error correction handlers
-  const handleErrorResolved = (_error: DistinctImportError) => {
-    queryClient.invalidateQueries({ queryKey: ["deployment-employees", consultantId] });
-    queryClient.invalidateQueries({ queryKey: ["deployment-positions", consultantId] });
-  };
-
-  const handleRetryImport = async () => {
-    if (!pendingImportData || !selectedSubmission) return;
-    setImportErrorDialogOpen(false);
-
-    let latestEmployees: Employee[] = employees;
-    let latestPositions: Position[] = positions;
-
-    try {
-      const [employeesResult, positionsResult] = await Promise.all([
-        supabase
-          .from("employees")
-          .select("*, positions(position_name)")
-          .eq("consultant_id", consultantId)
-          .in("status", ["active", "mobilized"])
-          .order("employee_name"),
-        supabase
-          .from("positions")
-          .select("*")
-          .eq("consultant_id", consultantId)
-          .order("position_name"),
-      ]);
-
-      if (employeesResult.error) throw employeesResult.error;
-      if (positionsResult.error) throw positionsResult.error;
-
-      latestEmployees = (employeesResult.data || []) as Employee[];
-      latestPositions = (positionsResult.data || []) as Position[];
-
-      queryClient.setQueryData(["deployment-employees", consultantId], latestEmployees);
-      queryClient.setQueryData(["deployment-positions", consultantId], latestPositions);
-    } catch (refreshError: any) {
-      setImportErrorDialogOpen(true);
-      toast.error(refreshError.message || "Could not refresh employees/positions. Please try again.");
-      return;
-    }
-
-    const revalidationErrors = validateImportData(pendingImportData, latestEmployees, latestPositions);
-    if (revalidationErrors.length > 0) {
-      setImportErrors(revalidationErrors);
-      setImportErrorDialogOpen(true);
-      toast.error(`Still ${revalidationErrors.length} unresolved issues`);
-      return;
-    }
-
-    toast.info("Retrying import...");
-    try {
-      const result = await executeImport(pendingImportData, () => {}, latestEmployees, latestPositions);
-      if (result.errors.length === 0) {
-        setImportBanner({ rows: result.created, employees: importErrors.filter(e => e.issue_type === "missing_employee").length, positions: importErrors.filter(e => e.issue_type === "missing_position").length });
-        toast.success(`Successfully imported ${result.created} rows`);
-      } else {
-        toast.error(`Import completed with ${result.errors.length} errors`);
-      }
-      setPendingImportData(null);
-      setImportErrors([]);
-      handleImportComplete();
-    } catch (err: any) {
-      toast.error(err.message || "Import failed");
-    }
-  };
-
-  const handleCancelImport = () => {
-    setImportErrorDialogOpen(false);
-    setPendingImportData(null);
-    setImportErrors([]);
+    const { error } = await supabase.from("deployment_lines").insert(linesToInsert);
+    return error ? error.message : null;
   };
 
   // ---- List view hooks (must be before any early return) ----
