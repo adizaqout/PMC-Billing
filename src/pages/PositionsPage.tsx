@@ -144,29 +144,95 @@ export default function PositionsPage() {
   ): Promise<ImportProgress> => {
     const total = rows.length - 1;
     const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
+    const normalizeHeader = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
+    const headerIndex = new Map((rows[0] ?? []).map((cell, index) => [normalizeHeader(String(cell ?? "")), index]));
+    const getValue = (row: string[], headers: string[]) => {
+      for (const header of headers) {
+        const index = headerIndex.get(normalizeHeader(header));
+        if (index != null) return String(row[index] ?? "").trim();
+      }
+      return "";
+    };
+    const parseImportedNumber = (value: string): number | null => {
+      const normalized = value.trim();
+      if (!normalized || /^\d{4}-\d{2}-\d{2}$/.test(normalized)) return null;
+      const negative = normalized.startsWith("(") && normalized.endsWith(")");
+      const compact = normalized.replace(/[()]/g, "").replace(/[^0-9,.-]/g, "");
+      if (!compact) return null;
+
+      const commaCount = (compact.match(/,/g) ?? []).length;
+      const dotCount = (compact.match(/\./g) ?? []).length;
+      let canonical = compact;
+
+      if (commaCount > 0 && dotCount > 0) {
+        canonical = compact.replace(/,/g, "");
+      } else if (commaCount > 0) {
+        canonical = commaCount === 1 && /,\d{1,2}$/.test(compact)
+          ? compact.replace(",", ".")
+          : compact.replace(/,/g, "");
+      }
+
+      const parsed = Number.parseFloat(canonical);
+      if (!Number.isFinite(parsed)) return null;
+      return negative ? -parsed : parsed;
+    };
+    const parseImportedInteger = (value: string) => {
+      const parsed = parseImportedNumber(value);
+      return parsed == null ? null : Math.trunc(parsed);
+    };
+
+    if (!headerIndex.has(normalizeHeader("Position Name")) || !headerIndex.has(normalizeHeader("Consultant"))) {
+      throw new Error("Invalid positions sheet format. Use the positions template or exported positions file.");
+    }
 
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      const posId = row[0] != null ? String(row[0]).trim() : null;
-      const name = row[1] != null ? String(row[1]).trim() : "";
-      const fnVal = row[2] != null ? String(row[2]).trim().substring(0, 50) : "";
-      const consultantName = row[3] != null ? String(row[3]).trim() : "";
-      const soNum = row[4] != null ? String(row[4]).trim() : "";
-      const exp = row[5] != null ? String(row[5]).trim() : "";
-      const y1 = row[6], y2 = row[7], y3 = row[8], y4 = row[9], y5 = row[10];
-      const from = row[11] != null ? String(row[11]).trim() : "";
-      const to = row[12] != null ? String(row[12]).trim() : "";
-      const notes = row[13] != null ? String(row[13]).trim() : "";
+      const posId = getValue(row, ["Position ID"]);
+      const name = getValue(row, ["Position Name"]);
+      const fnVal = getValue(row, ["Function"]).substring(0, 50);
+      const consultantName = getValue(row, ["Consultant"]);
+      const soNum = getValue(row, ["Service Order", "SO"]);
+      const exp = getValue(row, ["Exp (Yrs)", "Exp"]);
+      const rawY1 = getValue(row, ["Year 1 Rate", "Y1 Rate"]);
+      const rawY2 = getValue(row, ["Year 2 Rate", "Y2 Rate"]);
+      const rawY3 = getValue(row, ["Year 3 Rate", "Y3 Rate"]);
+      const rawY4 = getValue(row, ["Year 4 Rate", "Y4 Rate"]);
+      const rawY5 = getValue(row, ["Year 5 Rate", "Y5 Rate"]);
+      const from = getValue(row, ["Effective From", "From"]);
+      const to = getValue(row, ["Effective To", "To"]);
+      const notes = getValue(row, ["Notes"]);
+      const y1 = parseImportedNumber(rawY1);
+      const y2 = parseImportedNumber(rawY2);
+      const y3 = parseImportedNumber(rawY3);
+      const y4 = parseImportedNumber(rawY4);
+      const y5 = parseImportedNumber(rawY5);
+
+      const invalidFields = [
+        ["Exp (Yrs)", exp, parseImportedInteger(exp)],
+        ["Year 1 Rate", rawY1, y1],
+        ["Year 2 Rate", rawY2, y2],
+        ["Year 3 Rate", rawY3, y3],
+        ["Year 4 Rate", rawY4, y4],
+        ["Year 5 Rate", rawY5, y5],
+      ].filter(([, raw, parsed]) => raw && parsed == null).map(([label]) => label);
+
       if (!name) { result.processed++; onProgress({ ...result }); continue; }
+      if (invalidFields.length > 0) {
+        result.errors.push({ row: i + 1, message: `Invalid value for ${invalidFields.join(", ")}` });
+        result.processed++;
+        onProgress({ ...result });
+        continue;
+      }
+
       const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName.toLowerCase());
       if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
       const so = soNum ? allServiceOrders.find(s => s.so_number.toLowerCase() === soNum.toLowerCase() && s.consultant_id === consultant.id) : null;
       const { error } = await supabase.from("positions").insert({
         position_id: posId || null, position_name: name, consultant_id: consultant.id, so_id: so?.id || null,
-        total_years_of_exp: exp ? parseInt(exp) : null,
-        year_1_rate: y1 != null ? parseFloat(String(y1)) : null, year_2_rate: y2 != null ? parseFloat(String(y2)) : null,
-        year_3_rate: y3 != null ? parseFloat(String(y3)) : null, year_4_rate: y4 != null ? parseFloat(String(y4)) : null,
-        year_5_rate: y5 != null ? parseFloat(String(y5)) : null,
+        total_years_of_exp: parseImportedInteger(exp),
+        year_1_rate: y1, year_2_rate: y2,
+        year_3_rate: y3, year_4_rate: y4,
+        year_5_rate: y5,
         effective_from: from || null, effective_to: to || null, notes: notes || null, "function": fnVal || null,
       } as TablesInsert<"positions">);
       if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
