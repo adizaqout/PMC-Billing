@@ -330,7 +330,7 @@ export function buildAnalyticsModel(
   const totalBaselineCost = filteredSubmissions
     .filter((submission) => submission.schedule_type === "baseline")
     .reduce((sum, submission) => sum + (lineCostBySubmission.get(submission.id) || 0), 0);
-  const totalBudget = data.projects.reduce((sum, project) => sum + numeric(project.latest_pmc_budget || project.latest_budget), 0);
+  const totalBudget = data.projects.reduce((sum, project) => sum + numeric(project.latest_pmc_budget), 0);
   const remainingBudget = totalBudget - totalActualBilled;
   const forecastRemaining = totalBudget - totalForecastCost;
   const varianceToBaseline = totalForecastCost - totalBaselineCost;
