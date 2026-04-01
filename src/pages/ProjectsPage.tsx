@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -41,6 +41,20 @@ const excelDateToISO = (v: any): string | null => {
   const parsed = new Date(s);
   return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
 };
+
+const importColumns: ImportColumnDef[] = [
+  { header: "Project Number", key: "project_number" },
+  { header: "Project Name", key: "project_name", required: true },
+  { header: "Entity", key: "entity" },
+  { header: "Portfolio", key: "portfolio" },
+  { header: "Type", key: "project_type" },
+  { header: "Classification", key: "classification" },
+  { header: "Start Date", key: "start_date", type: "date" },
+  { header: "End Date", key: "end_date", type: "date" },
+  { header: "Latest Budget", key: "latest_budget", type: "number" },
+  { header: "PMC Budget", key: "latest_pmc_budget", type: "number" },
+  { header: "Status", key: "status" },
+];
 
 const columns = [
   { header: "Project Number", key: "project_number", width: 18 },
@@ -165,6 +179,49 @@ export default function ProjectsPage() {
     toast.success("Template downloaded");
   };
 
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Projects",
+    columns: importColumns,
+    businessKeys: ["project_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("projects").select("*").order("project_name");
+      if (error) throw error;
+      return (data || []).map((p: any) => ({
+        _id: p.id, project_number: p.project_number || "", project_name: p.project_name || "",
+        entity: p.entity || "", portfolio: p.portfolio || "", project_type: p.project_type || "",
+        classification: p.classification || "",
+        start_date: p.start_date || "", end_date: p.end_date || "",
+        latest_budget: p.latest_budget != null ? String(p.latest_budget) : "",
+        latest_pmc_budget: p.latest_pmc_budget != null ? String(p.latest_pmc_budget) : "",
+        status: p.status || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const { error } = await supabase.from("projects").insert({
+        project_number: rec.project_number?.trim() || null, project_name: rec.project_name.trim(),
+        entity: rec.entity?.trim() || null, portfolio: rec.portfolio?.trim() || null,
+        project_type: rec.project_type?.trim() || null, classification: rec.classification?.trim() || null,
+        start_date: excelDateToISO(rec.start_date), end_date: excelDateToISO(rec.end_date),
+        latest_budget: rec.latest_budget ? parseFloat(rec.latest_budget) : null,
+        latest_pmc_budget: rec.latest_pmc_budget ? parseFloat(rec.latest_pmc_budget) : null,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      } as ProjectInsert);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const { error } = await supabase.from("projects").update({
+        project_number: rec.project_number?.trim() || null, project_name: rec.project_name.trim(),
+        entity: rec.entity?.trim() || null, portfolio: rec.portfolio?.trim() || null,
+        project_type: rec.project_type?.trim() || null, classification: rec.classification?.trim() || null,
+        start_date: excelDateToISO(rec.start_date), end_date: excelDateToISO(rec.end_date),
+        latest_budget: rec.latest_budget ? parseFloat(rec.latest_budget) : null,
+        latest_pmc_budget: rec.latest_pmc_budget ? parseFloat(rec.latest_pmc_budget) : null,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["projects"] }); },
+  }), [queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
@@ -174,7 +231,7 @@ export default function ProjectsPage() {
             <p className="page-subtitle">Manage project master data</p>
           </div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={projTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Project</Button>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -27,6 +27,26 @@ interface SOForm { so_number: string; consultant_id: string; framework_id: strin
 const emptyForm: SOForm = { so_number: "", consultant_id: "", framework_id: null, so_start_date: null, so_end_date: null, so_value: null, comments: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+const importColumns: ImportColumnDef[] = [
+  { header: "SO Number", key: "so_number", required: true },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Framework Agreement", key: "framework_no" },
+  { header: "Start Date", key: "so_start_date", type: "date" },
+  { header: "End Date", key: "so_end_date", type: "date" },
+  { header: "Value (AED)", key: "so_value", type: "number" },
+  { header: "Comments", key: "comments" },
+];
 
 const cols = [
   { header: "SO Number", key: "so_number", width: 18 },
@@ -102,13 +122,51 @@ export default function ServiceOrdersPage() {
   const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
 
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Service Orders",
+    columns: importColumns,
+    businessKeys: ["so_number", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("service_orders").select("*, consultants(short_name), framework_agreements(framework_agreement_no)").order("so_number");
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, so_number: i.so_number || "", consultant_name: i.consultants?.short_name || "",
+        framework_no: i.framework_agreements?.framework_agreement_no || "",
+        so_start_date: i.so_start_date || "", so_end_date: i.so_end_date || "",
+        so_value: i.so_value != null ? String(i.so_value) : "", comments: i.comments || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const fw = rec.framework_no ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === rec.framework_no.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("service_orders").insert({
+        so_number: rec.so_number.trim(), consultant_id: consultant.id, framework_id: fw?.id || null,
+        so_start_date: parseImportDate(rec.so_start_date), so_end_date: parseImportDate(rec.so_end_date),
+        so_value: rec.so_value ? parseFloat(rec.so_value) : null, comments: rec.comments?.trim() || null,
+      } as TablesInsert<"service_orders">);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const fw = rec.framework_no ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === rec.framework_no.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("service_orders").update({
+        so_number: rec.so_number.trim(), consultant_id: consultant.id, framework_id: fw?.id || null,
+        so_start_date: parseImportDate(rec.so_start_date), so_end_date: parseImportDate(rec.so_end_date),
+        so_value: rec.so_value ? parseFloat(rec.so_value) : null, comments: rec.comments?.trim() || null,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["service_orders"] }); },
+  }), [consultants, frameworks, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
           <div><h1 className="page-title">Service Orders</h1><p className="page-subtitle">Track service orders per consultant</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={soTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Service Order</Button>
           </div>

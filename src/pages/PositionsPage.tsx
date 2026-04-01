@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -28,6 +28,33 @@ interface PosForm { position_id: string; position_name: string; consultant_id: s
 const emptyForm: PosForm = { position_id: "", position_name: "", consultant_id: "", so_id: null, total_years_of_exp: null, year_1_rate: null, year_2_rate: null, year_3_rate: null, year_4_rate: null, year_5_rate: null, effective_from: null, effective_to: null, notes: null, function: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+const posImportColumns: ImportColumnDef[] = [
+  { header: "Position ID", key: "position_id" },
+  { header: "Position Name", key: "position_name", required: true },
+  { header: "Function", key: "function" },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Service Order", key: "so_number" },
+  { header: "Exp (Yrs)", key: "total_years_of_exp", type: "number" },
+  { header: "Year 1 Rate", key: "year_1_rate", type: "number", aliases: ["Y1 Rate"] },
+  { header: "Year 2 Rate", key: "year_2_rate", type: "number", aliases: ["Y2 Rate"] },
+  { header: "Year 3 Rate", key: "year_3_rate", type: "number", aliases: ["Y3 Rate"] },
+  { header: "Year 4 Rate", key: "year_4_rate", type: "number", aliases: ["Y4 Rate"] },
+  { header: "Year 5 Rate", key: "year_5_rate", type: "number", aliases: ["Y5 Rate"] },
+  { header: "Effective From", key: "effective_from", type: "date", aliases: ["From"] },
+  { header: "Effective To", key: "effective_to", type: "date", aliases: ["To"] },
+  { header: "Notes", key: "notes" },
+];
 
 const exportCols = [
   { header: "Position ID", key: "position_id", width: 14 },
@@ -138,14 +165,72 @@ export default function PositionsPage() {
   const handleExport = () => { exportToExcel("positions.xlsx", exportCols, filtered.map(i => ({ ...i, position_id: i.position_id || "", system_id: (i as any).system_id || "", function: (i as any).function || "", consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("positions-template.xlsx", importCols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
-
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Positions",
+    columns: posImportColumns,
+    businessKeys: ["position_name", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("positions").select("*, consultants(short_name), service_orders(so_number)").order("position_name");
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, position_id: i.position_id || "", position_name: i.position_name || "",
+        function: i.function || "", consultant_name: i.consultants?.short_name || "",
+        so_number: i.service_orders?.so_number || "",
+        total_years_of_exp: i.total_years_of_exp != null ? String(i.total_years_of_exp) : "",
+        year_1_rate: i.year_1_rate != null ? String(i.year_1_rate) : "",
+        year_2_rate: i.year_2_rate != null ? String(i.year_2_rate) : "",
+        year_3_rate: i.year_3_rate != null ? String(i.year_3_rate) : "",
+        year_4_rate: i.year_4_rate != null ? String(i.year_4_rate) : "",
+        year_5_rate: i.year_5_rate != null ? String(i.year_5_rate) : "",
+        effective_from: i.effective_from || "", effective_to: i.effective_to || "",
+        notes: i.notes || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const so = rec.so_number ? allServiceOrders.find(s => s.so_number.toLowerCase() === rec.so_number.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("positions").insert({
+        position_id: rec.position_id?.trim() || null, position_name: rec.position_name.trim(),
+        consultant_id: consultant.id, so_id: so?.id || null,
+        total_years_of_exp: rec.total_years_of_exp ? parseInt(rec.total_years_of_exp) : null,
+        year_1_rate: rec.year_1_rate ? parseFloat(rec.year_1_rate) : null,
+        year_2_rate: rec.year_2_rate ? parseFloat(rec.year_2_rate) : null,
+        year_3_rate: rec.year_3_rate ? parseFloat(rec.year_3_rate) : null,
+        year_4_rate: rec.year_4_rate ? parseFloat(rec.year_4_rate) : null,
+        year_5_rate: rec.year_5_rate ? parseFloat(rec.year_5_rate) : null,
+        effective_from: parseImportDate(rec.effective_from), effective_to: parseImportDate(rec.effective_to),
+        notes: rec.notes?.trim() || null, function: rec.function?.trim()?.substring(0, 50) || null,
+      } as TablesInsert<"positions">);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const so = rec.so_number ? allServiceOrders.find(s => s.so_number.toLowerCase() === rec.so_number.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+      const { error } = await supabase.from("positions").update({
+        position_id: rec.position_id?.trim() || null, position_name: rec.position_name.trim(),
+        consultant_id: consultant.id, so_id: so?.id || null,
+        total_years_of_exp: rec.total_years_of_exp ? parseInt(rec.total_years_of_exp) : null,
+        year_1_rate: rec.year_1_rate ? parseFloat(rec.year_1_rate) : null,
+        year_2_rate: rec.year_2_rate ? parseFloat(rec.year_2_rate) : null,
+        year_3_rate: rec.year_3_rate ? parseFloat(rec.year_3_rate) : null,
+        year_4_rate: rec.year_4_rate ? parseFloat(rec.year_4_rate) : null,
+        year_5_rate: rec.year_5_rate ? parseFloat(rec.year_5_rate) : null,
+        effective_from: parseImportDate(rec.effective_from), effective_to: parseImportDate(rec.effective_to),
+        notes: rec.notes?.trim() || null, function: rec.function?.trim()?.substring(0, 50) || null,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["positions"] }); },
+  }), [consultants, allServiceOrders, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
           <div><h1 className="page-title">Positions</h1><p className="page-subtitle">Rate card with yearly rates linked to SOs</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={posTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Position</Button>
           </div>

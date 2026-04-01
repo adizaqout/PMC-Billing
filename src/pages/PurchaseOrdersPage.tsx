@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -29,6 +29,32 @@ interface POForm { po_number: string; consultant_id: string; so_id: string | nul
 const emptyForm: POForm = { po_number: "", consultant_id: "", so_id: null, po_reference: null, po_start_date: null, po_end_date: null, po_value: null, amount: null, portfolio: null, type: null, status: "active", comments: null, revision_number: 0, project_id: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+const poImportColumns: ImportColumnDef[] = [
+  { header: "PO Number", key: "po_number", required: true },
+  { header: "Revision No.", key: "revision_number", type: "number" },
+  { header: "PO Line Item", key: "po_reference" },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Service Order", key: "so_number" },
+  { header: "Project Number", key: "project_number" },
+  { header: "Project Name", key: "project_name" },
+  { header: "Start Date", key: "po_start_date", type: "date" },
+  { header: "End Date", key: "po_end_date", type: "date" },
+  { header: "Amount (AED)", key: "po_value", type: "number" },
+  { header: "Portfolio", key: "portfolio" },
+  { header: "Type", key: "type" },
+  { header: "Status", key: "status" },
+];
 
 const cols = [
   { header: "PO Number", key: "po_number", width: 18 },
@@ -125,13 +151,66 @@ export default function PurchaseOrdersPage() {
   const handleExport = () => { exportToExcel("purchase-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "", so_number: i.service_orders?.so_number || "", project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("po-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), "Service Orders": allServiceOrders.map(s => s.so_number) }); toast.success("Template downloaded"); };
 
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Purchase Orders",
+    columns: poImportColumns,
+    businessKeys: ["po_number", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("purchase_orders").select("*, consultants(short_name), service_orders(so_number), projects(project_name, project_number)").order("po_number");
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, po_number: i.po_number || "", revision_number: i.revision_number != null ? String(i.revision_number) : "0",
+        po_reference: i.po_reference || "", consultant_name: i.consultants?.short_name || "",
+        so_number: i.service_orders?.so_number || "",
+        project_number: i.projects?.project_number || "", project_name: i.projects?.project_name || "",
+        po_start_date: i.po_start_date || "", po_end_date: i.po_end_date || "",
+        po_value: i.po_value != null ? String(i.po_value) : "",
+        portfolio: i.portfolio || "", type: i.type || "", status: i.status || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const so = rec.so_number ? allServiceOrders.find(s => s.so_number.toLowerCase() === rec.so_number.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+      const project = rec.project_number ? allProjects.find(p => p.project_number?.toLowerCase() === rec.project_number.trim().toLowerCase()) : null;
+      const { error } = await supabase.from("purchase_orders").insert({
+        po_number: rec.po_number.trim(), consultant_id: consultant.id, so_id: so?.id || null,
+        po_reference: rec.po_reference?.trim() || null,
+        po_start_date: parseImportDate(rec.po_start_date), po_end_date: parseImportDate(rec.po_end_date),
+        po_value: rec.po_value ? parseFloat(rec.po_value) : null,
+        portfolio: rec.portfolio?.trim() || null, type: rec.type?.trim() || null,
+        revision_number: rec.revision_number ? parseInt(rec.revision_number) : 0,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        project_id: project?.id || null,
+      } as TablesInsert<"purchase_orders">);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const so = rec.so_number ? allServiceOrders.find(s => s.so_number.toLowerCase() === rec.so_number.trim().toLowerCase() && s.consultant_id === consultant.id) : null;
+      const project = rec.project_number ? allProjects.find(p => p.project_number?.toLowerCase() === rec.project_number.trim().toLowerCase()) : null;
+      const { error } = await supabase.from("purchase_orders").update({
+        po_number: rec.po_number.trim(), consultant_id: consultant.id, so_id: so?.id || null,
+        po_reference: rec.po_reference?.trim() || null,
+        po_start_date: parseImportDate(rec.po_start_date), po_end_date: parseImportDate(rec.po_end_date),
+        po_value: rec.po_value ? parseFloat(rec.po_value) : null,
+        portfolio: rec.portfolio?.trim() || null, type: rec.type?.trim() || null,
+        revision_number: rec.revision_number ? parseInt(rec.revision_number) : 0,
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+        project_id: project?.id || null,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["purchase_orders"] }); },
+  }), [consultants, allServiceOrders, allProjects, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
           <div><h1 className="page-title">Purchase Orders</h1><p className="page-subtitle">Manage POs and PO line items</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={poTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add PO</Button>
           </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -27,6 +27,24 @@ type FAInsert = TablesInsert<"framework_agreements">;
 
 interface FAForm { framework_agreement_no: string; consultant_id: string; start_date: string | null; end_date: string | null; status: "active" | "inactive"; }
 const emptyForm: FAForm = { framework_agreement_no: "", consultant_id: "", start_date: null, end_date: null, status: "active" };
+
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+const importColumns: ImportColumnDef[] = [
+  { header: "Agreement No.", key: "framework_agreement_no", required: true },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Start Date", key: "start_date", type: "date" },
+  { header: "End Date", key: "end_date", type: "date" },
+  { header: "Status", key: "status" },
+];
 
 const cols = [
   { header: "Agreement No.", key: "framework_agreement_no", width: 22 },
@@ -101,13 +119,48 @@ export default function FrameworkAgreementsPage() {
   const handleExport = () => { exportToExcel("framework-agreements.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("fa-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
 
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Framework Agreements",
+    columns: importColumns,
+    businessKeys: ["framework_agreement_no", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("framework_agreements").select("*, consultants(short_name)").order("framework_agreement_no");
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, framework_agreement_no: i.framework_agreement_no || "",
+        consultant_name: i.consultants?.short_name || "",
+        start_date: i.start_date || "", end_date: i.end_date || "", status: i.status || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const { error } = await supabase.from("framework_agreements").insert({
+        framework_agreement_no: rec.framework_agreement_no.trim(), consultant_id: consultant.id,
+        start_date: parseImportDate(rec.start_date), end_date: parseImportDate(rec.end_date),
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      } as FAInsert);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const { error } = await supabase.from("framework_agreements").update({
+        framework_agreement_no: rec.framework_agreement_no.trim(), consultant_id: consultant.id,
+        start_date: parseImportDate(rec.start_date), end_date: parseImportDate(rec.end_date),
+        status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["framework_agreements"] }); },
+  }), [consultants, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
           <div><h1 className="page-title">Framework Agreements</h1><p className="page-subtitle">Manage framework agreements with consultants</p></div>
          <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={tableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Agreement</Button>
           </div>

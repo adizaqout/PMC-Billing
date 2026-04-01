@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -40,6 +40,18 @@ interface InvoiceForm {
 }
 const emptyForm: InvoiceForm = { invoice_number: "", invoice_month: "", consultant_id: "", po_id: null, billed_amount_no_vat: null, paid_amount: null, status: "pending", description: null, _po_key: "" };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en", { maximumFractionDigits: 2 }).format(v) : "—";
+
+const invImportColumns: ImportColumnDef[] = [
+  { header: "Invoice Number", key: "invoice_number", required: true },
+  { header: "Month", key: "invoice_month", required: true },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "PO Number", key: "po_number" },
+  { header: "Rev", key: "po_revision", type: "number" },
+  { header: "Billed (excl VAT)", key: "billed_amount_no_vat", type: "number" },
+  { header: "Paid Amount", key: "paid_amount", type: "number" },
+  { header: "Status", key: "status" },
+  { header: "Description", key: "description" },
+];
 
 const cols = [
   { header: "Invoice Number", key: "invoice_number", width: 18 },
@@ -273,14 +285,68 @@ export default function InvoicesPage() {
 
   const handleTemplate = () => { downloadTemplate("invoices-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name) }); toast.success("Template downloaded"); };
 
-
+  const smartImportConfig: SmartImportConfig = useMemo(() => ({
+    entityName: "Invoices",
+    columns: invImportColumns,
+    businessKeys: ["invoice_number", "consultant_name"],
+    fetchExisting: async () => {
+      const { data, error } = await supabase.from("invoices").select("*, consultants(short_name), purchase_orders(po_number, revision_number)").order("invoice_month", { ascending: false });
+      if (error) throw error;
+      return (data || []).map((i: any) => ({
+        _id: i.id, invoice_number: i.invoice_number || "", invoice_month: i.invoice_month || "",
+        consultant_name: i.consultants?.short_name || "",
+        po_number: i.purchase_orders?.po_number || "",
+        po_revision: i.purchase_orders?.revision_number != null ? String(i.purchase_orders.revision_number) : "",
+        billed_amount_no_vat: i.billed_amount_no_vat != null ? String(i.billed_amount_no_vat) : "",
+        paid_amount: i.paid_amount != null ? String(i.paid_amount) : "",
+        status: i.status || "", description: i.description || "",
+      }));
+    },
+    executeInsert: async (rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const po = rec.po_number ? allPOs.find(p =>
+        p.po_number === rec.po_number.trim() &&
+        (p.revision_number ?? 0) === (rec.po_revision ? parseInt(rec.po_revision) : 0) &&
+        p.consultant_id === consultant.id
+      ) : null;
+      const { error } = await supabase.from("invoices").insert({
+        invoice_number: rec.invoice_number.trim(), invoice_month: rec.invoice_month.trim(),
+        consultant_id: consultant.id, po_id: po?.id || null,
+        billed_amount_no_vat: rec.billed_amount_no_vat ? parseFloat(rec.billed_amount_no_vat) : null,
+        paid_amount: rec.paid_amount ? parseFloat(rec.paid_amount) : null,
+        status: (["paid", "cancelled"].includes(rec.status?.trim()?.toLowerCase() || "") ? rec.status.trim().toLowerCase() : "pending") as any,
+        description: rec.description?.trim() || null,
+      } as TablesInsert<"invoices">);
+      return error?.message || null;
+    },
+    executeUpdate: async (id, rec) => {
+      const consultant = consultants.find(c => c.short_name.toLowerCase() === rec.consultant_name?.trim()?.toLowerCase());
+      if (!consultant) return `Consultant "${rec.consultant_name}" not found`;
+      const po = rec.po_number ? allPOs.find(p =>
+        p.po_number === rec.po_number.trim() &&
+        (p.revision_number ?? 0) === (rec.po_revision ? parseInt(rec.po_revision) : 0) &&
+        p.consultant_id === consultant.id
+      ) : null;
+      const { error } = await supabase.from("invoices").update({
+        invoice_number: rec.invoice_number.trim(), invoice_month: rec.invoice_month.trim(),
+        consultant_id: consultant.id, po_id: po?.id || null,
+        billed_amount_no_vat: rec.billed_amount_no_vat ? parseFloat(rec.billed_amount_no_vat) : null,
+        paid_amount: rec.paid_amount ? parseFloat(rec.paid_amount) : null,
+        status: (["paid", "cancelled"].includes(rec.status?.trim()?.toLowerCase() || "") ? rec.status.trim().toLowerCase() : "pending") as any,
+        description: rec.description?.trim() || null,
+      }).eq("id", id);
+      return error?.message || null;
+    },
+    onComplete: () => { queryClient.invalidateQueries({ queryKey: ["invoices"] }); },
+  }), [consultants, allPOs, queryClient]);
   return (
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
           <div><h1 className="page-title">Invoices</h1><p className="page-subtitle">Track and validate invoices</p></div>
           <div className="flex items-center gap-2">
-            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} />
+            <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={invTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
             <Button size="sm" onClick={openCreate}><Plus size={14} className="mr-1.5" />Add Invoice</Button>
           </div>
