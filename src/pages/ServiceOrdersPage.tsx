@@ -101,39 +101,6 @@ export default function ServiceOrdersPage() {
 
   const handleExport = () => { exportToExcel("service-orders.xlsx", cols, filtered.map(i => ({ ...i, consultant_name: i.consultants?.short_name || "", framework_no: i.framework_agreements?.framework_agreement_no || "" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("so-template.xlsx", cols, { Consultants: consultants.map(c => c.short_name), Frameworks: frameworks.map(f => f.framework_agreement_no) }); toast.success("Template downloaded"); };
-  const handleImportWithProgress = useCallback(async (
-    rows: string[][], onProgress: (p: ImportProgress) => void
-  ): Promise<ImportProgress> => {
-    const total = rows.length - 1;
-    const result: ImportProgress = { total, processed: 0, created: 0, errors: [] };
-    for (let i = 1; i < rows.length; i++) {
-      const [soNum, consultantName, fwNo, startDate, endDate, value, comments] = rows[i];
-      if (!soNum?.trim()) { result.processed++; onProgress({ ...result }); continue; }
-      const consultant = consultants.find(c => c.short_name.toLowerCase() === consultantName?.trim()?.toLowerCase());
-      if (!consultant) { result.errors.push({ row: i + 1, message: `Consultant "${consultantName}" not found` }); result.processed++; onProgress({ ...result }); continue; }
-      const fw = fwNo ? frameworks.find(f => f.framework_agreement_no.toLowerCase() === fwNo.trim().toLowerCase() && f.consultant_id === consultant.id) : null;
-      const excelDateToISO = (v: any): string | null => {
-        if (v == null || String(v).trim() === "") return null;
-        const s = String(v).trim();
-        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-        const n = Number(s);
-        if (!isNaN(n) && n > 0) { const d = new Date(Math.round((n - 25569) * 86400000)); return d.toISOString().slice(0, 10); }
-        const parsed = new Date(s);
-        return isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
-      };
-      const safeTrim = (v: any) => v == null ? null : String(v).trim() || null;
-      const { error } = await supabase.from("service_orders").insert({
-        so_number: soNum.trim(), consultant_id: consultant.id, framework_id: fw?.id || null,
-        so_start_date: excelDateToISO(startDate), so_end_date: excelDateToISO(endDate),
-        so_value: value ? parseFloat(String(value)) : null, comments: safeTrim(comments),
-      } as TablesInsert<"service_orders">);
-      if (error) result.errors.push({ row: i + 1, message: error.message }); else result.created++;
-      result.processed++;
-      onProgress({ ...result });
-    }
-    return result;
-  }, [consultants, frameworks]);
-  const handleImportComplete = useCallback(() => { queryClient.invalidateQueries({ queryKey: ["service_orders"] }); }, [queryClient]);
 
   return (
     <AppLayout>
