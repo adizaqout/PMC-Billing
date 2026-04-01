@@ -1137,7 +1137,7 @@ export default function DeploymentSchedulePage() {
               <Button variant="outline" size="sm" onClick={addRow}><Plus size={14} className="mr-1.5" />Add Row</Button>
               <div className="ml-auto flex items-center gap-2">
                 <ColumnVisibilityToggle columns={detailTableCols} visibleColumns={detailVisibleCols} onChange={setDetailVisibleCols} />
-                <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} onImport={() => {}} onImportWithProgress={handleImportWithProgress} onImportComplete={handleImportComplete} />
+                <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={deploymentSmartImportConfig} />
                 <Button variant="outline" size="sm" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : <Save size={14} className="mr-1.5" />}Save Draft
                 </Button>
