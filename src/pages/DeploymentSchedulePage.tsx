@@ -1435,7 +1435,7 @@ export default function DeploymentSchedulePage() {
                                 step="0.01"
                                 min={0}
                                 max={1}
-                                value={row.man_months ?? ""}
+                                value={row.man_months}
                                 onChange={(e) => {
                                   const val = parseFloat(e.target.value);
                                   updateRow(realIdx, "man_months", isNaN(val) ? 0 : Math.min(1, Math.max(0, val)));
