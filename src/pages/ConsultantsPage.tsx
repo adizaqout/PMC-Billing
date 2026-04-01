@@ -19,8 +19,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 type Consultant = Tables<"consultants">;
 type ConsultantInsert = TablesInsert<"consultants">;
@@ -56,8 +58,12 @@ export default function ConsultantsPage() {
   const [editing, setEditing] = useState<Consultant | null>(null);
   const [form, setForm] = useState<Partial<ConsultantInsert>>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const [deleteTarget, setDeleteTarget] = useState<Consultant | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { visibleColumns, setVisibleColumns } = useColumnVisibility(tableCols);
   const queryClient = useQueryClient();
+  const { isSuperAdmin, roles } = useAuth();
+  const isAdmin = isSuperAdmin || roles.includes("admin");
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
   const v = (key: string) => visibleColumns.has(key);
@@ -89,17 +95,30 @@ export default function ConsultantsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("consultants").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/delete-consultant`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ consultant_id: deleteTarget.id }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Delete failed");
       queryClient.invalidateQueries({ queryKey: ["consultants"] });
-      toast.success("Consultant deleted");
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
+      toast.success(`Consultant "${deleteTarget.name}" and all linked data deleted`);
+      setDeleteTarget(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (c: Consultant) => {
@@ -217,7 +236,7 @@ export default function ConsultantsPage() {
                           <DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEdit(c)}><Pencil size={14} className="mr-2" />Edit</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => deleteMutation.mutate(c.id)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem>
+                            {isAdmin && <DropdownMenuItem className="text-destructive" onClick={() => setDeleteTarget(c)}><Trash2 size={14} className="mr-2" />Delete</DropdownMenuItem>}
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </td>
@@ -261,6 +280,24 @@ export default function ConsultantsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Consultant</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{deleteTarget?.name}</strong> and <strong>all linked data</strong> including employees, positions, service orders, purchase orders, invoices, deployment schedules, and framework agreements. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={isDeleting} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {isDeleting ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}
+              Delete Everything
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
