@@ -28,6 +28,26 @@ const emptyForm: SOForm = { so_number: "", consultant_id: "", framework_id: null
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
+function parseImportDate(val: any): string | null {
+  if (val == null || String(val).trim() === "") return null;
+  const n = Number(val);
+  if (!isNaN(n) && n > 10000) { const d = new Date(Math.round((n - 25569) * 86400 * 1000)); return d.toISOString().slice(0, 10); }
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const parsed = new Date(s);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString().slice(0, 10) : null;
+}
+
+const importColumns: ImportColumnDef[] = [
+  { header: "SO Number", key: "so_number", required: true },
+  { header: "Consultant", key: "consultant_name", required: true },
+  { header: "Framework Agreement", key: "framework_no" },
+  { header: "Start Date", key: "so_start_date", type: "date" },
+  { header: "End Date", key: "so_end_date", type: "date" },
+  { header: "Value (AED)", key: "so_value", type: "number" },
+  { header: "Comments", key: "comments" },
+];
+
 const cols = [
   { header: "SO Number", key: "so_number", width: 18 },
   { header: "Consultant", key: "consultant_name", width: 25 },
