@@ -388,6 +388,7 @@ export type Database = {
       }
       employees: {
         Row: {
+          active: boolean
           consultant_id: string
           created_at: string
           created_by: string | null
@@ -403,6 +404,7 @@ export type Database = {
           updated_by: string | null
         }
         Insert: {
+          active?: boolean
           consultant_id: string
           created_at?: string
           created_by?: string | null
@@ -418,6 +420,7 @@ export type Database = {
           updated_by?: string | null
         }
         Update: {
+          active?: boolean
           consultant_id?: string
           created_at?: string
           created_by?: string | null

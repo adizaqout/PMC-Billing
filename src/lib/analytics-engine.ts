@@ -12,7 +12,7 @@ export type AppSettingRow = Pick<Tables<"app_settings">, "setting_key" | "settin
 export type ProfileSummary = Pick<Tables<"profiles">, "full_name" | "consultant_id"> | null;
 export type ConsultantRow = Pick<Tables<"consultants">, "id" | "name" | "short_name" | "status">;
 export type ProjectRow = Pick<Tables<"projects">, "id" | "project_name" | "latest_budget" | "latest_pmc_budget" | "previous_pmc_budget" | "previous_pmc_actual" | "actual_pmc_to_date" | "portfolio" | "status">;
-export type EmployeeRow = Pick<Tables<"employees">, "id" | "employee_name" | "consultant_id" | "position_id" | "status">;
+export type EmployeeRow = Pick<Tables<"employees">, "id" | "employee_name" | "consultant_id" | "position_id" | "status" | "active">;
 export type PositionRow = Pick<Tables<"positions">, "id" | "position_name" | "consultant_id" | "so_id" | "year_1_rate" | "year_2_rate" | "year_3_rate" | "year_4_rate" | "year_5_rate"> & { function?: string | null };
 export type ServiceOrderRow = Pick<Tables<"service_orders">, "id" | "so_number" | "consultant_id" | "so_value">;
 export type PurchaseOrderRow = Pick<Tables<"purchase_orders">, "id" | "po_number" | "consultant_id" | "so_id" | "project_id" | "po_value" | "amount"> & { revision_number?: number | null };
@@ -334,7 +334,7 @@ export function buildAnalyticsModel(
   const remainingBudget = totalBudget - totalActualBilled;
   const forecastRemaining = totalBudget - totalForecastCost;
   const varianceToBaseline = totalForecastCost - totalBaselineCost;
-  const activeEmployees = data.employees.filter((employee) => ["active", "mobilized"].includes(employee.status)).length;
+  const activeEmployees = data.employees.filter((employee) => employee.active === true).length;
   const myOpenTasks = filteredSubmissions.filter((submission) => ["draft", "returned", "submitted", "in_review"].includes(submission.status)).length;
   const pendingReviews = filteredSubmissions.filter((submission) => submission.status === "submitted").length;
 

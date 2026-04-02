@@ -337,7 +337,7 @@ export default function Dashboard() {
 
               <div className="grid grid-cols-1 gap-4">
                 <KpiCard title="Variance to Baseline" value={currency(analytics.kpis.varianceToBaseline)} hint="Forecast against baseline" icon={GitCompareArrows} />
-                <KpiCard title="Active Employees" value={compactNumber(analytics.kpis.activeEmployees)} hint="Active + mobilized headcount" icon={Users} />
+                <KpiCard title="Active Employees" value={compactNumber(analytics.kpis.activeEmployees)} hint="Employees marked as active" icon={Users} />
                 <KpiCard title="My Open Tasks" value={compactNumber(analytics.kpis.myOpenTasks)} hint="Drafts, returns, and reviews" icon={Briefcase} />
                 <KpiCard title="Pending Reviews" value={compactNumber(analytics.kpis.pendingReviews)} hint="Reviewer queue from latest revisions" icon={Clock3} />
                 <KpiCard title="Projects at Risk" value={compactNumber(analytics.kpis.projectsAtRisk)} hint={`Shared thresholds · amber ${analytics.amberThreshold}%`} icon={AlertTriangle} />
