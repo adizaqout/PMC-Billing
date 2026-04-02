@@ -323,7 +323,7 @@ export default function Dashboard() {
                         <tr key={task.id} className="border-b last:border-0 hover:bg-muted/50">
                           <td className="px-4 py-2.5 capitalize">{task.type}</td>
                           <td className="px-4 py-2.5">{formatMonthLabel(task.month)}</td>
-                          <td className="px-4 py-2.5">{task.project || "—"}</td>
+                          <td className="px-4 py-2.5">{task.consultant || "—"}</td>
                           <td className="px-4 py-2.5 text-center"><StatusBadge status={task.status} /></td>
                           <td className="px-4 py-2.5">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}</td>
                           <td className="px-4 py-2.5 text-right"><Button size="sm" variant="outline" onClick={() => navigate("/deployments")}>Open</Button></td>

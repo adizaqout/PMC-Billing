@@ -129,7 +129,7 @@ export interface AnalyticsModel {
   workflowAudit: Array<{ month: string; submitted: number; returned: number; inReview: number; avgReviewDays: number }>;
   crossBilling: Array<{ id: string; employee: string; workedProject: string; billedProject: string; company: string; amount: number }>;
   overAllocation: Array<{ employee: string; month: string; allocation: number }>;
-  taskRows: Array<{ id: string; type: string; month: string; project: string | null; status: string; dueDate: string | null }>;
+  taskRows: Array<{ id: string; type: string; month: string; consultant: string | null; status: string; dueDate: string | null }>;
   reviewQueue: Array<{ id: string; company: string; month: string; scheduleType: string }>;
   recentActivity: Array<{ id: string; label: string; status: string; timestamp: string }>;
   filterOptions: {
