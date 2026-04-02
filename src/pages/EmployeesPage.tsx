@@ -105,7 +105,7 @@ export default function EmployeesPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["employees"] }); toast.success("Employee deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status }); setDialogOpen(true); };
+  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status, active: emp.active }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
 
   const handleSubmit = (e: React.FormEvent) => {
