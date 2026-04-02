@@ -312,7 +312,7 @@ export default function Dashboard() {
                       <tr className="border-b">
                         <th className="data-table-header px-4 py-2.5 text-left">Task Type</th>
                         <th className="data-table-header px-4 py-2.5 text-left">Month</th>
-                        <th className="data-table-header px-4 py-2.5 text-left">Project</th>
+                        <th className="data-table-header px-4 py-2.5 text-left">Consultant</th>
                         <th className="data-table-header px-4 py-2.5 text-center">Status</th>
                         <th className="data-table-header px-4 py-2.5 text-left">Due Date</th>
                         <th className="data-table-header px-4 py-2.5 text-right">Action</th>
