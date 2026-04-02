@@ -171,7 +171,7 @@ export default function DeploymentSchedulePage() {
     queryKey: ["deployment-employees", consultantId],
     queryFn: async () => {
       if (!consultantId) return [];
-      const { data, error } = await supabase.from("employees").select("*, positions(position_name)").eq("consultant_id", consultantId).in("status", ["active", "mobilized"]).order("employee_name");
+      const { data, error } = await supabase.from("employees").select("*, positions(position_name)").eq("consultant_id", consultantId).order("employee_name");
       if (error) throw error;
       return data as Employee[];
     },
