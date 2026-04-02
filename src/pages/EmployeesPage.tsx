@@ -76,9 +76,9 @@ export default function EmployeesPage() {
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const empTableCols: ColumnDef[] = [
-    { key: "emp_id", label: "Emp ID" }, { key: "name", label: "Name" }, { key: "consultant", label: "Consultant" },
+     { key: "emp_id", label: "Emp ID" }, { key: "name", label: "Name" }, { key: "consultant", label: "Consultant" },
     { key: "pos_id", label: "Position ID" }, { key: "pos_name", label: "Position Name" }, { key: "exp", label: "Exp (Yrs)" },
-    { key: "start", label: "Start Date" }, { key: "end", label: "End Date" }, { key: "status", label: "Status" },
+    { key: "start", label: "Start Date" }, { key: "end", label: "End Date" }, { key: "active_flag", label: "Active" }, { key: "status", label: "Status" },
   ];
   const { visibleColumns, setVisibleColumns } = useColumnVisibility(empTableCols);
   const queryClient = useQueryClient();
