@@ -243,6 +243,7 @@ export default function EmployeesPage() {
                   {visibleColumns.has("exp") && <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>}
                   {visibleColumns.has("start") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.start_date)}</td>}
                   {visibleColumns.has("end") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.end_date)}</td>}
+                  {visibleColumns.has("active_flag") && <td className="px-4 py-2.5 text-center"><Switch checked={emp.active} onCheckedChange={async (checked) => { await supabase.from("employees").update({ active: checked }).eq("id", emp.id); queryClient.invalidateQueries({ queryKey: ["employees"] }); }} /></td>}
                   {visibleColumns.has("status") && <td className="px-4 py-2.5 text-center"><StatusBadge status={emp.status} /></td>}
                   <td className="px-4 py-2.5 text-center">
                     <DropdownMenu><DropdownMenuTrigger asChild><button className="p-1 rounded hover:bg-muted"><MoreHorizontal size={14} /></button></DropdownMenuTrigger>
