@@ -334,7 +334,7 @@ export function buildAnalyticsModel(
   const remainingBudget = totalBudget - totalActualBilled;
   const forecastRemaining = totalBudget - totalForecastCost;
   const varianceToBaseline = totalForecastCost - totalBaselineCost;
-  const activeEmployees = data.employees.filter((employee) => ["active", "mobilized"].includes(employee.status)).length;
+  const activeEmployees = data.employees.filter((employee) => employee.active === true).length;
   const myOpenTasks = filteredSubmissions.filter((submission) => ["draft", "returned", "submitted", "in_review"].includes(submission.status)).length;
   const pendingReviews = filteredSubmissions.filter((submission) => submission.status === "submitted").length;
 
