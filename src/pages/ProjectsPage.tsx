@@ -155,7 +155,7 @@ export default function ProjectsPage() {
 
   const filtered = projects.filter((p) => {
     const s = search.toLowerCase();
-    if (search && !p.project_name.toLowerCase().includes(s) && !((p as any).project_number || "").toLowerCase().includes(s)) return false;
+    if (s && !p.project_name.toLowerCase().includes(s) && !(p.project_number || "").toLowerCase().includes(s) && !(p.entity || "").toLowerCase().includes(s) && !(p.portfolio || "").toLowerCase().includes(s) && !(p.project_type || "").toLowerCase().includes(s) && !(p.classification || "").toLowerCase().includes(s)) return false;
     if (colFilters.project_number && !((p as any).project_number || "").toLowerCase().includes(colFilters.project_number.toLowerCase())) return false;
     if (colFilters.project_name && !p.project_name.toLowerCase().includes(colFilters.project_name.toLowerCase())) return false;
     if (colFilters.entity && !(p.entity || "").toLowerCase().includes(colFilters.entity.toLowerCase())) return false;

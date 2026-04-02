@@ -111,7 +111,7 @@ export default function ServiceOrdersPage() {
   };
 
   const filtered = items.filter((i) => {
-    if (search && !i.so_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !i.so_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase()) && !(i.framework_agreements?.framework_agreement_no || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.so_number && !i.so_number.toLowerCase().includes(colFilters.so_number.toLowerCase())) return false;
     if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
     if (colFilters.framework && !(i.framework_agreements?.framework_agreement_no || "").toLowerCase().includes(colFilters.framework.toLowerCase())) return false;
