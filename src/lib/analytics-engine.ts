@@ -380,7 +380,7 @@ export function buildAnalyticsModel(
       id: submission.id,
       type: submission.schedule_type,
       month: submission.month,
-      project: lineProjectBySubmission.get(submission.id) || null,
+      consultant: consultantNameById.get(submission.consultant_id) || null,
       status: submission.status,
       dueDate: submission.reviewed_on || submission.submitted_on || submission.updated_at,
     }));
