@@ -261,7 +261,7 @@ export default function InvoicesPage() {
   };
 
   const filtered = items.filter((i) => {
-    if (search && !i.invoice_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !i.invoice_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase()) && !i.invoice_month.toLowerCase().includes(search.toLowerCase()) && !(i.purchase_orders?.po_number || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.invoice_number && !i.invoice_number.toLowerCase().includes(colFilters.invoice_number.toLowerCase())) return false;
     if (colFilters.month && !i.invoice_month.toLowerCase().includes(colFilters.month.toLowerCase())) return false;
     if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;

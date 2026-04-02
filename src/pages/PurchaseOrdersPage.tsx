@@ -137,7 +137,7 @@ export default function PurchaseOrdersPage() {
   };
 
   const filtered = items.filter((i) => {
-    if (search && !i.po_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !i.po_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase()) && !(i.service_orders?.so_number || "").toLowerCase().includes(search.toLowerCase()) && !(i.projects?.project_name || "").toLowerCase().includes(search.toLowerCase()) && !(i.po_reference || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.po_number && !i.po_number.toLowerCase().includes(colFilters.po_number.toLowerCase())) return false;
     if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
     if (colFilters.so && !(i.service_orders?.so_number || "").toLowerCase().includes(colFilters.so.toLowerCase())) return false;

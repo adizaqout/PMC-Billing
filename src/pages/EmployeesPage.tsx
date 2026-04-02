@@ -126,6 +126,7 @@ export default function EmployeesPage() {
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
       const v = val.toLowerCase();
+      if (key === "employee_id" && !((e as any).employee_id || "").toLowerCase().includes(v)) return false;
       if (key === "name" && !e.employee_name.toLowerCase().includes(v)) return false;
       if (key === "consultant" && !(e.consultants?.short_name || "").toLowerCase().includes(v)) return false;
       if (key === "position" && !(e.positions?.position_name || "").toLowerCase().includes(v)) return false;
