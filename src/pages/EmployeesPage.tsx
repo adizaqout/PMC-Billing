@@ -95,7 +95,7 @@ export default function EmployeesPage() {
 
   const upsertMutation = useMutation({
     mutationFn: async (values: EmployeeForm & { id?: string }) => {
-      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any };
+      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any, active: values.active };
       if (values.id) { const { error } = await supabase.from("employees").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("employees").insert({ ...payload } as any); if (error) throw error; }
     },
