@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { AnalyticsSourceData, DeploymentLineRow, SubmissionRow } from "@/lib/analytics-engine";
 
-const PAGE_SIZE = 1000;
+const PAGE_SIZE = 5000;
 
 async function fetchAllRows<T>(queryBuilder: any): Promise<T[]> {
   const rows: T[] = [];
