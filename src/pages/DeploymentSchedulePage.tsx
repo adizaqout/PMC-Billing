@@ -1388,11 +1388,16 @@ export default function DeploymentSchedulePage() {
                         {detailVisibleCols.has("emp_name") && (
                           <td className="px-3 py-1.5">
                             {isEditable ? (
-                              <Select value={row.employee_id} onValueChange={(v) => updateRow(realIdx, "employee_id", v)}>
+                              <Select value={row.employee_id || "__empty__"} onValueChange={(v) => updateRow(realIdx, "employee_id", v === "__empty__" ? "" : v)}>
                                 <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select..." /></SelectTrigger>
-                                <SelectContent>{employees.map(e => <SelectItem key={e.id} value={e.id}>{e.employee_name}</SelectItem>)}</SelectContent>
+                                <SelectContent>
+                                  {(scheduleType === "baseline" || scheduleType === "forecast") && (
+                                    <SelectItem value="__empty__"><span className="italic text-muted-foreground">TBD</span></SelectItem>
+                                  )}
+                                  {employees.map(e => <SelectItem key={e.id} value={e.id}>{e.employee_name}</SelectItem>)}
+                                </SelectContent>
                               </Select>
-                            ) : <span className="text-xs">{emp?.employee_name || "—"}</span>}
+                            ) : <span className="text-xs">{emp?.employee_name || (!row.employee_id && (scheduleType === "baseline" || scheduleType === "forecast") ? "TBD" : "—")}</span>}
                           </td>
                         )}
                         {detailVisibleCols.has("pos_id") && (
