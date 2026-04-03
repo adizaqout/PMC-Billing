@@ -815,7 +815,7 @@ export default function DeploymentSchedulePage() {
       const rec: Record<string, any> = {
         month: row.month || defaultMonth,
         employee_id_code: (emp as any)?.employee_id || "",
-        employee_name: emp?.employee_name || "",
+        employee_name: emp?.employee_name || (!row.employee_id && (scheduleType === "baseline" || scheduleType === "forecast") ? "TBD" : ""),
         position_id_code: pos?.position_id || "",
         position_name: pos?.position_name || "",
         rate_year: row.rate_year,
