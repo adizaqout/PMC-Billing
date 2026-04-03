@@ -24,9 +24,10 @@ async function fetchAllRows<T>(queryBuilder: any): Promise<T[]> {
 export function useAnalyticsData() {
   return useQuery<AnalyticsSourceData>({
     queryKey: ["analytics-data"],
-    staleTime: 60_000,
-    gcTime: 5 * 60_000,
+    staleTime: 3 * 60_000,
+    gcTime: 10 * 60_000,
     refetchOnWindowFocus: false,
+    refetchOnMount: false,
     queryFn: async () => {
       const { data: authData, error: authError } = await supabase.auth.getUser();
       if (authError) throw authError;
