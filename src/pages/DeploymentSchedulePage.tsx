@@ -378,51 +378,68 @@ export default function DeploymentSchedulePage() {
   // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
     if (lines.length === 0) return [];
-    const grouped: Record<string, DeploymentLine[]> = {};
+
+    // Split lines by whether they have excel_row_id (new imports) or not (legacy data)
+    const withExcelRowId = lines.filter(l => (l as any).excel_row_id);
+    const withoutExcelRowId = lines.filter(l => !(l as any).excel_row_id);
+
+    const buildGroupedRows = (groupedLines: Record<string, DeploymentLine[]>): UIRow[] => {
+      return Object.entries(groupedLines).map(([, grpLines]) => {
+        const first = grpLines[0];
+        const empId = first.employee_id || "";
+        const notesStr = (first as any).notes as string | null;
+        const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
+        const allocations: Record<string, number> = {};
+        grpLines.forEach(l => {
+          const projId = l.worked_project_id || l.billed_project_id;
+          if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
+        });
+        const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
+        const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
+        return {
+          _key: newRowKey(),
+          month: monthFromNotes || selectedSubmission?.month || first.submission_id,
+          employee_id: empId,
+          position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
+          rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
+          man_months: maxManMonths,
+          so_id: first.so_id || "",
+          po_id: first.po_id || "",
+          allocations,
+        };
+      });
+    };
+
+    // NEW imports: group by excel_row_id (one UI row per Excel row)
+    const newGrouped: Record<string, DeploymentLine[]> = {};
+    withExcelRowId.forEach(l => {
+      const key = (l as any).excel_row_id as string;
+      if (!newGrouped[key]) newGrouped[key] = [];
+      newGrouped[key].push(l);
+    });
+    const newUIRows = buildGroupedRows(newGrouped);
+
+    // LEGACY data: group by employee_id + month (original logic)
+    const legacyGrouped: Record<string, DeploymentLine[]> = {};
     let nullCounter = 0;
-    lines.forEach(l => {
+    withoutExcelRowId.forEach(l => {
       let key: string;
       const notesStr = (l as any).notes as string | null;
       const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
       const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
       if (l.employee_id) {
-        // Group matched employees by employee_id + month
         key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
       } else if (empCodeFromNotes && monthFromNotes) {
-        // Group unmatched baseline employees by their original code + month
         key = `${empCodeFromNotes}|${monthFromNotes}`;
       } else {
         key = `__null_${++nullCounter}`;
       }
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(l);
+      if (!legacyGrouped[key]) legacyGrouped[key] = [];
+      legacyGrouped[key].push(l);
     });
-    return Object.entries(grouped).map(([empKey, grpLines]) => {
-      const first = grpLines[0];
-      const empId = first.employee_id || "";
-      const notesStr = (first as any).notes as string | null;
-      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
-      const allocations: Record<string, number> = {};
-      grpLines.forEach(l => {
-        const projId = l.worked_project_id || l.billed_project_id;
-        if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
-      });
-      // Extract position from notes for rows without matched employees
-      const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
-      // Take max man_months across all lines in the group (they should be equal but legacy data may differ)
-      const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
-      return {
-        _key: newRowKey(),
-        month: monthFromNotes || selectedSubmission?.month || first.submission_id,
-        employee_id: empId,
-        position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
-        rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
-        man_months: maxManMonths,
-        so_id: first.so_id || "",
-        po_id: first.po_id || "",
-        allocations,
-      };
-    });
+    const legacyUIRows = buildGroupedRows(legacyGrouped);
+
+    return [...newUIRows, ...legacyUIRows];
   };
 
   useEffect(() => {
@@ -863,7 +880,7 @@ export default function DeploymentSchedulePage() {
   };
 
   let _phCounter = 0;
-  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string) => {
+  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string, excelRowId?: string) => {
     const empIdCode = rec.employee_id?.trim();
     const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
     const posIdCode = rec.position_id?.trim();
@@ -873,7 +890,7 @@ export default function DeploymentSchedulePage() {
     const rowMonth = rec.month || "";
     const effectiveEmpCode = empIdCode || `PH-${Date.now()}-${++_phCounter}`;
     const posId = pos?.id || "";
-    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}${excelRowId ? `|excelRow:${excelRowId}` : ""}`;
 
     const projEntries: [string, number][] = [];
     projectColumns.forEach(p => {
@@ -891,6 +908,7 @@ export default function DeploymentSchedulePage() {
         po_id: null, po_item_id: null, so_id: null,
         allocation_pct: 0, rate_year: rateYear, man_months: manMonths,
         notes: groupNote,
+        excel_row_id: excelRowId || null,
       });
     } else {
       projEntries.forEach(([projId, pct]) => {
@@ -904,6 +922,7 @@ export default function DeploymentSchedulePage() {
           po_id: poId, po_item_id: poItemId, so_id: null,
           allocation_pct: pct, rate_year: rateYear, man_months: manMonths,
           notes: groupNote,
+          excel_row_id: excelRowId || null,
         });
       });
     }
