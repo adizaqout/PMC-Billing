@@ -756,17 +756,17 @@ export default function DeploymentSchedulePage() {
     const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
     
     // Check for duplicate employee per month
-    const empMonthMap = new Map<string, number>();
+      const empMonthMap = new Map<string, number>();
     
     rows.forEach((row, idx) => {
       if (!row.employee_id && !allowEmptyEmployee) return;
       
       // Duplicate employee per month check
       if (row.employee_id) {
-        const empMonthKey = `${row.employee_id}|${row.month}`;
+        const empMonthKey = `${row.employee_id}|${row.month}|${row.position_id || ""}`;
         if (empMonthMap.has(empMonthKey)) {
           const emp = employees.find(e => e.id === row.employee_id);
-          errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): duplicate entry for month ${row.month}`);
+          errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): duplicate entry for month ${row.month}${row.position_id ? " and position" : ""}`);
         }
         empMonthMap.set(empMonthKey, idx);
       }
@@ -940,7 +940,7 @@ export default function DeploymentSchedulePage() {
     return {
       entityName: "Deployment Lines",
       columns,
-      businessKeys: ["employee_id", "month"],
+      businessKeys: ["employee_id", "month", "position_id"],
       transformValues: (values) => {
         values.month = normalizeMonth(values.month);
         // Normalize allocations: if values look like decimals (sum <= 1), convert to percentages
@@ -1261,7 +1261,7 @@ export default function DeploymentSchedulePage() {
   }, [rows, detailSearch, detailColFilters, employees, positions]);
 
   const { sorted: sortedDetailRows, sort: detailSort, toggleSort: toggleDetailSort } = useSort(filteredDetailRows, "month", "asc");
-  const { paginatedItems: paginatedDetailRows, pageSize: detailPageSize, setPageSize: setDetailPageSize, currentPage: detailCurrentPage, setCurrentPage: setDetailCurrentPage, totalItems: detailTotalItems } = usePagination(sortedDetailRows, 20);
+  const { paginatedItems: paginatedDetailRows, pageSize: detailPageSize, setPageSize: setDetailPageSize, currentPage: detailCurrentPage, setCurrentPage: setDetailCurrentPage, totalItems: detailTotalItems } = usePagination(sortedDetailRows, 100);
 
   // ---- Render ----
 
@@ -1349,7 +1349,7 @@ export default function DeploymentSchedulePage() {
           <div className="bg-card rounded-md border">
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search rows..." value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
-              <span className="text-xs text-muted-foreground">{filteredDetailRows.length} of {rows.length} rows</span>
+              <span className="text-xs text-muted-foreground">Showing {paginatedDetailRows.length} of {filteredDetailRows.length} filtered rows ({rows.length} total)</span>
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
