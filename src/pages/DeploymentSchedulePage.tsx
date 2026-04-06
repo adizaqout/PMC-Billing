@@ -76,23 +76,6 @@ const projLabel = (p: Project) => p.project_number ? `${p.project_number} - ${p.
 let rowCounter = 0;
 const newRowKey = () => `row-${++rowCounter}-${Date.now()}`;
 
-const parseDeploymentGroupNote = (notes: string | null | undefined) => ({
-  month: notes?.match(/month:([^|]+)/)?.[1] || "",
-  empCode: notes?.match(/emp:([^|]+)/)?.[1] || "",
-  posId: notes?.match(/posId:([^|]+)/)?.[1] || "",
-  rowKey: notes?.match(/row:([^|]+)/)?.[1] || "",
-});
-
-const createImportRowKey = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return `import-${crypto.randomUUID()}`;
-  }
-
-  return `import-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-};
-
-const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
-
 export default function DeploymentSchedulePage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -373,7 +356,7 @@ export default function DeploymentSchedulePage() {
     queryFn: async () => {
       if (!selectedSubmission) return [];
       const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       let from = 0;
       while (true) {
         const { data, error } = await supabase
@@ -392,25 +375,52 @@ export default function DeploymentSchedulePage() {
     enabled: !!selectedSubmission,
   });
 
-  // Convert DB lines to UI rows with no grouping: 1 deployment_lines record = 1 visible row
+  // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
-    return lines.map((line) => {
-      const parsed = parseDeploymentGroupNote((line as any).notes as string | null);
-      const projectId = line.worked_project_id || line.billed_project_id || "";
-      const employee = line.employee_id ? employees.find(e => e.id === line.employee_id) : undefined;
-
+    if (lines.length === 0) return [];
+    const grouped: Record<string, DeploymentLine[]> = {};
+    let nullCounter = 0;
+    lines.forEach(l => {
+      let key: string;
+      const notesStr = (l as any).notes as string | null;
+      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
+      const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
+      if (l.employee_id) {
+        // Group matched employees by employee_id + month
+        key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
+      } else if (empCodeFromNotes && monthFromNotes) {
+        // Group unmatched baseline employees by their original code + month
+        key = `${empCodeFromNotes}|${monthFromNotes}`;
+      } else {
+        key = `__null_${++nullCounter}`;
+      }
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(l);
+    });
+    return Object.entries(grouped).map(([empKey, grpLines]) => {
+      const first = grpLines[0];
+      const empId = first.employee_id || "";
+      const notesStr = (first as any).notes as string | null;
+      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
+      const allocations: Record<string, number> = {};
+      grpLines.forEach(l => {
+        const projId = l.worked_project_id || l.billed_project_id;
+        if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
+      });
+      // Extract position from notes for rows without matched employees
+      const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
+      // Take max man_months across all lines in the group (they should be equal but legacy data may differ)
+      const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
       return {
-        _key: line.id,
-        month: parsed.month || selectedSubmission?.month || "",
-        employee_id: line.employee_id || "",
-        position_id: parsed.posId || employee?.position_id || "",
-        rate_year: Number(line.rate_year) || 1,
-        man_months: Number(line.man_months) || 0,
-        so_id: line.so_id || "",
-        po_id: line.po_id || "",
-        allocations: projectId && Number(line.allocation_pct) > 0
-          ? { [projectId]: Math.round(Number(line.allocation_pct) * 100) / 100 }
-          : {},
+        _key: newRowKey(),
+        month: monthFromNotes || selectedSubmission?.month || first.submission_id,
+        employee_id: empId,
+        position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
+        rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
+        man_months: maxManMonths,
+        so_id: first.so_id || "",
+        po_id: first.po_id || "",
+        allocations,
       };
     });
   };
@@ -476,7 +486,6 @@ export default function DeploymentSchedulePage() {
           for (let b = 0; b < allOldLines.length; b += BATCH) {
             const batch = allOldLines.slice(b, b + BATCH).map(l => ({
               submission_id: newSub.id,
-              consultant_id: newSub.consultant_id,
               employee_id: l.employee_id,
               worked_project_id: l.worked_project_id,
               billed_project_id: l.billed_project_id,
@@ -521,7 +530,7 @@ export default function DeploymentSchedulePage() {
         const empCode = row.employee_id
           ? (employees.find(e => e.id === row.employee_id) as any)?.employee_id || row.employee_id
           : `PH-${rowIdx + 1}`;
-        const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}|row:${row._key}`;
+        const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
 
         // Create one deployment_line per project allocation
         const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
@@ -545,7 +554,6 @@ export default function DeploymentSchedulePage() {
             const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
             toInsert.push({
               submission_id: selectedSubmission.id,
-              consultant_id: selectedSubmission.consultant_id,
               employee_id: row.employee_id || null,
               worked_project_id: projId,
               billed_project_id: projId,
@@ -734,10 +742,23 @@ export default function DeploymentSchedulePage() {
   const allocationErrors = useMemo(() => {
     const errors: string[] = [];
     const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
-
+    
+    // Check for duplicate employee per month
+    const empMonthMap = new Map<string, number>();
+    
     rows.forEach((row, idx) => {
       if (!row.employee_id && !allowEmptyEmployee) return;
-
+      
+      // Duplicate employee per month check
+      if (row.employee_id) {
+        const empMonthKey = `${row.employee_id}|${row.month}`;
+        if (empMonthMap.has(empMonthKey)) {
+          const emp = employees.find(e => e.id === row.employee_id);
+          errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): duplicate entry for month ${row.month}`);
+        }
+        empMonthMap.set(empMonthKey, idx);
+      }
+      
       const rawSum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
       const sum = Math.round(rawSum * 100) / 100; // fix floating point
       // Skip 100% allocation check for placeholder rows (no employee) in baseline/forecast
@@ -838,7 +859,7 @@ export default function DeploymentSchedulePage() {
     return raw;
   };
 
-  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string, consultantId?: string) => {
+  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string) => {
     const empIdCode = rec.employee_id?.trim();
     const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
     const posIdCode = rec.position_id?.trim();
@@ -846,10 +867,9 @@ export default function DeploymentSchedulePage() {
     const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
     const manMonths = parseFloat(rec.man_months || "") || 0;
     const rowMonth = rec.month || "";
-    const effectiveEmpCode = empIdCode || `PH-${createImportRowKey()}`;
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
     const posId = pos?.id || "";
-    const rowKey = createImportRowKey();
-    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}|row:${rowKey}`;
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
 
     const projEntries: [string, number][] = [];
     projectColumns.forEach(p => {
@@ -861,7 +881,6 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       lines.push({
         submission_id: submissionId,
-        consultant_id: consultantId || null,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -874,7 +893,6 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         lines.push({
           submission_id: submissionId,
-          consultant_id: consultantId || null,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
@@ -908,7 +926,7 @@ export default function DeploymentSchedulePage() {
     return {
       entityName: "Deployment Lines",
       columns,
-      businessKeys: ["employee_id", "month", "position_id", "rate_year", "man_months", ...projectColumns.map(p => `proj_${p.id}`)],
+      businessKeys: ["employee_id", "month"],
       transformValues: (values) => {
         values.month = normalizeMonth(values.month);
         // Normalize allocations: if values look like decimals (sum <= 1), convert to percentages
@@ -974,45 +992,35 @@ export default function DeploymentSchedulePage() {
       },
       executeUpdate: async (existingId, rec) => {
         if (!selectedSubmission) return "No submission selected";
-        if (isUuid(existingId)) {
-          const { error } = await supabase
-            .from("deployment_lines")
-            .delete()
-            .eq("id", existingId)
-            .eq("submission_id", selectedSubmission.id);
-          if (error) return error.message;
-        } else {
-          const existingRow = rows.find(r => r._key === existingId);
-          if (existingRow) {
-            setRows(prev => prev.filter(r => r._key !== existingId));
+        const existingRow = rows.find(r => r._key === existingId);
+        if (existingRow) {
+          const emp = employees.find(e => e.id === existingRow.employee_id);
+          const empCode = (emp as any)?.employee_id || "";
+          const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
+          if (empCode && existingRow.month) {
+            const { data: matchingLines } = await supabase
+              .from("deployment_lines")
+              .select("id, notes")
+              .eq("submission_id", selectedSubmission.id);
+            if (matchingLines) {
+              const idsToDelete = matchingLines
+                .filter(l => (l.notes || "").includes(notesPattern))
+                .map(l => l.id);
+              if (idsToDelete.length > 0) {
+                await supabase.from("deployment_lines").delete().in("id", idsToDelete);
+              }
+            }
           }
         }
         return insertDeploymentRow(rec);
       },
       executeBatchInsert: async (records) => {
         if (!selectedSubmission) return records.map((_, i) => ({ index: i, message: "No submission selected" }));
-
-        // Delete-then-insert: remove ALL existing lines for this submission first
-        // to prevent duplicate stacking from repeated imports
-        const DEL_BATCH = 500;
-        const { data: existingIds } = await supabase
-          .from("deployment_lines")
-          .select("id")
-          .eq("submission_id", selectedSubmission.id);
-        if (existingIds && existingIds.length > 0) {
-          for (let i = 0; i < existingIds.length; i += DEL_BATCH) {
-            await supabase.from("deployment_lines").delete().in(
-              "id",
-              existingIds.slice(i, i + DEL_BATCH).map(r => r.id)
-            );
-          }
-        }
-
         const allLines: any[] = [];
-        const recIndexMap: number[] = [];
+        const recIndexMap: number[] = []; // maps each line back to its source record index
         for (let ri = 0; ri < records.length; ri++) {
           const rec = records[ri];
-          const lines = buildDeploymentLines(rec, selectedSubmission.id, selectedSubmission.consultant_id);
+          const lines = buildDeploymentLines(rec, selectedSubmission.id);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
@@ -1024,6 +1032,7 @@ export default function DeploymentSchedulePage() {
           const chunk = allLines.slice(i, i + BATCH);
           const { error } = await supabase.from("deployment_lines").insert(chunk);
           if (error) {
+            // Mark all records in this chunk as failed
             const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
             for (const idx of failedIndices) {
               if (!errors.find(e => e.index === idx)) {
@@ -1036,16 +1045,31 @@ export default function DeploymentSchedulePage() {
       },
       executeBatchUpdate: async (updates) => {
         if (!selectedSubmission) return updates.map((_, i) => ({ index: i, message: "No submission selected" }));
-        const idsToDelete = Array.from(new Set(updates.map(upd => upd.existingId).filter(isUuid)));
-        if (idsToDelete.length > 0) {
-          for (let i = 0; i < idsToDelete.length; i += 500) {
-            const { error } = await supabase
-              .from("deployment_lines")
-              .delete()
-              .in("id", idsToDelete.slice(i, i + 500))
-              .eq("submission_id", selectedSubmission.id);
-            if (error) {
-              return updates.map((_, index) => ({ index, message: error.message }));
+        // Delete existing lines for all affected employee-month combos in one go
+        const { data: allExistingLines } = await supabase
+          .from("deployment_lines")
+          .select("id, notes")
+          .eq("submission_id", selectedSubmission.id);
+        if (allExistingLines) {
+          const idsToDelete: string[] = [];
+          for (const upd of updates) {
+            const existingRow = rows.find(r => r._key === upd.existingId);
+            if (existingRow) {
+              const emp = employees.find(e => e.id === existingRow.employee_id);
+              const empCode = (emp as any)?.employee_id || "";
+              const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
+              if (empCode && existingRow.month) {
+                for (const l of allExistingLines) {
+                  if ((l.notes || "").includes(notesPattern) && !idsToDelete.includes(l.id)) {
+                    idsToDelete.push(l.id);
+                  }
+                }
+              }
+            }
+          }
+          if (idsToDelete.length > 0) {
+            for (let i = 0; i < idsToDelete.length; i += 500) {
+              await supabase.from("deployment_lines").delete().in("id", idsToDelete.slice(i, i + 500));
             }
           }
         }
@@ -1053,7 +1077,7 @@ export default function DeploymentSchedulePage() {
         const allLines: any[] = [];
         const recIndexMap: number[] = [];
         for (let ri = 0; ri < updates.length; ri++) {
-          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id, selectedSubmission.consultant_id);
+          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
@@ -1080,15 +1104,14 @@ export default function DeploymentSchedulePage() {
         if (selectedSubmission) {
           (async () => {
             const allLines: DeploymentLine[] = [];
-            const PAGE_SIZE = 5000;
+            const PAGE_SIZE = 1000;
             let from = 0;
             while (true) {
-              const { data, error } = await supabase
+              const { data } = await supabase
                 .from("deployment_lines")
                 .select("*")
                 .eq("submission_id", selectedSubmission.id)
                 .range(from, from + PAGE_SIZE - 1);
-              if (error) { console.error("Failed to reload lines after import:", error); break; }
               if (!data || data.length === 0) break;
               allLines.push(...(data as DeploymentLine[]));
               if (data.length < PAGE_SIZE) break;
@@ -1117,16 +1140,14 @@ export default function DeploymentSchedulePage() {
       if (val > 0) projEntries.push([p.id, val]);
     });
 
-    const effectiveEmpCode = empIdCode || `PH-${createImportRowKey()}`;
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
     const posId = pos?.id || "";
-    const rowKey = createImportRowKey();
-    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}|row:${rowKey}`;
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
 
     const linesToInsert: any[] = [];
     if (projEntries.length === 0) {
       linesToInsert.push({
         submission_id: selectedSubmission.id,
-        consultant_id: selectedSubmission.consultant_id,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -1139,7 +1160,6 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         linesToInsert.push({
           submission_id: selectedSubmission.id,
-          consultant_id: selectedSubmission.consultant_id,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
