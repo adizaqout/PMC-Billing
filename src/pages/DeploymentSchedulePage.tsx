@@ -76,6 +76,21 @@ const projLabel = (p: Project) => p.project_number ? `${p.project_number} - ${p.
 let rowCounter = 0;
 const newRowKey = () => `row-${++rowCounter}-${Date.now()}`;
 
+const parseDeploymentGroupNote = (notes: string | null | undefined) => ({
+  month: notes?.match(/month:([^|]+)/)?.[1] || "",
+  empCode: notes?.match(/emp:([^|]+)/)?.[1] || "",
+  posId: notes?.match(/posId:([^|]+)/)?.[1] || "",
+  rowKey: notes?.match(/row:([^|]+)/)?.[1] || "",
+});
+
+const createImportRowKey = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `import-${crypto.randomUUID()}`;
+  }
+
+  return `import-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 export default function DeploymentSchedulePage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -382,15 +397,13 @@ export default function DeploymentSchedulePage() {
     let nullCounter = 0;
     lines.forEach(l => {
       let key: string;
-      const notesStr = (l as any).notes as string | null;
-      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
-      const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
-      if (l.employee_id) {
-        // Group matched employees by employee_id + month
-        key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
-      } else if (empCodeFromNotes && monthFromNotes) {
-        // Group unmatched baseline employees by their original code + month
-        key = `${empCodeFromNotes}|${monthFromNotes}`;
+      const parsed = parseDeploymentGroupNote((l as any).notes as string | null);
+      if (parsed.rowKey) {
+        key = parsed.rowKey;
+      } else if (l.employee_id) {
+        key = `${l.employee_id}|${parsed.month || selectedSubmission?.month || ""}|${parsed.posId || ""}`;
+      } else if (parsed.empCode && parsed.month) {
+        key = `${parsed.empCode}|${parsed.month}|${parsed.posId || ""}`;
       } else {
         key = `__null_${++nullCounter}`;
       }
@@ -400,22 +413,19 @@ export default function DeploymentSchedulePage() {
     return Object.entries(grouped).map(([empKey, grpLines]) => {
       const first = grpLines[0];
       const empId = first.employee_id || "";
-      const notesStr = (first as any).notes as string | null;
-      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
+      const parsed = parseDeploymentGroupNote((first as any).notes as string | null);
       const allocations: Record<string, number> = {};
       grpLines.forEach(l => {
         const projId = l.worked_project_id || l.billed_project_id;
         if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
       });
-      // Extract position from notes for rows without matched employees
-      const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
       // Take max man_months across all lines in the group (they should be equal but legacy data may differ)
       const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
       return {
         _key: newRowKey(),
-        month: monthFromNotes || selectedSubmission?.month || first.submission_id,
+        month: parsed.month || selectedSubmission?.month || first.submission_id,
         employee_id: empId,
-        position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
+        position_id: employees.find(e => e.id === empId)?.position_id || parsed.posId || first.po_item_id || "",
         rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
         man_months: maxManMonths,
         so_id: first.so_id || "",
@@ -531,7 +541,7 @@ export default function DeploymentSchedulePage() {
         const empCode = row.employee_id
           ? (employees.find(e => e.id === row.employee_id) as any)?.employee_id || row.employee_id
           : `PH-${rowIdx + 1}`;
-        const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
+        const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}|row:${row._key}`;
 
         // Create one deployment_line per project allocation
         const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
@@ -746,17 +756,17 @@ export default function DeploymentSchedulePage() {
     const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
     
     // Check for duplicate employee per month
-    const empMonthMap = new Map<string, number>();
+      const empMonthMap = new Map<string, number>();
     
     rows.forEach((row, idx) => {
       if (!row.employee_id && !allowEmptyEmployee) return;
       
       // Duplicate employee per month check
       if (row.employee_id) {
-        const empMonthKey = `${row.employee_id}|${row.month}`;
+        const empMonthKey = `${row.employee_id}|${row.month}|${row.position_id || ""}`;
         if (empMonthMap.has(empMonthKey)) {
           const emp = employees.find(e => e.id === row.employee_id);
-          errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): duplicate entry for month ${row.month}`);
+          errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): duplicate entry for month ${row.month}${row.position_id ? " and position" : ""}`);
         }
         empMonthMap.set(empMonthKey, idx);
       }
@@ -869,9 +879,10 @@ export default function DeploymentSchedulePage() {
     const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
     const manMonths = parseFloat(rec.man_months || "") || 0;
     const rowMonth = rec.month || "";
-    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const effectiveEmpCode = empIdCode || `PH-${createImportRowKey()}`;
     const posId = pos?.id || "";
-    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
+    const rowKey = createImportRowKey();
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}|row:${rowKey}`;
 
     const projEntries: [string, number][] = [];
     projectColumns.forEach(p => {
@@ -930,7 +941,7 @@ export default function DeploymentSchedulePage() {
     return {
       entityName: "Deployment Lines",
       columns,
-      businessKeys: ["employee_id", "month"],
+      businessKeys: ["employee_id", "month", "position_id"],
       transformValues: (values) => {
         values.month = normalizeMonth(values.month);
         // Normalize allocations: if values look like decimals (sum <= 1), convert to percentages
@@ -1161,9 +1172,10 @@ export default function DeploymentSchedulePage() {
       if (val > 0) projEntries.push([p.id, val]);
     });
 
-    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const effectiveEmpCode = empIdCode || `PH-${createImportRowKey()}`;
     const posId = pos?.id || "";
-    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
+    const rowKey = createImportRowKey();
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}|row:${rowKey}`;
 
     const linesToInsert: any[] = [];
     if (projEntries.length === 0) {
@@ -1251,7 +1263,7 @@ export default function DeploymentSchedulePage() {
   }, [rows, detailSearch, detailColFilters, employees, positions]);
 
   const { sorted: sortedDetailRows, sort: detailSort, toggleSort: toggleDetailSort } = useSort(filteredDetailRows, "month", "asc");
-  const { paginatedItems: paginatedDetailRows, pageSize: detailPageSize, setPageSize: setDetailPageSize, currentPage: detailCurrentPage, setCurrentPage: setDetailCurrentPage, totalItems: detailTotalItems } = usePagination(sortedDetailRows, 20);
+  const { paginatedItems: paginatedDetailRows, pageSize: detailPageSize, setPageSize: setDetailPageSize, currentPage: detailCurrentPage, setCurrentPage: setDetailCurrentPage, totalItems: detailTotalItems } = usePagination(sortedDetailRows, 100);
 
   // ---- Render ----
 
@@ -1339,7 +1351,7 @@ export default function DeploymentSchedulePage() {
           <div className="bg-card rounded-md border">
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search rows..." value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
-              <span className="text-xs text-muted-foreground">{filteredDetailRows.length} of {rows.length} rows</span>
+              <span className="text-xs text-muted-foreground">Showing {paginatedDetailRows.length} of {filteredDetailRows.length} filtered rows ({rows.length} total)</span>
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
