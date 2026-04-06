@@ -220,6 +220,7 @@ export type Database = {
           derived_cost: number | null
           derived_monthly_rate: number | null
           employee_id: string | null
+          excel_row_id: string | null
           id: string
           man_months: number | null
           notes: string | null
@@ -239,6 +240,7 @@ export type Database = {
           derived_cost?: number | null
           derived_monthly_rate?: number | null
           employee_id?: string | null
+          excel_row_id?: string | null
           id?: string
           man_months?: number | null
           notes?: string | null
@@ -258,6 +260,7 @@ export type Database = {
           derived_cost?: number | null
           derived_monthly_rate?: number | null
           employee_id?: string | null
+          excel_row_id?: string | null
           id?: string
           man_months?: number | null
           notes?: string | null
