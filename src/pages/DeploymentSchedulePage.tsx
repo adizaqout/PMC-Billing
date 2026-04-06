@@ -486,6 +486,7 @@ export default function DeploymentSchedulePage() {
           for (let b = 0; b < allOldLines.length; b += BATCH) {
             const batch = allOldLines.slice(b, b + BATCH).map(l => ({
               submission_id: newSub.id,
+              consultant_id: consultantId,
               employee_id: l.employee_id,
               worked_project_id: l.worked_project_id,
               billed_project_id: l.billed_project_id,
