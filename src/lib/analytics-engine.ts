@@ -335,8 +335,15 @@ export function buildAnalyticsModel(
   const forecastRemaining = totalBudget - totalForecastCost;
   const varianceToBaseline = totalForecastCost - totalBaselineCost;
   const activeEmployees = data.employees.filter((employee) => employee.active === true).length;
-  const myOpenTasks = filteredSubmissions.filter((submission) => ["draft", "returned", "submitted", "in_review"].includes(submission.status)).length;
-  const pendingReviews = filteredSubmissions.filter((submission) => submission.status === "submitted").length;
+  // Task KPIs use ALL latest-revision submissions (not month-filtered) so users see their full task backlog
+  const allLatestSubmissions = data.submissions.filter((s) => latestSubmissionIds.has(s.id));
+  const taskEligibleSubmissions = allLatestSubmissions.filter((submission) => {
+    if (appliedFilters.consultantId !== ALL_FILTER_VALUE && submission.consultant_id !== appliedFilters.consultantId) return false;
+    if (appliedFilters.scenario !== ALL_FILTER_VALUE && submission.schedule_type !== appliedFilters.scenario) return false;
+    return true;
+  });
+  const myOpenTasks = taskEligibleSubmissions.filter((submission) => ["draft", "returned", "submitted", "in_review"].includes(submission.status)).length;
+  const pendingReviews = taskEligibleSubmissions.filter((submission) => submission.status === "submitted").length;
 
   const projectMetrics = data.projects
     .map((project) => {
@@ -373,9 +380,10 @@ export function buildAnalyticsModel(
     value: filteredSubmissions.filter((submission) => submission.status === status).length,
   }));
 
-  const taskRows = filteredSubmissions
+  const taskRows = taskEligibleSubmissions
     .filter((submission) => ["draft", "returned", "submitted", "in_review"].includes(submission.status))
-    .slice(0, 8)
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    .slice(0, 20)
     .map((submission) => ({
       id: submission.id,
       type: submission.schedule_type,
@@ -385,9 +393,10 @@ export function buildAnalyticsModel(
       dueDate: submission.reviewed_on || submission.submitted_on || submission.updated_at,
     }));
 
-  const reviewQueue = filteredSubmissions
+  const reviewQueue = taskEligibleSubmissions
     .filter((submission) => submission.status === "submitted")
-    .slice(0, 8)
+    .sort((a, b) => new Date(b.submitted_on || b.updated_at).getTime() - new Date(a.submitted_on || a.updated_at).getTime())
+    .slice(0, 20)
     .map((submission) => ({
       id: submission.id,
       company: consultantNameById.get(submission.consultant_id) || "Unknown",
