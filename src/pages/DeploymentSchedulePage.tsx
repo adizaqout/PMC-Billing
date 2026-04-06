@@ -1165,6 +1165,7 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         linesToInsert.push({
           submission_id: selectedSubmission.id,
+          consultant_id: consultantId,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
