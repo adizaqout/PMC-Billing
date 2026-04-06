@@ -1160,6 +1160,7 @@ export default function DeploymentSchedulePage() {
       onComplete: () => {
         queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
         if (selectedSubmission) {
+          setIsProcessingRows(true);
           (async () => {
             const allLines: DeploymentLine[] = [];
             const PAGE_SIZE = 1000;
@@ -1175,7 +1176,10 @@ export default function DeploymentSchedulePage() {
               if (data.length < PAGE_SIZE) break;
               from += PAGE_SIZE;
             }
+            // Yield to browser before heavy grouping
+            await new Promise(resolve => setTimeout(resolve, 0));
             setRows(buildUIRows(allLines));
+            setIsProcessingRows(false);
           })();
         }
       },
