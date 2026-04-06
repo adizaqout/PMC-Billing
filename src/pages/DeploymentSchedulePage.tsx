@@ -486,6 +486,7 @@ export default function DeploymentSchedulePage() {
           for (let b = 0; b < allOldLines.length; b += BATCH) {
             const batch = allOldLines.slice(b, b + BATCH).map(l => ({
               submission_id: newSub.id,
+              consultant_id: consultantId,
               employee_id: l.employee_id,
               worked_project_id: l.worked_project_id,
               billed_project_id: l.billed_project_id,
@@ -537,6 +538,7 @@ export default function DeploymentSchedulePage() {
         if (projEntries.length === 0) {
           toInsert.push({
             submission_id: selectedSubmission.id,
+            consultant_id: consultantId,
             employee_id: row.employee_id || null,
             worked_project_id: null,
             billed_project_id: null,
@@ -554,6 +556,7 @@ export default function DeploymentSchedulePage() {
             const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
             toInsert.push({
               submission_id: selectedSubmission.id,
+              consultant_id: consultantId,
               employee_id: row.employee_id || null,
               worked_project_id: projId,
               billed_project_id: projId,
@@ -859,6 +862,7 @@ export default function DeploymentSchedulePage() {
     return raw;
   };
 
+  let _phCounter = 0;
   const buildDeploymentLines = (rec: Record<string, string>, submissionId: string) => {
     const empIdCode = rec.employee_id?.trim();
     const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
@@ -867,7 +871,7 @@ export default function DeploymentSchedulePage() {
     const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
     const manMonths = parseFloat(rec.man_months || "") || 0;
     const rowMonth = rec.month || "";
-    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}-${++_phCounter}`;
     const posId = pos?.id || "";
     const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
 
@@ -881,6 +885,7 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       lines.push({
         submission_id: submissionId,
+        consultant_id: consultantId,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -893,6 +898,7 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         lines.push({
           submission_id: submissionId,
+          consultant_id: consultantId,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
@@ -1140,7 +1146,7 @@ export default function DeploymentSchedulePage() {
       if (val > 0) projEntries.push([p.id, val]);
     });
 
-    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}-${++_phCounter}`;
     const posId = pos?.id || "";
     const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
 
@@ -1148,6 +1154,7 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       linesToInsert.push({
         submission_id: selectedSubmission.id,
+        consultant_id: consultantId,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -1160,6 +1167,7 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         linesToInsert.push({
           submission_id: selectedSubmission.id,
+          consultant_id: consultantId,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
