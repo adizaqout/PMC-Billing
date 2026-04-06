@@ -335,8 +335,15 @@ export function buildAnalyticsModel(
   const forecastRemaining = totalBudget - totalForecastCost;
   const varianceToBaseline = totalForecastCost - totalBaselineCost;
   const activeEmployees = data.employees.filter((employee) => employee.active === true).length;
-  const myOpenTasks = filteredSubmissions.filter((submission) => ["draft", "returned", "submitted", "in_review"].includes(submission.status)).length;
-  const pendingReviews = filteredSubmissions.filter((submission) => submission.status === "submitted").length;
+  // Task KPIs use ALL latest-revision submissions (not month-filtered) so users see their full task backlog
+  const allLatestSubmissions = data.submissions.filter((s) => latestSubmissionIds.has(s.id));
+  const taskEligibleSubmissions = allLatestSubmissions.filter((submission) => {
+    if (appliedFilters.consultantId !== ALL_FILTER_VALUE && submission.consultant_id !== appliedFilters.consultantId) return false;
+    if (appliedFilters.scenario !== ALL_FILTER_VALUE && submission.schedule_type !== appliedFilters.scenario) return false;
+    return true;
+  });
+  const myOpenTasks = taskEligibleSubmissions.filter((submission) => ["draft", "returned", "submitted", "in_review"].includes(submission.status)).length;
+  const pendingReviews = taskEligibleSubmissions.filter((submission) => submission.status === "submitted").length;
 
   const projectMetrics = data.projects
     .map((project) => {
