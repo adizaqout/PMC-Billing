@@ -1041,11 +1041,13 @@ export default function DeploymentSchedulePage() {
       },
       executeBatchInsert: async (records) => {
         if (!selectedSubmission) return records.map((_, i) => ({ index: i, message: "No submission selected" }));
+        const batchUUID = crypto.randomUUID().split("-")[0]; // short prefix
         const allLines: any[] = [];
-        const recIndexMap: number[] = []; // maps each line back to its source record index
+        const recIndexMap: number[] = [];
         for (let ri = 0; ri < records.length; ri++) {
           const rec = records[ri];
-          const lines = buildDeploymentLines(rec, selectedSubmission.id);
+          const excelRowId = `${batchUUID}_${(ri + 1).toString().padStart(4, "0")}`;
+          const lines = buildDeploymentLines(rec, selectedSubmission.id, excelRowId);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
@@ -1057,7 +1059,6 @@ export default function DeploymentSchedulePage() {
           const chunk = allLines.slice(i, i + BATCH);
           const { error } = await supabase.from("deployment_lines").insert(chunk);
           if (error) {
-            // Mark all records in this chunk as failed
             const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
             for (const idx of failedIndices) {
               if (!errors.find(e => e.index === idx)) {
@@ -1098,11 +1099,13 @@ export default function DeploymentSchedulePage() {
             }
           }
         }
-        // Now batch insert all replacement lines
+        // Now batch insert all replacement lines with excel_row_id
+        const batchUUID = crypto.randomUUID().split("-")[0];
         const allLines: any[] = [];
         const recIndexMap: number[] = [];
         for (let ri = 0; ri < updates.length; ri++) {
-          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id);
+          const excelRowId = `${batchUUID}_${(ri + 1).toString().padStart(4, "0")}`;
+          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id, excelRowId);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
