@@ -859,6 +859,7 @@ export default function DeploymentSchedulePage() {
     return raw;
   };
 
+  let _phCounter = 0;
   const buildDeploymentLines = (rec: Record<string, string>, submissionId: string) => {
     const empIdCode = rec.employee_id?.trim();
     const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
@@ -867,7 +868,7 @@ export default function DeploymentSchedulePage() {
     const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
     const manMonths = parseFloat(rec.man_months || "") || 0;
     const rowMonth = rec.month || "";
-    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}-${++_phCounter}`;
     const posId = pos?.id || "";
     const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
 
@@ -1140,7 +1141,7 @@ export default function DeploymentSchedulePage() {
       if (val > 0) projEntries.push([p.id, val]);
     });
 
-    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const effectiveEmpCode = empIdCode || `PH-${Date.now()}-${++_phCounter}`;
     const posId = pos?.id || "";
     const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
 
