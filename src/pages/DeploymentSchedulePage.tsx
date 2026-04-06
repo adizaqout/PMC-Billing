@@ -356,7 +356,7 @@ export default function DeploymentSchedulePage() {
     queryFn: async () => {
       if (!selectedSubmission) return [];
       const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       let from = 0;
       while (true) {
         const { data, error } = await supabase
@@ -1124,14 +1124,15 @@ export default function DeploymentSchedulePage() {
         if (selectedSubmission) {
           (async () => {
             const allLines: DeploymentLine[] = [];
-            const PAGE_SIZE = 1000;
+            const PAGE_SIZE = 5000;
             let from = 0;
             while (true) {
-              const { data } = await supabase
+              const { data, error } = await supabase
                 .from("deployment_lines")
                 .select("*")
                 .eq("submission_id", selectedSubmission.id)
                 .range(from, from + PAGE_SIZE - 1);
+              if (error) { console.error("Failed to reload lines after import:", error); break; }
               if (!data || data.length === 0) break;
               allLines.push(...(data as DeploymentLine[]));
               if (data.length < PAGE_SIZE) break;
