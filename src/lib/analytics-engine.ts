@@ -393,9 +393,10 @@ export function buildAnalyticsModel(
       dueDate: submission.reviewed_on || submission.submitted_on || submission.updated_at,
     }));
 
-  const reviewQueue = filteredSubmissions
+  const reviewQueue = taskEligibleSubmissions
     .filter((submission) => submission.status === "submitted")
-    .slice(0, 8)
+    .sort((a, b) => new Date(b.submitted_on || b.updated_at).getTime() - new Date(a.submitted_on || a.updated_at).getTime())
+    .slice(0, 20)
     .map((submission) => ({
       id: submission.id,
       company: consultantNameById.get(submission.consultant_id) || "Unknown",
