@@ -1152,6 +1152,7 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       linesToInsert.push({
         submission_id: selectedSubmission.id,
+        consultant_id: consultantId,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
