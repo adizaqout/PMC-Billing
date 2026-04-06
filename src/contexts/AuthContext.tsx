@@ -95,31 +95,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const clearAuthState = () => {
-    setSession(null);
-    setPermissions({});
-    setFeatureToggles({});
-    setRoles([]);
-    setIsSuperAdmin(false);
-  };
-
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "TOKEN_REFRESHED") {
-          setSession(session);
-          if (session?.user) {
-            setTimeout(() => fetchPermissions(session.user.id), 0);
-          }
-        } else if (event === "SIGNED_OUT" || !session) {
-          clearAuthState();
-          setLoading(false);
+      (_event, session) => {
+        setSession(session);
+        setLoading(false);
+        if (session?.user) {
+          setTimeout(() => fetchPermissions(session.user.id), 0);
         } else {
-          setSession(session);
-          setLoading(false);
-          if (session?.user) {
-            setTimeout(() => fetchPermissions(session.user.id), 0);
-          }
+          setPermissions({});
+          setFeatureToggles({});
+          setRoles([]);
+          setIsSuperAdmin(false);
         }
       }
     );
@@ -130,11 +117,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session?.user) {
         fetchPermissions(session.user.id);
       }
-    }).catch((error) => {
-      console.error("Session refresh failed:", error);
-      clearAuthState();
-      setLoading(false);
-      supabase.auth.signOut().catch(() => {});
     });
 
     return () => subscription.unsubscribe();

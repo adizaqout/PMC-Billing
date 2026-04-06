@@ -85,7 +85,6 @@ export default function DeploymentSchedulePage() {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [newType, setNewType] = useState<string>("actual");
   const [rows, setRows] = useState<UIRow[]>([]);
-  // isProcessingRows removed - grouping is now synchronous
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected" | "returned">("approved");
@@ -380,90 +379,71 @@ export default function DeploymentSchedulePage() {
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
     if (lines.length === 0) return [];
 
-    // Single-pass separation using Map for O(1) grouping
-    const newGrouped = new Map<string, DeploymentLine[]>();
-    const legacyGrouped = new Map<string, DeploymentLine[]>();
-    let nullCounter = 0;
+    // Split lines by whether they have excel_row_id (new imports) or not (legacy data)
+    const withExcelRowId = lines.filter(l => (l as any).excel_row_id);
+    const withoutExcelRowId = lines.filter(l => !(l as any).excel_row_id);
 
-    for (const l of lines) {
-      const excelRowId = (l as any).excel_row_id as string | null;
-      if (excelRowId) {
-        const existing = newGrouped.get(excelRowId);
-        if (existing) existing.push(l);
-        else newGrouped.set(excelRowId, [l]);
-      } else {
-        const notesStr = (l as any).notes as string | null;
-        const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
-        const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
-        let key: string;
-        if (l.employee_id) {
-          key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
-        } else if (empCodeFromNotes && monthFromNotes) {
-          key = `${empCodeFromNotes}|${monthFromNotes}`;
-        } else {
-          key = `__null_${++nullCounter}`;
-        }
-        const existing = legacyGrouped.get(key);
-        if (existing) existing.push(l);
-        else legacyGrouped.set(key, [l]);
-      }
-    }
-
-    // Pre-build employee lookup Map for O(1) access
-    const employeeMap = new Map(employees.map(e => [e.id, e]));
-
-    const buildFromGroup = (grouped: Map<string, DeploymentLine[]>): UIRow[] => {
-      const result: UIRow[] = new Array(grouped.size);
-      let idx = 0;
-      for (const [, grpLines] of grouped) {
+    const buildGroupedRows = (groupedLines: Record<string, DeploymentLine[]>): UIRow[] => {
+      return Object.entries(groupedLines).map(([, grpLines]) => {
         const first = grpLines[0];
         const empId = first.employee_id || "";
         const notesStr = (first as any).notes as string | null;
         const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
         const allocations: Record<string, number> = {};
-        let maxManMonths = 0;
-        let maxRateYear = 0;
-        for (const l of grpLines) {
+        grpLines.forEach(l => {
           const projId = l.worked_project_id || l.billed_project_id;
           if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
-          const mm = Number(l.man_months) || 0;
-          if (mm > maxManMonths) maxManMonths = mm;
-          const ry = Number(l.rate_year) || 0;
-          if (ry > maxRateYear) maxRateYear = ry;
-        }
+        });
         const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
-        result[idx++] = {
+        const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
+        return {
           _key: newRowKey(),
           month: monthFromNotes || selectedSubmission?.month || first.submission_id,
           employee_id: empId,
-          position_id: employeeMap.get(empId)?.position_id || posFromNotes || first.po_item_id || "",
-          rate_year: maxRateYear || 1,
+          position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
+          rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
           man_months: maxManMonths,
           so_id: first.so_id || "",
           po_id: first.po_id || "",
           allocations,
         };
-      }
-      return result;
+      });
     };
 
-    const newUIRows = buildFromGroup(newGrouped);
-    const legacyUIRows = buildFromGroup(legacyGrouped);
+    // NEW imports: group by excel_row_id (one UI row per Excel row)
+    const newGrouped: Record<string, DeploymentLine[]> = {};
+    withExcelRowId.forEach(l => {
+      const key = (l as any).excel_row_id as string;
+      if (!newGrouped[key]) newGrouped[key] = [];
+      newGrouped[key].push(l);
+    });
+    const newUIRows = buildGroupedRows(newGrouped);
 
-    // Pre-allocate combined array
-    const combined = new Array<UIRow>(newUIRows.length + legacyUIRows.length);
-    for (let i = 0; i < newUIRows.length; i++) combined[i] = newUIRows[i];
-    for (let i = 0; i < legacyUIRows.length; i++) combined[newUIRows.length + i] = legacyUIRows[i];
-    return combined;
+    // LEGACY data: group by employee_id + month (original logic)
+    const legacyGrouped: Record<string, DeploymentLine[]> = {};
+    let nullCounter = 0;
+    withoutExcelRowId.forEach(l => {
+      let key: string;
+      const notesStr = (l as any).notes as string | null;
+      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
+      const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
+      if (l.employee_id) {
+        key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
+      } else if (empCodeFromNotes && monthFromNotes) {
+        key = `${empCodeFromNotes}|${monthFromNotes}`;
+      } else {
+        key = `__null_${++nullCounter}`;
+      }
+      if (!legacyGrouped[key]) legacyGrouped[key] = [];
+      legacyGrouped[key].push(l);
+    });
+    const legacyUIRows = buildGroupedRows(legacyGrouped);
+
+    return [...newUIRows, ...legacyUIRows];
   };
 
   useEffect(() => {
     if (!selectedSubmission) return;
-    if (existingLines.length === 0) {
-      setRows([]);
-      return;
-    }
-    // Synchronous grouping - no async/setTimeout to avoid race conditions
     setRows(buildUIRows(existingLines));
   }, [existingLines, selectedSubmission, employees]);
 
@@ -1150,6 +1130,25 @@ export default function DeploymentSchedulePage() {
       },
       onComplete: () => {
         queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+        if (selectedSubmission) {
+          (async () => {
+            const allLines: DeploymentLine[] = [];
+            const PAGE_SIZE = 1000;
+            let from = 0;
+            while (true) {
+              const { data } = await supabase
+                .from("deployment_lines")
+                .select("*")
+                .eq("submission_id", selectedSubmission.id)
+                .range(from, from + PAGE_SIZE - 1);
+              if (!data || data.length === 0) break;
+              allLines.push(...(data as DeploymentLine[]));
+              if (data.length < PAGE_SIZE) break;
+              from += PAGE_SIZE;
+            }
+            setRows(buildUIRows(allLines));
+          })();
+        }
       },
     };
   }, [selectedSubmission, scheduleType, allEmployees, employees, positions, projectColumns, rows, poItemByProject, poByItem]);
@@ -1301,7 +1300,6 @@ export default function DeploymentSchedulePage() {
           )}
 
           {/* Lines table */}
-          {(
           <div className="bg-card rounded-md border">
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search rows..." value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
@@ -1476,7 +1474,6 @@ export default function DeploymentSchedulePage() {
             </div>
             {filteredDetailRows.length > 0 && <TablePagination totalItems={detailTotalItems} pageSize={detailPageSize} currentPage={detailCurrentPage} onPageChange={setDetailCurrentPage} onPageSizeChange={setDetailPageSize} />}
           </div>
-          )}
 
           <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
             <span>{rows.length} total row(s)</span>
