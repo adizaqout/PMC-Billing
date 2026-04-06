@@ -1329,6 +1329,19 @@ export default function DeploymentSchedulePage() {
           )}
 
           {/* Lines table */}
+          {isProcessingRows ? (
+            <div className="bg-card rounded-md border">
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <Loader2 size={24} className="animate-spin text-primary" />
+                <span className="text-sm text-muted-foreground">Processing {existingLines.length} records…</span>
+              </div>
+              <div className="px-4 pb-4 space-y-2">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="h-8 rounded bg-muted animate-pulse" />
+                ))}
+              </div>
+            </div>
+          ) : (
           <div className="bg-card rounded-md border">
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search rows..." value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
