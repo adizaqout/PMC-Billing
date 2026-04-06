@@ -538,6 +538,7 @@ export default function DeploymentSchedulePage() {
         if (projEntries.length === 0) {
           toInsert.push({
             submission_id: selectedSubmission.id,
+            consultant_id: consultantId,
             employee_id: row.employee_id || null,
             worked_project_id: null,
             billed_project_id: null,
@@ -555,6 +556,7 @@ export default function DeploymentSchedulePage() {
             const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
             toInsert.push({
               submission_id: selectedSubmission.id,
+              consultant_id: consultantId,
               employee_id: row.employee_id || null,
               worked_project_id: projId,
               billed_project_id: projId,
