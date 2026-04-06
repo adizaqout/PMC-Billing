@@ -1020,8 +1020,25 @@ export default function DeploymentSchedulePage() {
       },
       executeBatchInsert: async (records) => {
         if (!selectedSubmission) return records.map((_, i) => ({ index: i, message: "No submission selected" }));
+
+        // Delete-then-insert: remove ALL existing lines for this submission first
+        // to prevent duplicate stacking from repeated imports
+        const DEL_BATCH = 500;
+        const { data: existingIds } = await supabase
+          .from("deployment_lines")
+          .select("id")
+          .eq("submission_id", selectedSubmission.id);
+        if (existingIds && existingIds.length > 0) {
+          for (let i = 0; i < existingIds.length; i += DEL_BATCH) {
+            await supabase.from("deployment_lines").delete().in(
+              "id",
+              existingIds.slice(i, i + DEL_BATCH).map(r => r.id)
+            );
+          }
+        }
+
         const allLines: any[] = [];
-        const recIndexMap: number[] = []; // maps each line back to its source record index
+        const recIndexMap: number[] = [];
         for (let ri = 0; ri < records.length; ri++) {
           const rec = records[ri];
           const lines = buildDeploymentLines(rec, selectedSubmission.id, selectedSubmission.consultant_id);
@@ -1036,7 +1053,6 @@ export default function DeploymentSchedulePage() {
           const chunk = allLines.slice(i, i + BATCH);
           const { error } = await supabase.from("deployment_lines").insert(chunk);
           if (error) {
-            // Mark all records in this chunk as failed
             const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
             for (const idx of failedIndices) {
               if (!errors.find(e => e.index === idx)) {
