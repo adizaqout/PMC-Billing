@@ -373,7 +373,35 @@ export default function DeploymentSchedulePage() {
       return allLines;
     },
     enabled: !!selectedSubmission,
+    staleTime: 10 * 60 * 1000, // 10 minutes — show cached data instantly
+    gcTime: 30 * 60 * 1000, // 30 minutes — keep in memory
   });
+
+  // Prefetch submission lines on hover for instant navigation
+  const prefetchSubmissionLines = (submissionId: string) => {
+    queryClient.prefetchQuery({
+      queryKey: ["deployment-lines", submissionId],
+      queryFn: async () => {
+        const allLines: DeploymentLine[] = [];
+        const PAGE_SIZE = 1000;
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from("deployment_lines")
+            .select("*")
+            .eq("submission_id", submissionId)
+            .range(from, from + PAGE_SIZE - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          allLines.push(...(data as DeploymentLine[]));
+          if (data.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+        }
+        return allLines;
+      },
+      staleTime: 10 * 60 * 1000,
+    });
+  };
 
   // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
@@ -1589,7 +1617,7 @@ export default function DeploymentSchedulePage() {
                     {subVisibleCols.has("reviewed") && <td className="px-3 py-2.5 text-xs text-muted-foreground">{sub.reviewed_on ? new Date(sub.reviewed_on).toLocaleDateString() : "—"}</td>}
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => { setSelectedSubmission(sub); setView("detail"); }}>
+                        <Button size="sm" variant="ghost" onMouseEnter={() => prefetchSubmissionLines(sub.id)} onClick={() => { setSelectedSubmission(sub); setView("detail"); }}>
                           <Eye size={14} />
                         </Button>
                         {canDeleteDraft && sub.status === "draft" && (
