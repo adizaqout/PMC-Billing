@@ -352,7 +352,7 @@ export default function DeploymentSchedulePage() {
 
   // Load lines for selected submission
   // Fetch ALL lines for selected submission (paginate past Supabase 1000-row limit)
-  const { data: existingLines = [], isLoading: isLoadingLines } = useQuery({
+  const { data: existingLines = [] } = useQuery({
     queryKey: ["deployment-lines", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
@@ -1301,14 +1301,7 @@ export default function DeploymentSchedulePage() {
           )}
 
           {/* Lines table */}
-          {isLoadingLines ? (
-            <div className="bg-card rounded-md border">
-              <div className="flex flex-col items-center justify-center py-16 gap-3">
-                <Loader2 size={24} className="animate-spin text-primary" />
-                <span className="text-sm text-muted-foreground">Loading deployment schedules...</span>
-              </div>
-            </div>
-          ) : (
+          {(
           <div className="bg-card rounded-md border">
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search rows..." value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
