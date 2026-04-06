@@ -486,6 +486,7 @@ export default function DeploymentSchedulePage() {
           for (let b = 0; b < allOldLines.length; b += BATCH) {
             const batch = allOldLines.slice(b, b + BATCH).map(l => ({
               submission_id: newSub.id,
+              consultant_id: newSub.consultant_id,
               employee_id: l.employee_id,
               worked_project_id: l.worked_project_id,
               billed_project_id: l.billed_project_id,
@@ -554,6 +555,7 @@ export default function DeploymentSchedulePage() {
             const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
             toInsert.push({
               submission_id: selectedSubmission.id,
+              consultant_id: selectedSubmission.consultant_id,
               employee_id: row.employee_id || null,
               worked_project_id: projId,
               billed_project_id: projId,
@@ -1148,6 +1150,7 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       linesToInsert.push({
         submission_id: selectedSubmission.id,
+        consultant_id: selectedSubmission.consultant_id,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -1160,6 +1163,7 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         linesToInsert.push({
           submission_id: selectedSubmission.id,
+          consultant_id: selectedSubmission.consultant_id,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
