@@ -85,6 +85,7 @@ export default function DeploymentSchedulePage() {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [newType, setNewType] = useState<string>("actual");
   const [rows, setRows] = useState<UIRow[]>([]);
+  const [isProcessingRows, setIsProcessingRows] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected" | "returned">("approved");
