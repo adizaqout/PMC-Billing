@@ -356,7 +356,7 @@ export default function DeploymentSchedulePage() {
     queryFn: async () => {
       if (!selectedSubmission) return [];
       const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       let from = 0;
       while (true) {
         const { data, error } = await supabase
@@ -1020,8 +1020,25 @@ export default function DeploymentSchedulePage() {
       },
       executeBatchInsert: async (records) => {
         if (!selectedSubmission) return records.map((_, i) => ({ index: i, message: "No submission selected" }));
+
+        // Delete-then-insert: remove ALL existing lines for this submission first
+        // to prevent duplicate stacking from repeated imports
+        const DEL_BATCH = 500;
+        const { data: existingIds } = await supabase
+          .from("deployment_lines")
+          .select("id")
+          .eq("submission_id", selectedSubmission.id);
+        if (existingIds && existingIds.length > 0) {
+          for (let i = 0; i < existingIds.length; i += DEL_BATCH) {
+            await supabase.from("deployment_lines").delete().in(
+              "id",
+              existingIds.slice(i, i + DEL_BATCH).map(r => r.id)
+            );
+          }
+        }
+
         const allLines: any[] = [];
-        const recIndexMap: number[] = []; // maps each line back to its source record index
+        const recIndexMap: number[] = [];
         for (let ri = 0; ri < records.length; ri++) {
           const rec = records[ri];
           const lines = buildDeploymentLines(rec, selectedSubmission.id, selectedSubmission.consultant_id);
@@ -1036,7 +1053,6 @@ export default function DeploymentSchedulePage() {
           const chunk = allLines.slice(i, i + BATCH);
           const { error } = await supabase.from("deployment_lines").insert(chunk);
           if (error) {
-            // Mark all records in this chunk as failed
             const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
             for (const idx of failedIndices) {
               if (!errors.find(e => e.index === idx)) {
@@ -1108,14 +1124,15 @@ export default function DeploymentSchedulePage() {
         if (selectedSubmission) {
           (async () => {
             const allLines: DeploymentLine[] = [];
-            const PAGE_SIZE = 1000;
+            const PAGE_SIZE = 5000;
             let from = 0;
             while (true) {
-              const { data } = await supabase
+              const { data, error } = await supabase
                 .from("deployment_lines")
                 .select("*")
                 .eq("submission_id", selectedSubmission.id)
                 .range(from, from + PAGE_SIZE - 1);
+              if (error) { console.error("Failed to reload lines after import:", error); break; }
               if (!data || data.length === 0) break;
               allLines.push(...(data as DeploymentLine[]));
               if (data.length < PAGE_SIZE) break;
