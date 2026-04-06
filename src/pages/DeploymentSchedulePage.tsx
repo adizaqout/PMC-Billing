@@ -459,6 +459,20 @@ export default function DeploymentSchedulePage() {
 
   useEffect(() => {
     if (!selectedSubmission) return;
+    if (existingLines.length === 0) {
+      setRows([]);
+      setIsProcessingRows(false);
+      return;
+    }
+    // For large datasets, yield to browser to show loading UI
+    if (existingLines.length > 200) {
+      setIsProcessingRows(true);
+      const timer = setTimeout(() => {
+        setRows(buildUIRows(existingLines));
+        setIsProcessingRows(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
     setRows(buildUIRows(existingLines));
   }, [existingLines, selectedSubmission, employees]);
 
