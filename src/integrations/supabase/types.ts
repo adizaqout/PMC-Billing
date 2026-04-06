@@ -215,6 +215,7 @@ export type Database = {
         Row: {
           allocation_pct: number
           billed_project_id: string | null
+          consultant_id: string
           created_at: string
           derived_cost: number | null
           derived_monthly_rate: number | null
@@ -233,6 +234,7 @@ export type Database = {
         Insert: {
           allocation_pct?: number
           billed_project_id?: string | null
+          consultant_id: string
           created_at?: string
           derived_cost?: number | null
           derived_monthly_rate?: number | null
@@ -251,6 +253,7 @@ export type Database = {
         Update: {
           allocation_pct?: number
           billed_project_id?: string | null
+          consultant_id?: string
           created_at?: string
           derived_cost?: number | null
           derived_monthly_rate?: number | null

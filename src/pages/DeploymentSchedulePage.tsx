@@ -486,6 +486,7 @@ export default function DeploymentSchedulePage() {
           for (let b = 0; b < allOldLines.length; b += BATCH) {
             const batch = allOldLines.slice(b, b + BATCH).map(l => ({
               submission_id: newSub.id,
+              consultant_id: newSub.consultant_id,
               employee_id: l.employee_id,
               worked_project_id: l.worked_project_id,
               billed_project_id: l.billed_project_id,
@@ -554,6 +555,7 @@ export default function DeploymentSchedulePage() {
             const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
             toInsert.push({
               submission_id: selectedSubmission.id,
+              consultant_id: selectedSubmission.consultant_id,
               employee_id: row.employee_id || null,
               worked_project_id: projId,
               billed_project_id: projId,
@@ -859,7 +861,7 @@ export default function DeploymentSchedulePage() {
     return raw;
   };
 
-  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string) => {
+  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string, consultantId?: string) => {
     const empIdCode = rec.employee_id?.trim();
     const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
     const posIdCode = rec.position_id?.trim();
@@ -881,6 +883,7 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       lines.push({
         submission_id: submissionId,
+        consultant_id: consultantId || null,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -893,6 +896,7 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         lines.push({
           submission_id: submissionId,
+          consultant_id: consultantId || null,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
@@ -1020,7 +1024,7 @@ export default function DeploymentSchedulePage() {
         const recIndexMap: number[] = []; // maps each line back to its source record index
         for (let ri = 0; ri < records.length; ri++) {
           const rec = records[ri];
-          const lines = buildDeploymentLines(rec, selectedSubmission.id);
+          const lines = buildDeploymentLines(rec, selectedSubmission.id, selectedSubmission.consultant_id);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
@@ -1077,7 +1081,7 @@ export default function DeploymentSchedulePage() {
         const allLines: any[] = [];
         const recIndexMap: number[] = [];
         for (let ri = 0; ri < updates.length; ri++) {
-          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id);
+          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id, selectedSubmission.consultant_id);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
@@ -1148,6 +1152,7 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       linesToInsert.push({
         submission_id: selectedSubmission.id,
+        consultant_id: selectedSubmission.consultant_id,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -1160,6 +1165,7 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         linesToInsert.push({
           submission_id: selectedSubmission.id,
+          consultant_id: selectedSubmission.consultant_id,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
