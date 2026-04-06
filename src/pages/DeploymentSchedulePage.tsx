@@ -355,13 +355,14 @@ export default function DeploymentSchedulePage() {
     queryKey: ["deployment-lines", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
+      console.time('[deploy] fetch_lines_query');
       const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       let from = 0;
       while (true) {
         const { data, error } = await supabase
           .from("deployment_lines")
-          .select("*")
+          .select("id, submission_id, consultant_id, employee_id, worked_project_id, billed_project_id, po_id, po_item_id, so_id, allocation_pct, rate_year, man_months, notes, excel_row_id, derived_monthly_rate, derived_cost")
           .eq("submission_id", selectedSubmission.id)
           .range(from, from + PAGE_SIZE - 1);
         if (error) throw error;
@@ -370,6 +371,8 @@ export default function DeploymentSchedulePage() {
         if (data.length < PAGE_SIZE) break;
         from += PAGE_SIZE;
       }
+      console.timeEnd('[deploy] fetch_lines_query');
+      console.log(`[deploy] fetched ${allLines.length} lines`);
       return allLines;
     },
     enabled: !!selectedSubmission,
