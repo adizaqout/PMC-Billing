@@ -1024,7 +1024,7 @@ export default function DeploymentSchedulePage() {
         const recIndexMap: number[] = []; // maps each line back to its source record index
         for (let ri = 0; ri < records.length; ri++) {
           const rec = records[ri];
-          const lines = buildDeploymentLines(rec, selectedSubmission.id);
+          const lines = buildDeploymentLines(rec, selectedSubmission.id, selectedSubmission.consultant_id);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
@@ -1081,7 +1081,7 @@ export default function DeploymentSchedulePage() {
         const allLines: any[] = [];
         const recIndexMap: number[] = [];
         for (let ri = 0; ri < updates.length; ri++) {
-          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id);
+          const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id, selectedSubmission.consultant_id);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
