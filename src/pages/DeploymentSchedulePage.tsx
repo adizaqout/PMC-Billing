@@ -1158,9 +1158,6 @@ export default function DeploymentSchedulePage() {
     const { error } = await supabase.from("deployment_lines").insert(lines);
     return error ? error.message : null;
   };
-    const { error } = await supabase.from("deployment_lines").insert(linesToInsert);
-    return error ? error.message : null;
-  };
 
   // ---- List view hooks (must be before any early return) ----
   const submittedSubs = submissions.filter(s => s.status === "submitted");
