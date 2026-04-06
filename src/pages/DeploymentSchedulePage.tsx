@@ -351,7 +351,7 @@ export default function DeploymentSchedulePage() {
 
   // Load lines for selected submission
   // Fetch ALL lines for selected submission (paginate past Supabase 1000-row limit)
-  const { data: existingLines = [] } = useQuery({
+  const { data: existingLines = [], isLoading: linesLoading, isFetching: linesFetching } = useQuery({
     queryKey: ["deployment-lines", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
@@ -1243,9 +1243,25 @@ export default function DeploymentSchedulePage() {
       return pos[rateKey] as number | null;
     };
 
+    const detailDataLoading = linesLoading || linesFetching;
+
     return (
       <AppLayout>
-        <div className="animate-fade-in">
+        <div className="animate-fade-in relative">
+          {/* Loading overlay - blocks UI until deployment lines fully load */}
+          {detailDataLoading && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg min-h-[600px]">
+              <div className="flex flex-col items-center gap-4 p-8">
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <div className="text-center">
+                  <p className="text-lg font-medium">Loading submission data...</p>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Processing deployment lines, this may take a moment for large datasets...
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Detail view content */}
           <div className="page-header">
             <div>
