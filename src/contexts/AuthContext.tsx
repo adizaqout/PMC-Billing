@@ -97,7 +97,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          // Refresh failed — clear everything
+          setSession(null);
+          setPermissions({});
+          setFeatureToggles({});
+          setRoles([]);
+          setIsSuperAdmin(false);
+          setLoading(false);
+          return;
+        }
+        if (event === 'SIGNED_OUT') {
+          setSession(null);
+          setPermissions({});
+          setFeatureToggles({});
+          setRoles([]);
+          setIsSuperAdmin(false);
+          setLoading(false);
+          return;
+        }
         setSession(session);
         setLoading(false);
         if (session?.user) {
@@ -111,10 +130,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error || !session) {
+        // If getSession fails (e.g. expired refresh token), ensure clean state
+        setSession(null);
+        setLoading(false);
+        return;
+      }
       setSession(session);
       setLoading(false);
-      if (session?.user) {
+      if (session.user) {
         fetchPermissions(session.user.id);
       }
     });
