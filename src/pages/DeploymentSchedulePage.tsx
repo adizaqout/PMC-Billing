@@ -352,7 +352,7 @@ export default function DeploymentSchedulePage() {
 
   // Load lines for selected submission
   // Fetch ALL lines for selected submission (paginate past Supabase 1000-row limit)
-  const { data: existingLines = [] } = useQuery({
+  const { data: existingLines = [], isLoading: isLoadingLines } = useQuery({
     queryKey: ["deployment-lines", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
