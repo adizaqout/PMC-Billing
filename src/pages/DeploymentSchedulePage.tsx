@@ -1516,6 +1516,7 @@ export default function DeploymentSchedulePage() {
             </div>
             {filteredDetailRows.length > 0 && <TablePagination totalItems={detailTotalItems} pageSize={detailPageSize} currentPage={detailCurrentPage} onPageChange={setDetailCurrentPage} onPageSizeChange={setDetailPageSize} />}
           </div>
+          )}
 
           <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
             <span>{rows.length} total row(s)</span>
