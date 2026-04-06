@@ -461,18 +461,9 @@ export default function DeploymentSchedulePage() {
     if (!selectedSubmission) return;
     if (existingLines.length === 0) {
       setRows([]);
-      setIsProcessingRows(false);
       return;
     }
-    // For large datasets, yield to browser to show loading UI
-    if (existingLines.length > 200) {
-      setIsProcessingRows(true);
-      const timer = setTimeout(() => {
-        setRows(buildUIRows(existingLines));
-        setIsProcessingRows(false);
-      }, 0);
-      return () => clearTimeout(timer);
-    }
+    // Synchronous grouping - no async/setTimeout to avoid race conditions
     setRows(buildUIRows(existingLines));
   }, [existingLines, selectedSubmission, employees]);
 
@@ -1159,29 +1150,6 @@ export default function DeploymentSchedulePage() {
       },
       onComplete: () => {
         queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
-        if (selectedSubmission) {
-          setIsProcessingRows(true);
-          (async () => {
-            const allLines: DeploymentLine[] = [];
-            const PAGE_SIZE = 1000;
-            let from = 0;
-            while (true) {
-              const { data } = await supabase
-                .from("deployment_lines")
-                .select("*")
-                .eq("submission_id", selectedSubmission.id)
-                .range(from, from + PAGE_SIZE - 1);
-              if (!data || data.length === 0) break;
-              allLines.push(...(data as DeploymentLine[]));
-              if (data.length < PAGE_SIZE) break;
-              from += PAGE_SIZE;
-            }
-            // Yield to browser before heavy grouping
-            await new Promise(resolve => setTimeout(resolve, 0));
-            setRows(buildUIRows(allLines));
-            setIsProcessingRows(false);
-          })();
-        }
       },
     };
   }, [selectedSubmission, scheduleType, allEmployees, employees, positions, projectColumns, rows, poItemByProject, poByItem]);
