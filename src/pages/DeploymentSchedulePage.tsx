@@ -861,7 +861,7 @@ export default function DeploymentSchedulePage() {
     return raw;
   };
 
-  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string) => {
+  const buildDeploymentLines = (rec: Record<string, string>, submissionId: string, consultantId?: string) => {
     const empIdCode = rec.employee_id?.trim();
     const emp = empIdCode ? allEmployees.find(e => (e as any).employee_id?.toLowerCase() === empIdCode.toLowerCase()) : undefined;
     const posIdCode = rec.position_id?.trim();
@@ -883,6 +883,7 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       lines.push({
         submission_id: submissionId,
+        consultant_id: consultantId || null,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -895,6 +896,7 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         lines.push({
           submission_id: submissionId,
+          consultant_id: consultantId || null,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
