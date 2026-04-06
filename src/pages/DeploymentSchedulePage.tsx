@@ -879,9 +879,10 @@ export default function DeploymentSchedulePage() {
     const rateYear = parseInt((rec.rate_year || "").replace(/[^0-9]/g, "")) || 1;
     const manMonths = parseFloat(rec.man_months || "") || 0;
     const rowMonth = rec.month || "";
-    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const effectiveEmpCode = empIdCode || `PH-${createImportRowKey()}`;
     const posId = pos?.id || "";
-    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
+    const rowKey = createImportRowKey();
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}|row:${rowKey}`;
 
     const projEntries: [string, number][] = [];
     projectColumns.forEach(p => {
@@ -1171,9 +1172,10 @@ export default function DeploymentSchedulePage() {
       if (val > 0) projEntries.push([p.id, val]);
     });
 
-    const effectiveEmpCode = empIdCode || `PH-${Date.now()}`;
+    const effectiveEmpCode = empIdCode || `PH-${createImportRowKey()}`;
     const posId = pos?.id || "";
-    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}`;
+    const rowKey = createImportRowKey();
+    const groupNote = `emp:${effectiveEmpCode}|month:${rowMonth}|posId:${posId}|row:${rowKey}`;
 
     const linesToInsert: any[] = [];
     if (projEntries.length === 0) {
