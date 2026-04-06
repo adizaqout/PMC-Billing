@@ -10,7 +10,7 @@ interface TablePaginationProps {
   onPageSizeChange: (size: number) => void;
 }
 
-const PAGE_SIZES = [5, 10, 20];
+const PAGE_SIZES = [5, 10, 20, 50, 100, 500];
 
 export default function TablePagination({ totalItems, pageSize, currentPage, onPageChange, onPageSizeChange }: TablePaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
