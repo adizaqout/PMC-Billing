@@ -380,9 +380,10 @@ export function buildAnalyticsModel(
     value: filteredSubmissions.filter((submission) => submission.status === status).length,
   }));
 
-  const taskRows = filteredSubmissions
+  const taskRows = taskEligibleSubmissions
     .filter((submission) => ["draft", "returned", "submitted", "in_review"].includes(submission.status))
-    .slice(0, 8)
+    .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+    .slice(0, 20)
     .map((submission) => ({
       id: submission.id,
       type: submission.schedule_type,
