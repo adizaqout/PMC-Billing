@@ -91,6 +91,8 @@ const createImportRowKey = () => {
   return `import-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 };
 
+const isUuid = (value: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
 export default function DeploymentSchedulePage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -390,45 +392,25 @@ export default function DeploymentSchedulePage() {
     enabled: !!selectedSubmission,
   });
 
-  // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
+  // Convert DB lines to UI rows with no grouping: 1 deployment_lines record = 1 visible row
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
-    if (lines.length === 0) return [];
-    const grouped: Record<string, DeploymentLine[]> = {};
-    let nullCounter = 0;
-    lines.forEach(l => {
-      let key: string;
-      const parsed = parseDeploymentGroupNote((l as any).notes as string | null);
-      if (l.employee_id) {
-        key = parsed.month ? `${l.employee_id}|${parsed.month}` : l.employee_id;
-      } else if (parsed.empCode && parsed.month) {
-        key = `${parsed.empCode}|${parsed.month}`;
-      } else {
-        key = `__null_${++nullCounter}`;
-      }
-      if (!grouped[key]) grouped[key] = [];
-      grouped[key].push(l);
-    });
-    return Object.entries(grouped).map(([empKey, grpLines]) => {
-      const first = grpLines[0];
-      const empId = first.employee_id || "";
-      const parsed = parseDeploymentGroupNote((first as any).notes as string | null);
-      const allocations: Record<string, number> = {};
-      grpLines.forEach(l => {
-        const projId = l.worked_project_id || l.billed_project_id;
-        if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
-      });
-      // Take max man_months across all lines in the group (they should be equal but legacy data may differ)
-      const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
+    return lines.map((line) => {
+      const parsed = parseDeploymentGroupNote((line as any).notes as string | null);
+      const projectId = line.worked_project_id || line.billed_project_id || "";
+      const employee = line.employee_id ? employees.find(e => e.id === line.employee_id) : undefined;
+
       return {
-        _key: newRowKey(),
-        month: parsed.month || selectedSubmission?.month || first.submission_id,
-        employee_id: empId,
-        position_id: employees.find(e => e.id === empId)?.position_id || parsed.posId || first.po_item_id || "",
-        rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
-        man_months: maxManMonths,
-        so_id: first.so_id || "",
-        po_id: first.po_id || "",
-        allocations,
+        _key: line.id,
+        month: parsed.month || selectedSubmission?.month || "",
+        employee_id: line.employee_id || "",
+        position_id: parsed.posId || employee?.position_id || "",
+        rate_year: Number(line.rate_year) || 1,
+        man_months: Number(line.man_months) || 0,
+        so_id: line.so_id || "",
+        po_id: line.po_id || "",
+        allocations: projectId && Number(line.allocation_pct) > 0
+          ? { [projectId]: Math.round(Number(line.allocation_pct) * 100) / 100 }
+          : {},
       };
     });
   };
@@ -752,23 +734,10 @@ export default function DeploymentSchedulePage() {
   const allocationErrors = useMemo(() => {
     const errors: string[] = [];
     const allowEmptyEmployee = scheduleType === "baseline" || scheduleType === "forecast";
-    
-    // Check for duplicate employee per month
-      const empMonthMap = new Map<string, number>();
-    
+
     rows.forEach((row, idx) => {
       if (!row.employee_id && !allowEmptyEmployee) return;
-      
-      // Duplicate employee per month check
-      if (row.employee_id) {
-        const empMonthKey = `${row.employee_id}|${row.month}`;
-        if (empMonthMap.has(empMonthKey)) {
-          const emp = employees.find(e => e.id === row.employee_id);
-          errors.push(`Row ${idx + 1} (${emp?.employee_name || "Unknown"}): duplicate entry for month ${row.month}`);
-        }
-        empMonthMap.set(empMonthKey, idx);
-      }
-      
+
       const rawSum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
       const sum = Math.round(rawSum * 100) / 100; // fix floating point
       // Skip 100% allocation check for placeholder rows (no employee) in baseline/forecast
@@ -939,7 +908,7 @@ export default function DeploymentSchedulePage() {
     return {
       entityName: "Deployment Lines",
       columns,
-      businessKeys: ["employee_id", "month"],
+      businessKeys: ["employee_id", "month", "position_id", "rate_year", "man_months", ...projectColumns.map(p => `proj_${p.id}`)],
       transformValues: (values) => {
         values.month = normalizeMonth(values.month);
         // Normalize allocations: if values look like decimals (sum <= 1), convert to percentages
@@ -1005,24 +974,17 @@ export default function DeploymentSchedulePage() {
       },
       executeUpdate: async (existingId, rec) => {
         if (!selectedSubmission) return "No submission selected";
-        const existingRow = rows.find(r => r._key === existingId);
-        if (existingRow) {
-          const emp = employees.find(e => e.id === existingRow.employee_id);
-          const empCode = (emp as any)?.employee_id || "";
-          const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
-          if (empCode && existingRow.month) {
-            const { data: matchingLines } = await supabase
-              .from("deployment_lines")
-              .select("id, notes")
-              .eq("submission_id", selectedSubmission.id);
-            if (matchingLines) {
-              const idsToDelete = matchingLines
-                .filter(l => (l.notes || "").includes(notesPattern))
-                .map(l => l.id);
-              if (idsToDelete.length > 0) {
-                await supabase.from("deployment_lines").delete().in("id", idsToDelete);
-              }
-            }
+        if (isUuid(existingId)) {
+          const { error } = await supabase
+            .from("deployment_lines")
+            .delete()
+            .eq("id", existingId)
+            .eq("submission_id", selectedSubmission.id);
+          if (error) return error.message;
+        } else {
+          const existingRow = rows.find(r => r._key === existingId);
+          if (existingRow) {
+            setRows(prev => prev.filter(r => r._key !== existingId));
           }
         }
         return insertDeploymentRow(rec);
@@ -1074,31 +1036,16 @@ export default function DeploymentSchedulePage() {
       },
       executeBatchUpdate: async (updates) => {
         if (!selectedSubmission) return updates.map((_, i) => ({ index: i, message: "No submission selected" }));
-        // Delete existing lines for all affected employee-month combos in one go
-        const { data: allExistingLines } = await supabase
-          .from("deployment_lines")
-          .select("id, notes")
-          .eq("submission_id", selectedSubmission.id);
-        if (allExistingLines) {
-          const idsToDelete: string[] = [];
-          for (const upd of updates) {
-            const existingRow = rows.find(r => r._key === upd.existingId);
-            if (existingRow) {
-              const emp = employees.find(e => e.id === existingRow.employee_id);
-              const empCode = (emp as any)?.employee_id || "";
-              const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
-              if (empCode && existingRow.month) {
-                for (const l of allExistingLines) {
-                  if ((l.notes || "").includes(notesPattern) && !idsToDelete.includes(l.id)) {
-                    idsToDelete.push(l.id);
-                  }
-                }
-              }
-            }
-          }
-          if (idsToDelete.length > 0) {
-            for (let i = 0; i < idsToDelete.length; i += 500) {
-              await supabase.from("deployment_lines").delete().in("id", idsToDelete.slice(i, i + 500));
+        const idsToDelete = Array.from(new Set(updates.map(upd => upd.existingId).filter(isUuid)));
+        if (idsToDelete.length > 0) {
+          for (let i = 0; i < idsToDelete.length; i += 500) {
+            const { error } = await supabase
+              .from("deployment_lines")
+              .delete()
+              .in("id", idsToDelete.slice(i, i + 500))
+              .eq("submission_id", selectedSubmission.id);
+            if (error) {
+              return updates.map((_, index) => ({ index, message: error.message }));
             }
           }
         }
