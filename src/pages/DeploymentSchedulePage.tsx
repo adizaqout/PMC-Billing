@@ -76,6 +76,21 @@ const projLabel = (p: Project) => p.project_number ? `${p.project_number} - ${p.
 let rowCounter = 0;
 const newRowKey = () => `row-${++rowCounter}-${Date.now()}`;
 
+const parseDeploymentGroupNote = (notes: string | null | undefined) => ({
+  month: notes?.match(/month:([^|]+)/)?.[1] || "",
+  empCode: notes?.match(/emp:([^|]+)/)?.[1] || "",
+  posId: notes?.match(/posId:([^|]+)/)?.[1] || "",
+  rowKey: notes?.match(/row:([^|]+)/)?.[1] || "",
+});
+
+const createImportRowKey = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return `import-${crypto.randomUUID()}`;
+  }
+
+  return `import-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+};
+
 export default function DeploymentSchedulePage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -382,15 +397,13 @@ export default function DeploymentSchedulePage() {
     let nullCounter = 0;
     lines.forEach(l => {
       let key: string;
-      const notesStr = (l as any).notes as string | null;
-      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
-      const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
-      if (l.employee_id) {
-        // Group matched employees by employee_id + month
-        key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
-      } else if (empCodeFromNotes && monthFromNotes) {
-        // Group unmatched baseline employees by their original code + month
-        key = `${empCodeFromNotes}|${monthFromNotes}`;
+      const parsed = parseDeploymentGroupNote((l as any).notes as string | null);
+      if (parsed.rowKey) {
+        key = parsed.rowKey;
+      } else if (l.employee_id) {
+        key = `${l.employee_id}|${parsed.month || selectedSubmission?.month || ""}|${parsed.posId || ""}`;
+      } else if (parsed.empCode && parsed.month) {
+        key = `${parsed.empCode}|${parsed.month}|${parsed.posId || ""}`;
       } else {
         key = `__null_${++nullCounter}`;
       }
@@ -400,22 +413,19 @@ export default function DeploymentSchedulePage() {
     return Object.entries(grouped).map(([empKey, grpLines]) => {
       const first = grpLines[0];
       const empId = first.employee_id || "";
-      const notesStr = (first as any).notes as string | null;
-      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
+      const parsed = parseDeploymentGroupNote((first as any).notes as string | null);
       const allocations: Record<string, number> = {};
       grpLines.forEach(l => {
         const projId = l.worked_project_id || l.billed_project_id;
         if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
       });
-      // Extract position from notes for rows without matched employees
-      const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
       // Take max man_months across all lines in the group (they should be equal but legacy data may differ)
       const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
       return {
         _key: newRowKey(),
-        month: monthFromNotes || selectedSubmission?.month || first.submission_id,
+        month: parsed.month || selectedSubmission?.month || first.submission_id,
         employee_id: empId,
-        position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
+        position_id: employees.find(e => e.id === empId)?.position_id || parsed.posId || first.po_item_id || "",
         rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
         man_months: maxManMonths,
         so_id: first.so_id || "",
@@ -531,7 +541,7 @@ export default function DeploymentSchedulePage() {
         const empCode = row.employee_id
           ? (employees.find(e => e.id === row.employee_id) as any)?.employee_id || row.employee_id
           : `PH-${rowIdx + 1}`;
-        const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
+        const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}|row:${row._key}`;
 
         // Create one deployment_line per project allocation
         const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
