@@ -514,6 +514,7 @@ export default function DeploymentSchedulePage() {
               rate_year: l.rate_year,
               man_months: l.man_months,
               notes: l.notes,
+              excel_row_id: l.excel_row_id || null,
             }));
             await supabase.from("deployment_lines").insert(batch);
           }
