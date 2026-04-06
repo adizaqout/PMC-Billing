@@ -882,6 +882,7 @@ export default function DeploymentSchedulePage() {
     if (projEntries.length === 0) {
       lines.push({
         submission_id: submissionId,
+        consultant_id: consultantId,
         employee_id: emp?.id || null,
         worked_project_id: null, billed_project_id: null,
         po_id: null, po_item_id: null, so_id: null,
@@ -894,6 +895,7 @@ export default function DeploymentSchedulePage() {
         const poId = poItemId ? (poByItem[poItemId] || null) : null;
         lines.push({
           submission_id: submissionId,
+          consultant_id: consultantId,
           employee_id: emp?.id || null,
           worked_project_id: projId, billed_project_id: projId,
           po_id: poId, po_item_id: poItemId, so_id: null,
