@@ -57,6 +57,9 @@ type POItem = { id: string; po_id: string; po_item_ref: string | null; project_i
 type ServiceOrder = { id: string; so_number: string; consultant_id: string; framework_id: string | null; so_start_date: string | null; so_end_date: string | null };
 type Position = Tables<"positions">;
 
+// Only fetch the columns buildUIRows actually needs — avoids transferring unused data
+const DL_SELECT_COLS = "id,submission_id,excel_row_id,employee_id,worked_project_id,billed_project_id,allocation_pct,man_months,rate_year,po_id,po_item_id,so_id,notes" as const;
+
 // A UI row: one employee-month combination with allocations across project columns
 interface UIRow {
   _key: string; // UI key
@@ -362,13 +365,13 @@ export default function DeploymentSchedulePage() {
       const timeout = setTimeout(() => controller.abort(), 90_000);
       try {
         const allLines: DeploymentLine[] = [];
-        const PAGE_SIZE = 1000;
+        const PAGE_SIZE = 5000;
         let from = 0;
         while (true) {
           if (controller.signal.aborted) throw new Error("Query timeout after 90s");
           const { data, error } = await supabase
             .from("deployment_lines")
-            .select("*")
+            .select(DL_SELECT_COLS)
             .eq("submission_id", selectedSubmission.id)
             .range(from, from + PAGE_SIZE - 1)
             .abortSignal(controller.signal);
@@ -408,13 +411,13 @@ export default function DeploymentSchedulePage() {
     const timeout = setTimeout(() => controller.abort(), 90_000);
     try {
       const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       let from = 0;
       while (true) {
         if (controller.signal.aborted) throw new Error("Query timeout");
         const { data, error } = await supabase
           .from("deployment_lines")
-          .select("*")
+          .select(DL_SELECT_COLS)
           .eq("submission_id", submissionId)
           .range(from, from + PAGE_SIZE - 1)
           .abortSignal(controller.signal);
@@ -445,10 +448,11 @@ export default function DeploymentSchedulePage() {
       return;
     }
 
-    // Prioritise: submitted/immutable first, then drafts
+    // Prioritise: submitted/immutable first, then drafts — limit to 20 to avoid overwhelming DB
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const immutable = toPrefetch.filter(s => !["draft", "returned", "rejected"].includes(s.status));
     const mutable = toPrefetch.filter(s => ["draft", "returned", "rejected"].includes(s.status));
-    const ordered = [...immutable, ...mutable];
+    const ordered = [...mutable, ...immutable.filter(s => new Date(s.created_at) > cutoff)].slice(0, 20);
 
     let done = 0;
     setPrefetchProgress({ done: 0, total: ordered.length });
@@ -557,10 +561,15 @@ export default function DeploymentSchedulePage() {
     return [...newUIRows, ...legacyUIRows];
   };
 
+  const builtRows = useMemo(() => {
+    if (!selectedSubmission || existingLines.length === 0) return [];
+    return buildUIRows(existingLines);
+  }, [existingLines, selectedSubmission, employees]);
+
   useEffect(() => {
     if (!selectedSubmission) return;
-    setRows(buildUIRows(existingLines));
-  }, [existingLines, selectedSubmission, employees]);
+    setRows(builtRows);
+  }, [builtRows]);
 
   const isEditable = selectedSubmission && ["draft", "returned", "rejected"].includes(selectedSubmission.status);
 
@@ -607,7 +616,7 @@ export default function DeploymentSchedulePage() {
         const PAGE = 1000;
         let from = 0;
         while (true) {
-          const { data } = await supabase.from("deployment_lines").select("*").eq("submission_id", latest.id).range(from, from + PAGE - 1);
+          const { data } = await supabase.from("deployment_lines").select(DL_SELECT_COLS).eq("submission_id", latest.id).range(from, from + PAGE - 1);
           if (!data || data.length === 0) break;
           allOldLines.push(...data);
           if (data.length < PAGE) break;
