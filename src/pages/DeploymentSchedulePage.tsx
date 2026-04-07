@@ -560,7 +560,7 @@ export default function DeploymentSchedulePage() {
     setRows(buildUIRows(existingLines));
   }, [existingLines, selectedSubmission, employees]);
 
-  const isEditable = selectedSubmission && ["draft", "returned"].includes(selectedSubmission.status);
+  const isEditable = selectedSubmission && ["draft", "returned", "rejected"].includes(selectedSubmission.status);
 
   // ---- Mutations ----
 
@@ -1762,7 +1762,7 @@ export default function DeploymentSchedulePage() {
                         <Button size="sm" variant="ghost" onMouseEnter={() => prefetchSubmissionLines(sub.id)} onClick={() => { setSelectedSubmission(sub); setView("detail"); }}>
                           <Eye size={14} />
                         </Button>
-                        {canDeleteDraft && sub.status === "draft" && (
+                        {canDeleteDraft && ["draft", "rejected"].includes(sub.status) && (
                           <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(sub)}>
                             <Trash2 size={14} />
                           </Button>
@@ -1838,7 +1838,7 @@ export default function DeploymentSchedulePage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Draft Submission?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Submission?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete the {deleteTarget?.schedule_type} submission for {deleteTarget?.month} (Rev #{deleteTarget?.revision_no}) and all its deployment lines. This action cannot be undone.
             </AlertDialogDescription>
