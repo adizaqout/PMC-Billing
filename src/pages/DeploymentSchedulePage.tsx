@@ -438,7 +438,10 @@ export default function DeploymentSchedulePage() {
       return !cached;
     });
 
-    if (toPrefetch.length === 0) return;
+    if (toPrefetch.length === 0) {
+      setPrefetchProgress(null);
+      return;
+    }
 
     // Prioritise: submitted/immutable first, then drafts
     const immutable = toPrefetch.filter(s => !["draft", "returned"].includes(s.status));
