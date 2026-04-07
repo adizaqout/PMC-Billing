@@ -803,7 +803,7 @@ export default function DeploymentSchedulePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
       setDeleteTarget(null);
-      toast.success("Draft submission deleted");
+      toast.success("Submission deleted");
     },
     onError: (e: Error) => toast.error(e.message),
   });
