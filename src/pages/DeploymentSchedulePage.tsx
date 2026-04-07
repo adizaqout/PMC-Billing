@@ -449,26 +449,35 @@ export default function DeploymentSchedulePage() {
     setPrefetchProgress({ done: 0, total: ordered.length });
 
     const run = async () => {
-      for (const sub of ordered) {
+      const BATCH_SIZE = 5;
+      for (let i = 0; i < ordered.length; i += BATCH_SIZE) {
         if (prefetchAbortRef.current) break;
-        const isImm = !["draft", "returned"].includes(sub.status);
-        try {
-          await queryClient.prefetchQuery({
-            queryKey: ["deployment-lines", sub.id],
-            queryFn: () => fetchLinesForSubmission(sub.id),
-            staleTime: isImm ? Infinity : 10 * 60 * 1000,
-            gcTime: isImm ? Infinity : 30 * 60 * 1000,
-          });
-        } catch {
-          // ignore individual failures, continue
+        const batch = ordered.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+          batch.map(async (sub) => {
+            if (prefetchAbortRef.current) return;
+            const isImm = !["draft", "returned"].includes(sub.status);
+            try {
+              await queryClient.prefetchQuery({
+                queryKey: ["deployment-lines", sub.id],
+                queryFn: () => fetchLinesForSubmission(sub.id),
+                staleTime: isImm ? Infinity : 10 * 60 * 1000,
+                gcTime: isImm ? Infinity : 30 * 60 * 1000,
+              });
+            } catch {
+              // ignore individual failures, continue
+            }
+            done++;
+            setPrefetchProgress({ done, total: ordered.length });
+          })
+        );
+        // Small delay between batches to avoid overwhelming DB
+        if (i + BATCH_SIZE < ordered.length) {
+          await new Promise(r => setTimeout(r, 300));
         }
-        done++;
-        setPrefetchProgress({ done, total: ordered.length });
-        // Rate-limit: 200ms between requests
-        await new Promise(r => setTimeout(r, 200));
       }
       // Hide progress after completion
-      setTimeout(() => setPrefetchProgress(null), 3000);
+      setTimeout(() => setPrefetchProgress(null), 5000);
     };
 
     // Use requestIdleCallback if available for non-blocking start
