@@ -731,7 +731,8 @@ export default function DeploymentSchedulePage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+      // Only invalidate this specific submission's cache, not all deployment-lines
+      queryClient.invalidateQueries({ queryKey: ["deployment-lines", selectedSubmission?.id] });
       toast.success("Draft saved");
     },
     onError: (e: Error) => toast.error(e.message),
