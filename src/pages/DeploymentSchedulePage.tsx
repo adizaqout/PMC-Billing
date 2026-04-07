@@ -1687,6 +1687,13 @@ export default function DeploymentSchedulePage() {
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Loader2 size={12} className="animate-spin" />
                 <span>Pre-loading: {prefetchProgress.done}/{prefetchProgress.total}</span>
+                <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-full transition-all duration-300"
+                    style={{ width: `${Math.round((prefetchProgress.done / prefetchProgress.total) * 100)}%` }}
+                  />
+                </div>
+                <span>{Math.round((prefetchProgress.done / prefetchProgress.total) * 100)}%</span>
               </div>
             )}
             {prefetchProgress && prefetchProgress.done === prefetchProgress.total && prefetchProgress.total > 0 && (
