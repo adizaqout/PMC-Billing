@@ -376,14 +376,14 @@ export default function DeploymentSchedulePage() {
     },
     enabled: !!selectedSubmission,
     // Submitted/approved/etc. data never changes → cache permanently; drafts stay at 30min
-    staleTime: selectedSubmission && !["draft", "returned"].includes(selectedSubmission.status) ? Infinity : 10 * 60 * 1000,
-    gcTime: selectedSubmission && !["draft", "returned"].includes(selectedSubmission.status) ? Infinity : 30 * 60 * 1000,
+    staleTime: selectedSubmission && !["draft", "returned", "rejected"].includes(selectedSubmission.status) ? Infinity : 10 * 60 * 1000,
+    gcTime: selectedSubmission && !["draft", "returned", "rejected"].includes(selectedSubmission.status) ? Infinity : 30 * 60 * 1000,
   });
 
   // Prefetch submission lines on hover for instant navigation
   const prefetchSubmissionLines = (submissionId: string) => {
     const sub = submissions.find(s => s.id === submissionId);
-    const isImmutable = sub && !["draft", "returned"].includes(sub.status);
+    const isImmutable = sub && !["draft", "returned", "rejected"].includes(sub.status);
     queryClient.prefetchQuery({
       queryKey: ["deployment-lines", submissionId],
       queryFn: async () => {
@@ -444,8 +444,8 @@ export default function DeploymentSchedulePage() {
     }
 
     // Prioritise: submitted/immutable first, then drafts
-    const immutable = toPrefetch.filter(s => !["draft", "returned"].includes(s.status));
-    const mutable = toPrefetch.filter(s => ["draft", "returned"].includes(s.status));
+    const immutable = toPrefetch.filter(s => !["draft", "returned", "rejected"].includes(s.status));
+    const mutable = toPrefetch.filter(s => ["draft", "returned", "rejected"].includes(s.status));
     const ordered = [...immutable, ...mutable];
 
     let done = 0;
@@ -459,7 +459,7 @@ export default function DeploymentSchedulePage() {
         await Promise.all(
           batch.map(async (sub) => {
             if (prefetchAbortRef.current) return;
-            const isImm = !["draft", "returned"].includes(sub.status);
+            const isImm = !["draft", "returned", "rejected"].includes(sub.status);
             try {
               await queryClient.prefetchQuery({
                 queryKey: ["deployment-lines", sub.id],
@@ -560,7 +560,7 @@ export default function DeploymentSchedulePage() {
     setRows(buildUIRows(existingLines));
   }, [existingLines, selectedSubmission, employees]);
 
-  const isEditable = selectedSubmission && ["draft", "returned"].includes(selectedSubmission.status);
+  const isEditable = selectedSubmission && ["draft", "returned", "rejected"].includes(selectedSubmission.status);
 
   // ---- Mutations ----
 
@@ -803,7 +803,7 @@ export default function DeploymentSchedulePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
       setDeleteTarget(null);
-      toast.success("Draft submission deleted");
+      toast.success("Submission deleted");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1762,7 +1762,7 @@ export default function DeploymentSchedulePage() {
                         <Button size="sm" variant="ghost" onMouseEnter={() => prefetchSubmissionLines(sub.id)} onClick={() => { setSelectedSubmission(sub); setView("detail"); }}>
                           <Eye size={14} />
                         </Button>
-                        {canDeleteDraft && sub.status === "draft" && (
+                        {canDeleteDraft && ["draft", "rejected"].includes(sub.status) && (
                           <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(sub)}>
                             <Trash2 size={14} />
                           </Button>
@@ -1838,7 +1838,7 @@ export default function DeploymentSchedulePage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Draft Submission?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Submission?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete the {deleteTarget?.schedule_type} submission for {deleteTarget?.month} (Rev #{deleteTarget?.revision_no}) and all its deployment lines. This action cannot be undone.
             </AlertDialogDescription>
