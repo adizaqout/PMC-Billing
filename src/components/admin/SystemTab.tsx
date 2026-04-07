@@ -193,7 +193,7 @@ export default function SystemTab() {
           {syncStatus && (
             <div className="rounded-md border bg-muted/50 p-3 space-y-2">
               <p className="text-sm flex items-center gap-2">
-                {syncStatus.startsWith("✓") && <CheckCircle2 size={14} className="text-green-600 shrink-0" />}
+                {syncStatus.startsWith("✓") && <CheckCircle2 size={14} className="text-primary shrink-0" />}
                 {syncStatus.startsWith("✗") && <XCircle size={14} className="text-destructive shrink-0" />}
                 {syncStatus}
               </p>
