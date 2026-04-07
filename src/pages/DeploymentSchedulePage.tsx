@@ -747,9 +747,16 @@ export default function DeploymentSchedulePage() {
         .eq("id", selectedSubmission!.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+      // Invalidate old draft cache, then re-cache permanently as submitted
+      await queryClient.invalidateQueries({ queryKey: ["deployment-lines", selectedSubmission!.id] });
+      queryClient.prefetchQuery({
+        queryKey: ["deployment-lines", selectedSubmission!.id],
+        queryFn: () => fetchLinesForSubmission(selectedSubmission!.id),
+        staleTime: Infinity,
+        gcTime: Infinity,
+      });
       toast.success("Submitted for review");
       setView("list");
     },
