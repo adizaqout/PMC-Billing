@@ -11,7 +11,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban, CalendarRange, CalendarIcon, X, ChevronLeft, ChevronRight, SlidersHorizontal, Bot, Wrench } from "lucide-react";
+import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2, Users, Shield, ListChecks, UserPlus, UserX, Ban, CalendarRange, CalendarIcon, X, ChevronLeft, ChevronRight, SlidersHorizontal, Bot } from "lucide-react";
 import { toast } from "sonner";
 import type { Tables } from "@/integrations/supabase/types";
 import StatusBadge from "@/components/StatusBadge";
@@ -19,7 +19,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import AnalyticsControlsTab from "@/components/admin/AnalyticsControlsTab";
 import SavedInsightsAdminTab from "@/components/admin/SavedInsightsAdminTab";
-import SystemTab from "@/components/admin/SystemTab";
 
 // ---- Types ----
 type Profile = Tables<"profiles">;
@@ -58,7 +57,6 @@ export default function AdminPage() {
             <TabsTrigger value="saved-insights"><Bot size={14} className="mr-1.5" />Saved Insights</TabsTrigger>
             <TabsTrigger value="lookups"><ListChecks size={14} className="mr-1.5" />Lookup Values</TabsTrigger>
             <TabsTrigger value="period-constraints"><CalendarRange size={14} className="mr-1.5" />Period Constraints</TabsTrigger>
-            <TabsTrigger value="system"><Wrench size={14} className="mr-1.5" />System</TabsTrigger>
           </TabsList>
           <TabsContent value="users"><UsersTab /></TabsContent>
           <TabsContent value="groups"><GroupsTab /></TabsContent>
@@ -66,7 +64,6 @@ export default function AdminPage() {
           <TabsContent value="saved-insights"><SavedInsightsAdminTab /></TabsContent>
           <TabsContent value="lookups"><LookupsTab /></TabsContent>
           <TabsContent value="period-constraints"><PeriodConstraintsTab /></TabsContent>
-          <TabsContent value="system"><SystemTab /></TabsContent>
         </Tabs>
       </div>
     </AppLayout>

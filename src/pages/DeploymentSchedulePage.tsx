@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -57,9 +57,6 @@ type POItem = { id: string; po_id: string; po_item_ref: string | null; project_i
 type ServiceOrder = { id: string; so_number: string; consultant_id: string; framework_id: string | null; so_start_date: string | null; so_end_date: string | null };
 type Position = Tables<"positions">;
 
-// Only fetch the columns buildUIRows actually needs — avoids transferring unused data
-const DL_SELECT_COLS = "id,submission_id,excel_row_id,employee_id,worked_project_id,billed_project_id,allocation_pct,man_months,rate_year,po_id,po_item_id,so_id,notes" as const;
-
 // A UI row: one employee-month combination with allocations across project columns
 interface UIRow {
   _key: string; // UI key
@@ -93,8 +90,6 @@ export default function DeploymentSchedulePage() {
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected" | "returned">("approved");
   const [reviewComment, setReviewComment] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
-  const [prefetchProgress, setPrefetchProgress] = useState<{ done: number; total: number } | null>(null);
-  const prefetchAbortRef = useRef(false);
   const [subSearch, setSubSearch] = useState("");
   const [subColFilters, setSubColFilters] = useState<Record<string, string>>({});
   const setSubColFilter = (key: string, value: string) => setSubColFilters(prev => ({ ...prev, [key]: value }));
@@ -356,71 +351,19 @@ export default function DeploymentSchedulePage() {
 
   // Load lines for selected submission
   // Fetch ALL lines for selected submission (paginate past Supabase 1000-row limit)
-  const { data: existingLines = [], isLoading: linesLoading, isFetching: linesFetching, error: linesError } = useQuery({
+  const { data: existingLines = [], isLoading: linesLoading, isFetching: linesFetching } = useQuery({
     queryKey: ["deployment-lines", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
-      // Use timeout-wrapped fetcher (defined below via fetchLinesForSubmission)
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 90_000);
-      try {
-        const allLines: DeploymentLine[] = [];
-        const PAGE_SIZE = 5000;
-        let from = 0;
-        while (true) {
-          if (controller.signal.aborted) throw new Error("Query timeout after 90s");
-          const { data, error } = await supabase
-            .from("deployment_lines")
-            .select(DL_SELECT_COLS)
-            .eq("submission_id", selectedSubmission.id)
-            .range(from, from + PAGE_SIZE - 1)
-            .abortSignal(controller.signal);
-          if (error) throw error;
-          if (!data || data.length === 0) break;
-          allLines.push(...(data as DeploymentLine[]));
-          if (data.length < PAGE_SIZE) break;
-          from += PAGE_SIZE;
-        }
-        return allLines;
-      } finally {
-        clearTimeout(timeout);
-      }
-    },
-    enabled: !!selectedSubmission,
-    retry: 1,
-    retryDelay: 2000,
-    staleTime: selectedSubmission && !["draft", "returned", "rejected"].includes(selectedSubmission.status) ? Infinity : 10 * 60 * 1000,
-    gcTime: selectedSubmission && !["draft", "returned", "rejected"].includes(selectedSubmission.status) ? Infinity : 30 * 60 * 1000,
-  });
-
-  // Prefetch submission lines on hover for instant navigation
-  const prefetchSubmissionLines = (submissionId: string) => {
-    const sub = submissions.find(s => s.id === submissionId);
-    const isImmutable = sub && !["draft", "returned", "rejected"].includes(sub.status);
-    queryClient.prefetchQuery({
-      queryKey: ["deployment-lines", submissionId],
-      queryFn: () => fetchLinesForSubmission(submissionId),
-      staleTime: isImmutable ? Infinity : 10 * 60 * 1000,
-    });
-  };
-
-  // Background prefetch: pre-cache all submissions when list loads
-  const fetchLinesForSubmission = useCallback(async (submissionId: string) => {
-    // Wrap in a 90-second timeout to prevent hanging queries
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 90_000);
-    try {
       const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 5000;
+      const PAGE_SIZE = 1000;
       let from = 0;
       while (true) {
-        if (controller.signal.aborted) throw new Error("Query timeout");
         const { data, error } = await supabase
           .from("deployment_lines")
-          .select(DL_SELECT_COLS)
-          .eq("submission_id", submissionId)
-          .range(from, from + PAGE_SIZE - 1)
-          .abortSignal(controller.signal);
+          .select("*")
+          .eq("submission_id", selectedSubmission.id)
+          .range(from, from + PAGE_SIZE - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
         allLines.push(...(data as DeploymentLine[]));
@@ -428,71 +371,37 @@ export default function DeploymentSchedulePage() {
         from += PAGE_SIZE;
       }
       return allLines;
-    } finally {
-      clearTimeout(timeout);
-    }
-  }, []);
+    },
+    enabled: !!selectedSubmission,
+    staleTime: 10 * 60 * 1000, // 10 minutes — show cached data instantly
+    gcTime: 30 * 60 * 1000, // 30 minutes — keep in memory
+  });
 
-  useEffect(() => {
-    if (submissions.length === 0 || view !== "list") return;
-    prefetchAbortRef.current = false;
-
-    // Only prefetch submissions not already cached
-    const toPrefetch = submissions.filter(sub => {
-      const cached = queryClient.getQueryData(["deployment-lines", sub.id]);
-      return !cached;
-    });
-
-    if (toPrefetch.length === 0) {
-      setPrefetchProgress(null);
-      return;
-    }
-
-    // Prioritise: submitted/immutable first, then drafts — limit to 20 to avoid overwhelming DB
-    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const immutable = toPrefetch.filter(s => !["draft", "returned", "rejected"].includes(s.status));
-    const mutable = toPrefetch.filter(s => ["draft", "returned", "rejected"].includes(s.status));
-    const ordered = [...mutable, ...immutable.filter(s => new Date(s.created_at) > cutoff)].slice(0, 20);
-
-    let done = 0;
-    setPrefetchProgress({ done: 0, total: ordered.length });
-
-    const run = async () => {
-      const BATCH_SIZE = 2; // Reduced from 5 to avoid overwhelming DB
-      for (let i = 0; i < ordered.length; i += BATCH_SIZE) {
-        if (prefetchAbortRef.current) break;
-        const batch = ordered.slice(i, i + BATCH_SIZE);
-        await Promise.all(
-          batch.map(async (sub) => {
-            if (prefetchAbortRef.current) return;
-            const isImm = !["draft", "returned", "rejected"].includes(sub.status);
-            try {
-              await queryClient.prefetchQuery({
-                queryKey: ["deployment-lines", sub.id],
-                queryFn: () => fetchLinesForSubmission(sub.id),
-                staleTime: isImm ? Infinity : 10 * 60 * 1000,
-                gcTime: isImm ? Infinity : 30 * 60 * 1000,
-              });
-            } catch (err) {
-              console.warn(`Prefetch failed for ${sub.id}:`, err);
-            }
-            done++;
-            setPrefetchProgress({ done, total: ordered.length });
-          })
-        );
-        // Longer delay between batches to avoid overwhelming DB
-        if (i + BATCH_SIZE < ordered.length) {
-          await new Promise(r => setTimeout(r, 1000));
+  // Prefetch submission lines on hover for instant navigation
+  const prefetchSubmissionLines = (submissionId: string) => {
+    queryClient.prefetchQuery({
+      queryKey: ["deployment-lines", submissionId],
+      queryFn: async () => {
+        const allLines: DeploymentLine[] = [];
+        const PAGE_SIZE = 1000;
+        let from = 0;
+        while (true) {
+          const { data, error } = await supabase
+            .from("deployment_lines")
+            .select("*")
+            .eq("submission_id", submissionId)
+            .range(from, from + PAGE_SIZE - 1);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          allLines.push(...(data as DeploymentLine[]));
+          if (data.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
         }
-      }
-      // Hide progress after completion
-      setTimeout(() => setPrefetchProgress(null), 3000);
-    };
-
-    // Start prefetch after a short delay to let UI render first
-    const t = setTimeout(() => run(), 500);
-    return () => { prefetchAbortRef.current = true; clearTimeout(t); };
-  }, [submissions, view, queryClient, fetchLinesForSubmission]);
+        return allLines;
+      },
+      staleTime: 10 * 60 * 1000,
+    });
+  };
 
   // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
@@ -561,17 +470,12 @@ export default function DeploymentSchedulePage() {
     return [...newUIRows, ...legacyUIRows];
   };
 
-  const builtRows = useMemo(() => {
-    if (!selectedSubmission || existingLines.length === 0) return [];
-    return buildUIRows(existingLines);
-  }, [existingLines, selectedSubmission, employees]);
-
   useEffect(() => {
     if (!selectedSubmission) return;
-    setRows(builtRows);
-  }, [builtRows]);
+    setRows(buildUIRows(existingLines));
+  }, [existingLines, selectedSubmission, employees]);
 
-  const isEditable = selectedSubmission && ["draft", "returned", "rejected"].includes(selectedSubmission.status);
+  const isEditable = selectedSubmission && ["draft", "returned"].includes(selectedSubmission.status);
 
   // ---- Mutations ----
 
@@ -616,7 +520,7 @@ export default function DeploymentSchedulePage() {
         const PAGE = 1000;
         let from = 0;
         while (true) {
-          const { data } = await supabase.from("deployment_lines").select(DL_SELECT_COLS).eq("submission_id", latest.id).range(from, from + PAGE - 1);
+          const { data } = await supabase.from("deployment_lines").select("*").eq("submission_id", latest.id).range(from, from + PAGE - 1);
           if (!data || data.length === 0) break;
           allOldLines.push(...data);
           if (data.length < PAGE) break;
@@ -660,22 +564,7 @@ export default function DeploymentSchedulePage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSubmission) throw new Error("No submission selected");
-
-      // Delete existing lines in batches to avoid RLS timeout on large datasets
-      // First get all line IDs, then delete in chunks
-      const { data: existingIds } = await supabase
-        .from("deployment_lines")
-        .select("id")
-        .eq("submission_id", selectedSubmission.id);
-
-      if (existingIds && existingIds.length > 0) {
-        const deleteBatchSize = 500;
-        for (let i = 0; i < existingIds.length; i += deleteBatchSize) {
-          const batch = existingIds.slice(i, i + deleteBatchSize).map(r => r.id);
-          const { error } = await supabase.from("deployment_lines").delete().in("id", batch);
-          if (error) throw error;
-        }
-      }
+      await supabase.from("deployment_lines").delete().eq("submission_id", selectedSubmission.id);
 
       const toInsert: any[] = [];
       const allowEmpty = selectedSubmission.schedule_type === "baseline" || selectedSubmission.schedule_type === "forecast";
@@ -729,19 +618,13 @@ export default function DeploymentSchedulePage() {
         }
       });
 
-      // Insert in batches of 500 to avoid statement timeout
       if (toInsert.length > 0) {
-        const insertBatchSize = 500;
-        for (let i = 0; i < toInsert.length; i += insertBatchSize) {
-          const batch = toInsert.slice(i, i + insertBatchSize);
-          const { error } = await supabase.from("deployment_lines").insert(batch);
-          if (error) throw error;
-        }
+        const { error } = await supabase.from("deployment_lines").insert(toInsert);
+        if (error) throw error;
       }
     },
     onSuccess: () => {
-      // Only invalidate this specific submission's cache, not all deployment-lines
-      queryClient.invalidateQueries({ queryKey: ["deployment-lines", selectedSubmission?.id] });
+      queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
       toast.success("Draft saved");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -751,7 +634,6 @@ export default function DeploymentSchedulePage() {
     mutationFn: async () => {
       if (allocationErrors.length > 0) throw new Error("Cannot submit with validation errors. Please fix all errors first.");
       await saveMutation.mutateAsync();
-      // Only update the submission row (1 row, instant)
       const { error } = await supabase
         .from("deployment_submissions")
         .update({ status: "submitted" as any, submitted_on: new Date().toISOString(), submitted_by: user?.id || null })
@@ -760,16 +642,7 @@ export default function DeploymentSchedulePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      // The lines were just saved by saveMutation — promote cache to permanent instead of re-fetching
-      const cachedLines = queryClient.getQueryData(["deployment-lines", selectedSubmission!.id]);
-      if (cachedLines) {
-        queryClient.setQueryData(["deployment-lines", selectedSubmission!.id], cachedLines);
-        // Update cache options to permanent for this now-submitted entry
-        queryClient.setQueryDefaults(["deployment-lines", selectedSubmission!.id], {
-          staleTime: Infinity,
-          gcTime: Infinity,
-        });
-      }
+      queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
       toast.success("Submitted for review");
       setView("list");
     },
@@ -790,21 +663,10 @@ export default function DeploymentSchedulePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      // Re-cache reviewed submissions permanently
-      const ids = Array.from(selectedIds);
-      for (const id of ids) {
-        queryClient.invalidateQueries({ queryKey: ["deployment-lines", id] });
-        queryClient.prefetchQuery({
-          queryKey: ["deployment-lines", id],
-          queryFn: () => fetchLinesForSubmission(id),
-          staleTime: Infinity,
-          gcTime: Infinity,
-        });
-      }
       setSelectedIds(new Set());
       setReviewDialogOpen(false);
       setReviewComment("");
-      toast.success(`${ids.length} submission(s) ${reviewAction}`);
+      toast.success(`${selectedIds.size} submission(s) ${reviewAction}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -818,7 +680,7 @@ export default function DeploymentSchedulePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
       setDeleteTarget(null);
-      toast.success("Submission deleted");
+      toast.success("Draft submission deleted");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -1714,25 +1576,6 @@ export default function DeploymentSchedulePage() {
           <div className="px-4 py-3 border-b flex items-center gap-3">
             <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search submissions..." value={subSearch} onChange={(e) => setSubSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
             <span className="text-xs text-muted-foreground">{filteredSubs.length} records</span>
-            {prefetchProgress && prefetchProgress.done < prefetchProgress.total && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Loader2 size={12} className="animate-spin" />
-                <span>Pre-loading: {prefetchProgress.done}/{prefetchProgress.total}</span>
-                <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-primary rounded-full transition-all duration-300"
-                    style={{ width: `${Math.round((prefetchProgress.done / prefetchProgress.total) * 100)}%` }}
-                  />
-                </div>
-                <span>{Math.round((prefetchProgress.done / prefetchProgress.total) * 100)}%</span>
-              </div>
-            )}
-            {prefetchProgress && prefetchProgress.done === prefetchProgress.total && prefetchProgress.total > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-primary">
-                <CheckCircle2 size={12} />
-                <span>All cached</span>
-              </div>
-            )}
           </div>
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -1777,7 +1620,7 @@ export default function DeploymentSchedulePage() {
                         <Button size="sm" variant="ghost" onMouseEnter={() => prefetchSubmissionLines(sub.id)} onClick={() => { setSelectedSubmission(sub); setView("detail"); }}>
                           <Eye size={14} />
                         </Button>
-                        {canDeleteDraft && ["draft", "rejected"].includes(sub.status) && (
+                        {canDeleteDraft && sub.status === "draft" && (
                           <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget(sub)}>
                             <Trash2 size={14} />
                           </Button>
@@ -1853,7 +1696,7 @@ export default function DeploymentSchedulePage() {
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Submission?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Draft Submission?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete the {deleteTarget?.schedule_type} submission for {deleteTarget?.month} (Rev #{deleteTarget?.revision_no}) and all its deployment lines. This action cannot be undone.
             </AlertDialogDescription>
