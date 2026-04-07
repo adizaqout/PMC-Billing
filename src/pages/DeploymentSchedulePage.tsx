@@ -380,6 +380,8 @@ export default function DeploymentSchedulePage() {
 
   // Prefetch submission lines on hover for instant navigation
   const prefetchSubmissionLines = (submissionId: string) => {
+    const sub = submissions.find(s => s.id === submissionId);
+    const isImmutable = sub && !["draft", "returned"].includes(sub.status);
     queryClient.prefetchQuery({
       queryKey: ["deployment-lines", submissionId],
       queryFn: async () => {
@@ -400,7 +402,7 @@ export default function DeploymentSchedulePage() {
         }
         return allLines;
       },
-      staleTime: 10 * 60 * 1000,
+      staleTime: isImmutable ? Infinity : 10 * 60 * 1000,
     });
   };
 
