@@ -741,22 +741,25 @@ export default function DeploymentSchedulePage() {
     mutationFn: async () => {
       if (allocationErrors.length > 0) throw new Error("Cannot submit with validation errors. Please fix all errors first.");
       await saveMutation.mutateAsync();
+      // Only update the submission row (1 row, instant)
       const { error } = await supabase
         .from("deployment_submissions")
         .update({ status: "submitted" as any, submitted_on: new Date().toISOString(), submitted_by: user?.id || null })
         .eq("id", selectedSubmission!.id);
       if (error) throw error;
     },
-    onSuccess: async () => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      // Invalidate old draft cache, then re-cache permanently as submitted
-      await queryClient.invalidateQueries({ queryKey: ["deployment-lines", selectedSubmission!.id] });
-      queryClient.prefetchQuery({
-        queryKey: ["deployment-lines", selectedSubmission!.id],
-        queryFn: () => fetchLinesForSubmission(selectedSubmission!.id),
-        staleTime: Infinity,
-        gcTime: Infinity,
-      });
+      // The lines were just saved by saveMutation — promote cache to permanent instead of re-fetching
+      const cachedLines = queryClient.getQueryData(["deployment-lines", selectedSubmission!.id]);
+      if (cachedLines) {
+        queryClient.setQueryData(["deployment-lines", selectedSubmission!.id], cachedLines);
+        // Update cache options to permanent for this now-submitted entry
+        queryClient.setQueryDefaults(["deployment-lines", selectedSubmission!.id], {
+          staleTime: Infinity,
+          gcTime: Infinity,
+        });
+      }
       toast.success("Submitted for review");
       setView("list");
     },
