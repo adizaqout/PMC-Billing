@@ -396,24 +396,7 @@ export default function DeploymentSchedulePage() {
     const isImmutable = sub && !["draft", "returned", "rejected"].includes(sub.status);
     queryClient.prefetchQuery({
       queryKey: ["deployment-lines", submissionId],
-      queryFn: async () => {
-        const allLines: DeploymentLine[] = [];
-        const PAGE_SIZE = 1000;
-        let from = 0;
-        while (true) {
-          const { data, error } = await supabase
-            .from("deployment_lines")
-            .select("*")
-            .eq("submission_id", submissionId)
-            .range(from, from + PAGE_SIZE - 1);
-          if (error) throw error;
-          if (!data || data.length === 0) break;
-          allLines.push(...(data as DeploymentLine[]));
-          if (data.length < PAGE_SIZE) break;
-          from += PAGE_SIZE;
-        }
-        return allLines;
-      },
+      queryFn: () => fetchLinesForSubmission(submissionId),
       staleTime: isImmutable ? Infinity : 10 * 60 * 1000,
     });
   };
