@@ -1,0 +1,2 @@
+CREATE INDEX IF NOT EXISTS idx_deployment_lines_submission_id ON public.deployment_lines(submission_id);
+CREATE INDEX IF NOT EXISTS idx_deployment_lines_composite ON public.deployment_lines(submission_id, excel_row_id);
