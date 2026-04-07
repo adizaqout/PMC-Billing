@@ -373,12 +373,15 @@ export default function DeploymentSchedulePage() {
       return allLines;
     },
     enabled: !!selectedSubmission,
-    staleTime: 10 * 60 * 1000, // 10 minutes — show cached data instantly
-    gcTime: 30 * 60 * 1000, // 30 minutes — keep in memory
+    // Submitted/approved/etc. data never changes → cache permanently; drafts stay at 30min
+    staleTime: selectedSubmission && !["draft", "returned"].includes(selectedSubmission.status) ? Infinity : 10 * 60 * 1000,
+    gcTime: selectedSubmission && !["draft", "returned"].includes(selectedSubmission.status) ? Infinity : 30 * 60 * 1000,
   });
 
   // Prefetch submission lines on hover for instant navigation
   const prefetchSubmissionLines = (submissionId: string) => {
+    const sub = submissions.find(s => s.id === submissionId);
+    const isImmutable = sub && !["draft", "returned"].includes(sub.status);
     queryClient.prefetchQuery({
       queryKey: ["deployment-lines", submissionId],
       queryFn: async () => {
@@ -399,7 +402,7 @@ export default function DeploymentSchedulePage() {
         }
         return allLines;
       },
-      staleTime: 10 * 60 * 1000,
+      staleTime: isImmutable ? Infinity : 10 * 60 * 1000,
     });
   };
 
