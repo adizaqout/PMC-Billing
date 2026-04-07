@@ -564,7 +564,22 @@ export default function DeploymentSchedulePage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSubmission) throw new Error("No submission selected");
-      await supabase.from("deployment_lines").delete().eq("submission_id", selectedSubmission.id);
+
+      // Delete existing lines in batches to avoid RLS timeout on large datasets
+      // First get all line IDs, then delete in chunks
+      const { data: existingIds } = await supabase
+        .from("deployment_lines")
+        .select("id")
+        .eq("submission_id", selectedSubmission.id);
+
+      if (existingIds && existingIds.length > 0) {
+        const deleteBatchSize = 500;
+        for (let i = 0; i < existingIds.length; i += deleteBatchSize) {
+          const batch = existingIds.slice(i, i + deleteBatchSize).map(r => r.id);
+          const { error } = await supabase.from("deployment_lines").delete().in("id", batch);
+          if (error) throw error;
+        }
+      }
 
       const toInsert: any[] = [];
       const allowEmpty = selectedSubmission.schedule_type === "baseline" || selectedSubmission.schedule_type === "forecast";
@@ -618,9 +633,14 @@ export default function DeploymentSchedulePage() {
         }
       });
 
+      // Insert in batches of 500 to avoid statement timeout
       if (toInsert.length > 0) {
-        const { error } = await supabase.from("deployment_lines").insert(toInsert);
-        if (error) throw error;
+        const insertBatchSize = 500;
+        for (let i = 0; i < toInsert.length; i += insertBatchSize) {
+          const batch = toInsert.slice(i, i + insertBatchSize);
+          const { error } = await supabase.from("deployment_lines").insert(batch);
+          if (error) throw error;
+        }
       }
     },
     onSuccess: () => {
