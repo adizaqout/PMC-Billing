@@ -1681,7 +1681,7 @@ export default function DeploymentSchedulePage() {
               </div>
             )}
             {prefetchProgress && prefetchProgress.done === prefetchProgress.total && prefetchProgress.total > 0 && (
-              <div className="flex items-center gap-1.5 text-xs text-green-600">
+              <div className="flex items-center gap-1.5 text-xs text-primary">
                 <CheckCircle2 size={12} />
                 <span>All cached</span>
               </div>
