@@ -777,10 +777,21 @@ export default function DeploymentSchedulePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
+      // Re-cache reviewed submissions permanently
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        queryClient.invalidateQueries({ queryKey: ["deployment-lines", id] });
+        queryClient.prefetchQuery({
+          queryKey: ["deployment-lines", id],
+          queryFn: () => fetchLinesForSubmission(id),
+          staleTime: Infinity,
+          gcTime: Infinity,
+        });
+      }
       setSelectedIds(new Set());
       setReviewDialogOpen(false);
       setReviewComment("");
-      toast.success(`${selectedIds.size} submission(s) ${reviewAction}`);
+      toast.success(`${ids.length} submission(s) ${reviewAction}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
