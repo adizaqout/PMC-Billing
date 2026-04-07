@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
@@ -90,6 +90,8 @@ export default function DeploymentSchedulePage() {
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected" | "returned">("approved");
   const [reviewComment, setReviewComment] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Submission | null>(null);
+  const [prefetchProgress, setPrefetchProgress] = useState<{ done: number; total: number } | null>(null);
+  const prefetchAbortRef = useRef(false);
   const [subSearch, setSubSearch] = useState("");
   const [subColFilters, setSubColFilters] = useState<Record<string, string>>({});
   const setSubColFilter = (key: string, value: string) => setSubColFilters(prev => ({ ...prev, [key]: value }));
@@ -405,6 +407,79 @@ export default function DeploymentSchedulePage() {
       staleTime: isImmutable ? Infinity : 10 * 60 * 1000,
     });
   };
+
+  // Background prefetch: pre-cache all submissions when list loads
+  const fetchLinesForSubmission = useCallback(async (submissionId: string) => {
+    const allLines: DeploymentLine[] = [];
+    const PAGE_SIZE = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("deployment_lines")
+        .select("*")
+        .eq("submission_id", submissionId)
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      allLines.push(...(data as DeploymentLine[]));
+      if (data.length < PAGE_SIZE) break;
+      from += PAGE_SIZE;
+    }
+    return allLines;
+  }, []);
+
+  useEffect(() => {
+    if (submissions.length === 0 || view !== "list") return;
+    prefetchAbortRef.current = false;
+
+    // Only prefetch submissions not already cached
+    const toPrefetch = submissions.filter(sub => {
+      const cached = queryClient.getQueryData(["deployment-lines", sub.id]);
+      return !cached;
+    });
+
+    if (toPrefetch.length === 0) return;
+
+    // Prioritise: submitted/immutable first, then drafts
+    const immutable = toPrefetch.filter(s => !["draft", "returned"].includes(s.status));
+    const mutable = toPrefetch.filter(s => ["draft", "returned"].includes(s.status));
+    const ordered = [...immutable, ...mutable];
+
+    let done = 0;
+    setPrefetchProgress({ done: 0, total: ordered.length });
+
+    const run = async () => {
+      for (const sub of ordered) {
+        if (prefetchAbortRef.current) break;
+        const isImm = !["draft", "returned"].includes(sub.status);
+        try {
+          await queryClient.prefetchQuery({
+            queryKey: ["deployment-lines", sub.id],
+            queryFn: () => fetchLinesForSubmission(sub.id),
+            staleTime: isImm ? Infinity : 10 * 60 * 1000,
+            gcTime: isImm ? Infinity : 30 * 60 * 1000,
+          });
+        } catch {
+          // ignore individual failures, continue
+        }
+        done++;
+        setPrefetchProgress({ done, total: ordered.length });
+        // Rate-limit: 200ms between requests
+        await new Promise(r => setTimeout(r, 200));
+      }
+      // Hide progress after completion
+      setTimeout(() => setPrefetchProgress(null), 3000);
+    };
+
+    // Use requestIdleCallback if available for non-blocking start
+    if ("requestIdleCallback" in window) {
+      const id = (window as any).requestIdleCallback(() => run(), { timeout: 3000 });
+      return () => { prefetchAbortRef.current = true; (window as any).cancelIdleCallback(id); };
+    } else {
+      const t = setTimeout(() => run(), 1000);
+      return () => { prefetchAbortRef.current = true; clearTimeout(t); };
+    }
+  }, [submissions, view, queryClient, fetchLinesForSubmission]);
 
   // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
@@ -1599,6 +1674,18 @@ export default function DeploymentSchedulePage() {
           <div className="px-4 py-3 border-b flex items-center gap-3">
             <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search submissions..." value={subSearch} onChange={(e) => setSubSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
             <span className="text-xs text-muted-foreground">{filteredSubs.length} records</span>
+            {prefetchProgress && prefetchProgress.done < prefetchProgress.total && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Loader2 size={12} className="animate-spin" />
+                <span>Pre-loading: {prefetchProgress.done}/{prefetchProgress.total}</span>
+              </div>
+            )}
+            {prefetchProgress && prefetchProgress.done === prefetchProgress.total && prefetchProgress.total > 0 && (
+              <div className="flex items-center gap-1.5 text-xs text-green-600">
+                <CheckCircle2 size={12} />
+                <span>All cached</span>
+              </div>
+            )}
           </div>
           <div className="overflow-x-auto">
           <table className="w-full text-sm">
