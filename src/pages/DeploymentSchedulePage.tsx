@@ -353,29 +353,39 @@ export default function DeploymentSchedulePage() {
 
   // Load lines for selected submission
   // Fetch ALL lines for selected submission (paginate past Supabase 1000-row limit)
-  const { data: existingLines = [], isLoading: linesLoading, isFetching: linesFetching } = useQuery({
+  const { data: existingLines = [], isLoading: linesLoading, isFetching: linesFetching, error: linesError } = useQuery({
     queryKey: ["deployment-lines", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
-      const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 1000;
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from("deployment_lines")
-          .select("*")
-          .eq("submission_id", selectedSubmission.id)
-          .range(from, from + PAGE_SIZE - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        allLines.push(...(data as DeploymentLine[]));
-        if (data.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
+      // Use timeout-wrapped fetcher (defined below via fetchLinesForSubmission)
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90_000);
+      try {
+        const allLines: DeploymentLine[] = [];
+        const PAGE_SIZE = 1000;
+        let from = 0;
+        while (true) {
+          if (controller.signal.aborted) throw new Error("Query timeout after 90s");
+          const { data, error } = await supabase
+            .from("deployment_lines")
+            .select("*")
+            .eq("submission_id", selectedSubmission.id)
+            .range(from, from + PAGE_SIZE - 1)
+            .abortSignal(controller.signal);
+          if (error) throw error;
+          if (!data || data.length === 0) break;
+          allLines.push(...(data as DeploymentLine[]));
+          if (data.length < PAGE_SIZE) break;
+          from += PAGE_SIZE;
+        }
+        return allLines;
+      } finally {
+        clearTimeout(timeout);
       }
-      return allLines;
     },
     enabled: !!selectedSubmission,
-    // Submitted/approved/etc. data never changes → cache permanently; drafts stay at 30min
+    retry: 1,
+    retryDelay: 2000,
     staleTime: selectedSubmission && !["draft", "returned", "rejected"].includes(selectedSubmission.status) ? Infinity : 10 * 60 * 1000,
     gcTime: selectedSubmission && !["draft", "returned", "rejected"].includes(selectedSubmission.status) ? Infinity : 30 * 60 * 1000,
   });
