@@ -438,7 +438,10 @@ export default function DeploymentSchedulePage() {
       return !cached;
     });
 
-    if (toPrefetch.length === 0) return;
+    if (toPrefetch.length === 0) {
+      setPrefetchProgress(null);
+      return;
+    }
 
     // Prioritise: submitted/immutable first, then drafts
     const immutable = toPrefetch.filter(s => !["draft", "returned"].includes(s.status));
@@ -480,14 +483,9 @@ export default function DeploymentSchedulePage() {
       setTimeout(() => setPrefetchProgress(null), 5000);
     };
 
-    // Use requestIdleCallback if available for non-blocking start
-    if ("requestIdleCallback" in window) {
-      const id = (window as any).requestIdleCallback(() => run(), { timeout: 3000 });
-      return () => { prefetchAbortRef.current = true; (window as any).cancelIdleCallback(id); };
-    } else {
-      const t = setTimeout(() => run(), 1000);
-      return () => { prefetchAbortRef.current = true; clearTimeout(t); };
-    }
+    // Start prefetch after a short delay to let UI render first
+    const t = setTimeout(() => run(), 500);
+    return () => { prefetchAbortRef.current = true; clearTimeout(t); };
   }, [submissions, view, queryClient, fetchLinesForSubmission]);
 
   // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
