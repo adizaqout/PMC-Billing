@@ -747,9 +747,16 @@ export default function DeploymentSchedulePage() {
         .eq("id", selectedSubmission!.id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+      // Invalidate old draft cache, then re-cache permanently as submitted
+      await queryClient.invalidateQueries({ queryKey: ["deployment-lines", selectedSubmission!.id] });
+      queryClient.prefetchQuery({
+        queryKey: ["deployment-lines", selectedSubmission!.id],
+        queryFn: () => fetchLinesForSubmission(selectedSubmission!.id),
+        staleTime: Infinity,
+        gcTime: Infinity,
+      });
       toast.success("Submitted for review");
       setView("list");
     },
@@ -770,10 +777,21 @@ export default function DeploymentSchedulePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
+      // Re-cache reviewed submissions permanently
+      const ids = Array.from(selectedIds);
+      for (const id of ids) {
+        queryClient.invalidateQueries({ queryKey: ["deployment-lines", id] });
+        queryClient.prefetchQuery({
+          queryKey: ["deployment-lines", id],
+          queryFn: () => fetchLinesForSubmission(id),
+          staleTime: Infinity,
+          gcTime: Infinity,
+        });
+      }
       setSelectedIds(new Set());
       setReviewDialogOpen(false);
       setReviewComment("");
-      toast.success(`${selectedIds.size} submission(s) ${reviewAction}`);
+      toast.success(`${ids.length} submission(s) ${reviewAction}`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
