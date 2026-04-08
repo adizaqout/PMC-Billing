@@ -63,6 +63,7 @@ const DL_SELECT_COLS = `id,submission_id,excel_row_id,employee_id,worked_project
 // A UI row: one employee-month combination with allocations across project columns
 interface UIRow {
   _key: string; // UI key
+  excel_row_id?: string; // preserved from import for correct grouping
   month: string;
   employee_id: string;
   position_id: string;
@@ -330,11 +331,18 @@ export default function DeploymentSchedulePage() {
 
   const poProjects = useMemo(() => allProjects.filter(p => poProjectIds.has(p.id)), [allProjects, poProjectIds]);
 
-  // Project columns for the table
+  // Project columns for the table — include PO-linked projects PLUS any projects found in current data
   const projectColumns: Project[] = useMemo(() => {
     if (scheduleType === "workload") return allProjects;
-    return poProjects.length > 0 ? poProjects : [];
-  }, [scheduleType, poProjects, allProjects]);
+    const projIds = new Set<string>(poProjects.map(p => p.id));
+    // Add projects found in current rows' allocations (from imported data)
+    for (const row of rows) {
+      for (const projId of Object.keys(row.allocations)) {
+        if (projId && projId !== '__none__') projIds.add(projId);
+      }
+    }
+    return allProjects.filter(p => projIds.has(p.id));
+  }, [scheduleType, poProjects, allProjects, rows]);
 
   // Map: po_item_id -> project_id for saving
   const poItemByProject = useMemo(() => {
@@ -352,122 +360,61 @@ export default function DeploymentSchedulePage() {
     return map;
   }, [poItems]);
 
-  // Load lines for selected submission
-  // Fetch ALL lines for selected submission (paginate past Supabase 1000-row limit)
-  const { data: existingLines = [], isLoading: linesLoading, isFetching: linesFetching } = useQuery({
-    queryKey: ["deployment-lines-v2", selectedSubmission?.id],
+  // Load pre-aggregated rows via server-side RPC (groups by excel_row_id, no limit)
+  const { data: rpcData = [], isLoading: linesLoading, isFetching: linesFetching } = useQuery({
+    queryKey: ["deployment-rows-rpc", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
-      const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 5000;
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from("deployment_lines")
-          .select(DL_SELECT_COLS)
-          .eq("submission_id", selectedSubmission.id)
-          .range(from, from + PAGE_SIZE - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        allLines.push(...(data as DeploymentLine[]));
-        if (data.length < PAGE_SIZE) break;
-        from += PAGE_SIZE;
-      }
-      return allLines;
+      console.log("Fetching deployment rows via RPC for submission:", selectedSubmission.id);
+      const { data, error } = await supabase.rpc('get_deployment_rows' as any, {
+        p_submission_id: selectedSubmission.id,
+      });
+      if (error) throw error;
+      const rows = (data as any[]) || [];
+      console.log("Rows returned from RPC:", rows.length);
+      return rows;
     },
     enabled: !!selectedSubmission,
     staleTime: 0,
     gcTime: 0,
-    refetchOnMount: 'always',
+    refetchOnMount: 'always' as const,
     refetchOnWindowFocus: true,
   });
 
+  // Map RPC result to UIRow[] (depends on employees for position lookup)
+  useEffect(() => {
+    if (!selectedSubmission) return;
+    if (rpcData.length === 0 && !linesLoading) { setRows([]); return; }
 
-  // Convert DB lines to UI rows (group by employee_id+month — each employee per month has multiple lines for different projects)
-  const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
-    if (lines.length === 0) return [];
-
-    // Build employee lookup map once for O(1) position lookups
     const empPositionMap = new Map<string, string>();
     for (const e of employees) {
       if (e.position_id) empPositionMap.set(e.id, e.position_id);
     }
 
-    // Single-pass: separate and group simultaneously
-    const newGrouped = new Map<string, DeploymentLine[]>();
-    const legacyGrouped = new Map<string, DeploymentLine[]>();
-    let nullCounter = 0;
-
-    for (const line of lines) {
-      const excelRowId = (line as any).excel_row_id as string | null;
-
-      if (excelRowId) {
-        const existing = newGrouped.get(excelRowId);
-        if (existing) existing.push(line);
-        else newGrouped.set(excelRowId, [line]);
-      } else {
-        const notesStr = (line as any).notes as string | null;
-        const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
-        const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
-        let key: string;
-        if (line.employee_id) {
-          key = monthFromNotes ? `${line.employee_id}|${monthFromNotes}` : line.employee_id;
-        } else if (empCodeFromNotes && monthFromNotes) {
-          key = `${empCodeFromNotes}|${monthFromNotes}`;
-        } else {
-          key = `__null_${++nullCounter}`;
-        }
-        const existing = legacyGrouped.get(key);
-        if (existing) existing.push(line);
-        else legacyGrouped.set(key, [line]);
-      }
-    }
-
-    // Convert a group of lines into a UIRow
-    const toUIRow = (grpLines: DeploymentLine[]): UIRow => {
-      const first = grpLines[0];
-      const empId = first.employee_id || "";
-      const notesStr = (first as any).notes as string | null;
-      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
-      const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
-
-      const allocations: Record<string, number> = {};
-      let maxManMonths = 0;
-      let maxRateYear = 0;
-
-      for (const l of grpLines) {
-        const projId = l.worked_project_id || l.billed_project_id;
-        if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
-        const mm = Number(l.man_months) || 0;
-        if (mm > maxManMonths) maxManMonths = mm;
-        const ry = Number(l.rate_year) || 0;
-        if (ry > maxRateYear) maxRateYear = ry;
-      }
+    const uiRows: UIRow[] = rpcData.map((r: any) => {
+      const notesStr = r.notes || '';
+      const monthFromNotes = notesStr.match(/month:([^|]+)/)?.[1];
+      const posFromNotes = notesStr.match(/posId:([^|]+)/)?.[1];
+      const allocs = { ...(r.allocations || {}) };
+      delete allocs['__none__'];
 
       return {
         _key: newRowKey(),
-        month: monthFromNotes || selectedSubmission?.month || first.submission_id,
-        employee_id: empId,
-        position_id: empPositionMap.get(empId) || posFromNotes || first.po_item_id || "",
-        rate_year: maxRateYear || 1,
-        man_months: maxManMonths,
-        so_id: first.so_id || "",
-        po_id: first.po_id || "",
-        allocations,
+        excel_row_id: r.excel_row_id || undefined,
+        month: monthFromNotes || selectedSubmission.month,
+        employee_id: r.employee_id || '',
+        position_id: empPositionMap.get(r.employee_id || '') || posFromNotes || '',
+        rate_year: Number(r.rate_year) || 1,
+        man_months: Number(r.man_months) || 0,
+        so_id: r.so_id || '',
+        po_id: r.po_id || '',
+        allocations: allocs,
       };
-    };
+    });
 
-    const result: UIRow[] = new Array(newGrouped.size + legacyGrouped.size);
-    let idx = 0;
-    for (const [, grpLines] of newGrouped) result[idx++] = toUIRow(grpLines);
-    for (const [, grpLines] of legacyGrouped) result[idx++] = toUIRow(grpLines);
-    return result;
-  };
-
-  useEffect(() => {
-    if (!selectedSubmission) return;
-    setRows(buildUIRows(existingLines));
-  }, [existingLines, selectedSubmission, employees]);
+    console.log("UI rows built from RPC:", uiRows.length);
+    setRows(uiRows);
+  }, [rpcData, selectedSubmission, employees, linesLoading]);
 
   const isEditable = selectedSubmission && ["draft", "returned"].includes(selectedSubmission.status);
 
@@ -591,7 +538,7 @@ export default function DeploymentSchedulePage() {
             rate_year: row.rate_year,
             man_months: row.man_months,
             notes: groupNote,
-            excel_row_id: null,
+            excel_row_id: row.excel_row_id || null,
           });
         } else {
           projEntries.forEach(([projId, pct]) => {
@@ -609,7 +556,7 @@ export default function DeploymentSchedulePage() {
               rate_year: row.rate_year,
               man_months: row.man_months,
               notes: groupNote,
-              excel_row_id: null,
+              excel_row_id: row.excel_row_id || null,
             });
           });
         }
@@ -629,7 +576,7 @@ export default function DeploymentSchedulePage() {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deployment-lines-v2"] });
+      queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
       toast.success("Draft saved");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -647,7 +594,7 @@ export default function DeploymentSchedulePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      queryClient.invalidateQueries({ queryKey: ["deployment-lines-v2"] });
+      queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
       toast.success("Submitted for review");
       setView("list");
     },
@@ -1162,26 +1109,8 @@ export default function DeploymentSchedulePage() {
         return errors;
       },
       onComplete: () => {
-        queryClient.invalidateQueries({ queryKey: ["deployment-lines-v2"] });
-        if (selectedSubmission) {
-          (async () => {
-            const allLines: DeploymentLine[] = [];
-            const PAGE_SIZE = 1000;
-            let from = 0;
-            while (true) {
-              const { data } = await supabase
-                .from("deployment_lines")
-                .select("*")
-                .eq("submission_id", selectedSubmission.id)
-                .range(from, from + PAGE_SIZE - 1);
-              if (!data || data.length === 0) break;
-              allLines.push(...(data as DeploymentLine[]));
-              if (data.length < PAGE_SIZE) break;
-              from += PAGE_SIZE;
-            }
-            setRows(buildUIRows(allLines));
-          })();
-        }
+        // Invalidate RPC query to trigger a fresh server-side aggregation
+        queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
       },
     };
   }, [selectedSubmission, scheduleType, allEmployees, employees, positions, projectColumns, rows, poItemByProject, poByItem]);
@@ -1248,7 +1177,7 @@ export default function DeploymentSchedulePage() {
   }, [rows, detailSearch, detailColFilters, employees, positions]);
 
   const { sorted: sortedDetailRows, sort: detailSort, toggleSort: toggleDetailSort } = useSort(filteredDetailRows, "month", "asc");
-  const { paginatedItems: paginatedDetailRows, pageSize: detailPageSize, setPageSize: setDetailPageSize, currentPage: detailCurrentPage, setCurrentPage: setDetailCurrentPage, totalItems: detailTotalItems } = usePagination(sortedDetailRows, 20);
+  const { paginatedItems: paginatedDetailRows, pageSize: detailPageSize, setPageSize: setDetailPageSize, currentPage: detailCurrentPage, setCurrentPage: setDetailCurrentPage, totalItems: detailTotalItems } = usePagination(sortedDetailRows, 50);
 
   // ---- Render ----
 
