@@ -1500,6 +1500,7 @@ export type Database = {
         Args: { target_consultant_id: string }
         Returns: boolean
       }
+      get_deployment_rows: { Args: { p_submission_id: string }; Returns: Json }
       get_po_consultant_id: { Args: { p_po_id: string }; Returns: string }
       get_submission_consultant_id: {
         Args: { p_submission_id: string }
