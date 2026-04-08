@@ -324,6 +324,72 @@ export type Database = {
           },
         ]
       }
+      deployment_row_cache: {
+        Row: {
+          allocations: Json | null
+          created_at: string
+          employee_id: string | null
+          employee_name: string | null
+          excel_row_id: string
+          id: string
+          man_months: number | null
+          month: string | null
+          po_id: string | null
+          position_id: string | null
+          position_name: string | null
+          rate: number | null
+          rate_year: number | null
+          so_id: string | null
+          sort_order: number | null
+          submission_id: string
+          total_pct: number | null
+          updated_at: string
+          validation_error: string | null
+        }
+        Insert: {
+          allocations?: Json | null
+          created_at?: string
+          employee_id?: string | null
+          employee_name?: string | null
+          excel_row_id: string
+          id?: string
+          man_months?: number | null
+          month?: string | null
+          po_id?: string | null
+          position_id?: string | null
+          position_name?: string | null
+          rate?: number | null
+          rate_year?: number | null
+          so_id?: string | null
+          sort_order?: number | null
+          submission_id: string
+          total_pct?: number | null
+          updated_at?: string
+          validation_error?: string | null
+        }
+        Update: {
+          allocations?: Json | null
+          created_at?: string
+          employee_id?: string | null
+          employee_name?: string | null
+          excel_row_id?: string
+          id?: string
+          man_months?: number | null
+          month?: string | null
+          po_id?: string | null
+          position_id?: string | null
+          position_name?: string | null
+          rate?: number | null
+          rate_year?: number | null
+          so_id?: string | null
+          sort_order?: number | null
+          submission_id?: string
+          total_pct?: number | null
+          updated_at?: string
+          validation_error?: string | null
+        }
+        Relationships: []
+      }
       deployment_submissions: {
         Row: {
           consultant_id: string
@@ -1516,6 +1582,10 @@ export type Database = {
         Returns: boolean
       }
       is_superadmin: { Args: never; Returns: boolean }
+      refresh_deployment_row_cache: {
+        Args: { p_submission_id: string }
+        Returns: Json
+      }
       save_deployment_lines: {
         Args: { p_lines: Json; p_submission_id: string }
         Returns: Json
