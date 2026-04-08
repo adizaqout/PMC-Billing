@@ -1328,7 +1328,7 @@ export default function DeploymentSchedulePage() {
           <div className="bg-card rounded-md border">
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search rows..." value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
-              <span className="text-xs text-muted-foreground">{filteredDetailRows.length} of {rows.length} rows</span>
+              <span className="text-xs text-muted-foreground">{rows.length} on page · {cacheTotalCount} total rows</span>
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
