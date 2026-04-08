@@ -64,6 +64,11 @@ export interface SmartImportConfig {
    * When provided, the wizard uses this instead of row-by-row executeUpdate.
    */
   executeBatchUpdate?: (updates: { existingId: string; record: Record<string, string> }[]) => Promise<{ index: number; message: string }[]>;
+  /**
+   * Optional: called once before any inserts/updates begin.
+   * Use to clear existing data for the target scope.
+   */
+  beforeImport?: () => Promise<void>;
   /** Called after import completes to refresh data */
   onComplete: () => void;
   /**

@@ -1061,9 +1061,16 @@ export default function DeploymentSchedulePage() {
         }
         return insertDeploymentRow(rec);
       },
+      beforeImport: async () => {
+        if (!selectedSubmission) throw new Error("No submission selected");
+        console.log('[Import] === BEGIN DEPLOYMENT IMPORT ===', { submissionId: selectedSubmission.id });
+        const { data, error } = await supabase.rpc('begin_deployment_import' as any, { p_submission_id: selectedSubmission.id });
+        if (error) throw error;
+        console.log('[Import] begin_deployment_import result:', data);
+      },
       executeBatchInsert: async (records) => {
         if (!selectedSubmission) return records.map((_, i) => ({ index: i, message: "No submission selected" }));
-        const batchUUID = crypto.randomUUID().split("-")[0]; // short prefix
+        const batchUUID = crypto.randomUUID().split("-")[0];
         const allLines: any[] = [];
         const recIndexMap: number[] = [];
         for (let ri = 0; ri < records.length; ri++) {
@@ -1075,84 +1082,82 @@ export default function DeploymentSchedulePage() {
             recIndexMap.push(ri);
           }
         }
+        console.log(`[Import] Chunk: ${records.length} records → ${allLines.length} deployment_lines`);
         const errors: { index: number; message: string }[] = [];
+        // Use append RPC in sub-batches of 500 lines
         const BATCH = 500;
         for (let i = 0; i < allLines.length; i += BATCH) {
           const chunk = allLines.slice(i, i + BATCH);
-          const { error } = await supabase.from("deployment_lines").insert(chunk);
+          console.log(`[Import]   Sub-batch ${Math.floor(i / BATCH) + 1}: ${chunk.length} lines`);
+          const { data, error } = await supabase.rpc('append_deployment_lines_chunk' as any, {
+            p_submission_id: selectedSubmission.id,
+            p_lines: chunk,
+          });
           if (error) {
+            console.error(`[Import]   Sub-batch FAILED:`, error.message);
             const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
             for (const idx of failedIndices) {
               if (!errors.find(e => e.index === idx)) {
                 errors.push({ index: idx, message: error.message });
               }
             }
+          } else {
+            console.log(`[Import]   Sub-batch OK:`, data);
           }
         }
         return errors;
       },
       executeBatchUpdate: async (updates) => {
         if (!selectedSubmission) return updates.map((_, i) => ({ index: i, message: "No submission selected" }));
-        // Delete existing lines for all affected employee-month combos in one go
-        const { data: allExistingLines } = await supabase
-          .from("deployment_lines")
-          .select("id, notes")
-          .eq("submission_id", selectedSubmission.id);
-        if (allExistingLines) {
-          const idsToDelete: string[] = [];
-          for (const upd of updates) {
-            const existingRow = rows.find(r => r._key === upd.existingId);
-            if (existingRow) {
-              const emp = employees.find(e => e.id === existingRow.employee_id);
-              const empCode = (emp as any)?.employee_id || "";
-              const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
-              if (empCode && existingRow.month) {
-                for (const l of allExistingLines) {
-                  if ((l.notes || "").includes(notesPattern) && !idsToDelete.includes(l.id)) {
-                    idsToDelete.push(l.id);
-                  }
-                }
-              }
-            }
-          }
-          if (idsToDelete.length > 0) {
-            for (let i = 0; i < idsToDelete.length; i += 500) {
-              await supabase.from("deployment_lines").delete().in("id", idsToDelete.slice(i, i + 500));
-            }
-          }
-        }
-        // Now batch insert all replacement lines with excel_row_id
+        // Updates also use append (begin_deployment_import already cleared everything)
         const batchUUID = crypto.randomUUID().split("-")[0];
         const allLines: any[] = [];
         const recIndexMap: number[] = [];
         for (let ri = 0; ri < updates.length; ri++) {
-          const excelRowId = `${batchUUID}_${(ri + 1).toString().padStart(4, "0")}`;
+          const excelRowId = `${batchUUID}_upd_${(ri + 1).toString().padStart(4, "0")}`;
           const lines = buildDeploymentLines(updates[ri].record, selectedSubmission.id, excelRowId);
           for (const line of lines) {
             allLines.push(line);
             recIndexMap.push(ri);
           }
         }
+        console.log(`[Import] Update chunk: ${updates.length} records → ${allLines.length} deployment_lines`);
         const errors: { index: number; message: string }[] = [];
         const BATCH = 500;
         for (let i = 0; i < allLines.length; i += BATCH) {
           const chunk = allLines.slice(i, i + BATCH);
-          const { error } = await supabase.from("deployment_lines").insert(chunk);
+          const { data, error } = await supabase.rpc('append_deployment_lines_chunk' as any, {
+            p_submission_id: selectedSubmission.id,
+            p_lines: chunk,
+          });
           if (error) {
+            console.error(`[Import] Update sub-batch FAILED:`, error.message);
             const failedIndices = new Set(recIndexMap.slice(i, i + BATCH));
             for (const idx of failedIndices) {
               if (!errors.find(e => e.index === idx)) {
                 errors.push({ index: idx, message: error.message });
               }
             }
+          } else {
+            console.log(`[Import] Update sub-batch OK:`, data);
           }
         }
         return errors;
       },
       onComplete: async () => {
-        // Refresh the cache from deployment_lines
-        if (selectedSubmission) {
-          await supabase.rpc('refresh_deployment_row_cache' as any, { p_submission_id: selectedSubmission.id });
+        if (!selectedSubmission) return;
+        console.log('[Import] === FINALIZE DEPLOYMENT IMPORT ===');
+        const { data, error } = await supabase.rpc('finalize_deployment_import' as any, { p_submission_id: selectedSubmission.id });
+        if (error) {
+          console.error('[Import] Finalize FAILED:', error.message);
+          toast.error(`Cache refresh failed: ${error.message}`);
+        } else {
+          console.log('[Import] Finalize result:', data);
+          const result = data as any;
+          console.log(`[Import] === VERIFICATION ===`);
+          console.log(`[Import]   deployment_lines count: ${result?.total_lines}`);
+          console.log(`[Import]   distinct excel_row_id count: ${result?.distinct_excel_rows}`);
+          console.log(`[Import]   cache rows inserted: ${result?.cache_result?.inserted}`);
         }
         queryClient.invalidateQueries({ queryKey: ["drc-count"] });
         queryClient.invalidateQueries({ queryKey: ["drc-page"] });

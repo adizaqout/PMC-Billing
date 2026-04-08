@@ -1562,9 +1562,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      append_deployment_lines_chunk: {
+        Args: { p_lines: Json; p_submission_id: string }
+        Returns: Json
+      }
+      begin_deployment_import: {
+        Args: { p_submission_id: string }
+        Returns: Json
+      }
       can_access_consultant: {
         Args: { target_consultant_id: string }
         Returns: boolean
+      }
+      finalize_deployment_import: {
+        Args: { p_submission_id: string }
+        Returns: Json
       }
       get_deployment_rows: { Args: { p_submission_id: string }; Returns: Json }
       get_po_consultant_id: { Args: { p_po_id: string }; Returns: string }
