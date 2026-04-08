@@ -606,8 +606,12 @@ export default function DeploymentSchedulePage() {
         throw new Error(`Save incomplete: inserted ${saveResult.inserted_count}/${saveResult.input_count}`);
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
+    onSuccess: async () => {
+      if (selectedSubmission) {
+        await supabase.rpc('refresh_deployment_row_cache' as any, { p_submission_id: selectedSubmission.id });
+      }
+      queryClient.invalidateQueries({ queryKey: ["drc-count"] });
+      queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       toast.success("Draft saved");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -1146,9 +1150,13 @@ export default function DeploymentSchedulePage() {
         }
         return errors;
       },
-      onComplete: () => {
-        // Invalidate RPC query to trigger a fresh server-side aggregation
-        queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
+      onComplete: async () => {
+        // Refresh the cache from deployment_lines
+        if (selectedSubmission) {
+          await supabase.rpc('refresh_deployment_row_cache' as any, { p_submission_id: selectedSubmission.id });
+        }
+        queryClient.invalidateQueries({ queryKey: ["drc-count"] });
+        queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       },
     };
   }, [selectedSubmission, scheduleType, allEmployees, employees, positions, projectColumns, rows, poItemByProject, poByItem]);
