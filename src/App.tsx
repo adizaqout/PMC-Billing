@@ -32,6 +32,21 @@ const queryClient = new QueryClient({
   },
 });
 
+const CacheMigration = () => {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    const CACHE_VERSION = 'v2';
+    if (localStorage.getItem('app-cache-version') !== CACHE_VERSION) {
+      console.log('Cache version mismatch - clearing stale cache');
+      queryClient.clear();
+      localStorage.removeItem('REACT_QUERY_OFFLINE_CACHE');
+      localStorage.setItem('app-cache-version', CACHE_VERSION);
+      console.log('Cache cleared - now using v2');
+    }
+  }, [queryClient]);
+  return null;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
