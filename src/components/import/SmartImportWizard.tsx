@@ -137,6 +137,9 @@ export default function SmartImportWizard({ config }: Props) {
       const headerMap = mapHeaders(rawRows[0], config.columns);
       const parsed = parseRows(rawRows, config.columns, headerMap, config);
       if (parsed.length === 0) { toast.error("No valid rows found"); setIsProcessing(false); return; }
+      if (config.onParsed) {
+        await config.onParsed(parsed);
+      }
       setRecords(parsed);
       const hasErrors = parsed.some(r => Object.keys(r.validationErrors).length > 0);
       setStage(hasErrors ? "validate" : "conflicts");

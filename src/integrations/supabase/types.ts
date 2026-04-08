@@ -211,6 +211,83 @@ export type Database = {
         }
         Relationships: []
       }
+      deployment_import_staging: {
+        Row: {
+          allocation_pct: number
+          billed_project_id: string | null
+          consultant_id: string
+          created_at: string
+          derived_cost: number | null
+          derived_monthly_rate: number | null
+          employee_id: string | null
+          excel_row_id: string | null
+          id: string
+          import_session_id: string
+          man_months: number | null
+          notes: string | null
+          po_id: string | null
+          po_item_id: string | null
+          rate_year: number | null
+          raw_line_id: string
+          so_id: string | null
+          submission_id: string
+          updated_at: string
+          worked_project_id: string | null
+        }
+        Insert: {
+          allocation_pct?: number
+          billed_project_id?: string | null
+          consultant_id: string
+          created_at?: string
+          derived_cost?: number | null
+          derived_monthly_rate?: number | null
+          employee_id?: string | null
+          excel_row_id?: string | null
+          id?: string
+          import_session_id: string
+          man_months?: number | null
+          notes?: string | null
+          po_id?: string | null
+          po_item_id?: string | null
+          rate_year?: number | null
+          raw_line_id: string
+          so_id?: string | null
+          submission_id: string
+          updated_at?: string
+          worked_project_id?: string | null
+        }
+        Update: {
+          allocation_pct?: number
+          billed_project_id?: string | null
+          consultant_id?: string
+          created_at?: string
+          derived_cost?: number | null
+          derived_monthly_rate?: number | null
+          employee_id?: string | null
+          excel_row_id?: string | null
+          id?: string
+          import_session_id?: string
+          man_months?: number | null
+          notes?: string | null
+          po_id?: string | null
+          po_item_id?: string | null
+          rate_year?: number | null
+          raw_line_id?: string
+          so_id?: string | null
+          submission_id?: string
+          updated_at?: string
+          worked_project_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deployment_import_staging_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "deployment_submissions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       deployment_lines: {
         Row: {
           allocation_pct: number
@@ -404,6 +481,7 @@ export type Database = {
           revision_no: number
           revision_reason: string | null
           schedule_type: Database["public"]["Enums"]["schedule_type"]
+          staging_import_session_id: string | null
           status: Database["public"]["Enums"]["submission_status"]
           submitted_by: string | null
           submitted_on: string | null
@@ -423,6 +501,7 @@ export type Database = {
           revision_no?: number
           revision_reason?: string | null
           schedule_type: Database["public"]["Enums"]["schedule_type"]
+          staging_import_session_id?: string | null
           status?: Database["public"]["Enums"]["submission_status"]
           submitted_by?: string | null
           submitted_on?: string | null
@@ -442,6 +521,7 @@ export type Database = {
           revision_no?: number
           revision_reason?: string | null
           schedule_type?: Database["public"]["Enums"]["schedule_type"]
+          staging_import_session_id?: string | null
           status?: Database["public"]["Enums"]["submission_status"]
           submitted_by?: string | null
           submitted_on?: string | null
@@ -1566,6 +1646,10 @@ export type Database = {
         Args: { p_lines: Json; p_submission_id: string }
         Returns: Json
       }
+      assert_can_modify_deployment_submission: {
+        Args: { p_submission_id: string }
+        Returns: string
+      }
       begin_deployment_import: {
         Args: { p_submission_id: string }
         Returns: Json
@@ -1573,6 +1657,10 @@ export type Database = {
       can_access_consultant: {
         Args: { target_consultant_id: string }
         Returns: boolean
+      }
+      ensure_deployment_import_session: {
+        Args: { p_submission_id: string }
+        Returns: Json
       }
       finalize_deployment_import: {
         Args: { p_submission_id: string }
@@ -1594,8 +1682,24 @@ export type Database = {
         Returns: boolean
       }
       is_superadmin: { Args: never; Returns: boolean }
+      normalize_deployment_excel_row_id: {
+        Args: { p_employee_id: string; p_excel_row_id: string; p_notes: string }
+        Returns: string
+      }
+      persist_deployment_staging_snapshot: {
+        Args: { p_submission_id: string }
+        Returns: Json
+      }
       refresh_deployment_row_cache: {
         Args: { p_submission_id: string }
+        Returns: Json
+      }
+      replace_deployment_staging_page_rows: {
+        Args: {
+          p_original_excel_row_ids: string[]
+          p_row_sets: Json
+          p_submission_id: string
+        }
         Returns: Json
       }
       save_deployment_lines: {

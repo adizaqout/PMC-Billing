@@ -37,6 +37,11 @@ export interface SmartImportConfig {
   /** Column definitions for the import */
   columns: ImportColumnDef[];
   /**
+   * Optional: called after file parsing/normalization and before conflict detection.
+   * Useful for import-specific logging or preflight metrics.
+   */
+  onParsed?: (records: ImportRecord[]) => void | Promise<void>;
+  /**
    * Keys used for conflict detection against existing records.
    * These are ImportColumnDef.key values.
    */
@@ -70,7 +75,7 @@ export interface SmartImportConfig {
    */
   beforeImport?: () => Promise<void>;
   /** Called after import completes to refresh data */
-  onComplete: () => void;
+  onComplete: () => void | Promise<void>;
   /**
    * Optional: transform raw parsed values (e.g. normalize dates).
    * Called after parsing, before validation and conflict detection.
