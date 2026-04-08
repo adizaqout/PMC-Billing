@@ -98,6 +98,7 @@ export default function DeploymentSchedulePage() {
   const [newDialogOpen, setNewDialogOpen] = useState(false);
   const [newType, setNewType] = useState<string>("actual");
   const [rows, setRows] = useState<UIRow[]>([]);
+  const [deletedExcelRowIds, setDeletedExcelRowIds] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<"approved" | "rejected" | "returned">("approved");
@@ -447,6 +448,10 @@ export default function DeploymentSchedulePage() {
     setRows(uiRows);
   }, [cacheRows, selectedSubmission, cacheLoading]);
 
+  useEffect(() => {
+    setDeletedExcelRowIds([]);
+  }, [selectedSubmission?.id]);
+
   const isEditable = selectedSubmission && ["draft", "returned"].includes(selectedSubmission.status);
 
   // ---- Mutations ----
@@ -533,29 +538,8 @@ export default function DeploymentSchedulePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // Helper: fetch ALL raw deployment_lines for a submission (paginated reads)
-  const fetchAllRawLines = async (submissionId: string) => {
-    const allLines: any[] = [];
-    const PAGE = 5000;
-    let from = 0;
-    while (true) {
-      const { data, error } = await supabase
-        .from("deployment_lines")
-        .select(DL_SELECT_COLS)
-        .eq("submission_id", submissionId)
-        .range(from, from + PAGE - 1);
-      if (error) throw error;
-      if (!data || data.length === 0) break;
-      allLines.push(...data);
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-    return allLines;
-  };
-
-  // Helper: convert UI rows into deployment_line records
-  const buildLinesFromUIRows = (uiRows: UIRow[], allowEmpty: boolean) => {
-    const lines: any[] = [];
+  const buildStagingRowSetsFromUIRows = (uiRows: UIRow[], allowEmpty: boolean) => {
+    const rowSets: { excel_row_id: string; lines: any[] }[] = [];
     const empCodeMap = new Map<string, string>();
     for (const e of employees) {
       empCodeMap.set(e.id, (e as any).employee_id || e.id);
@@ -566,14 +550,21 @@ export default function DeploymentSchedulePage() {
       const hasAllocations = Object.values(row.allocations).some(v => v > 0);
       if (!hasAllocations && row.man_months <= 0) return;
 
+       const excelRowId = row.excel_row_id || `ui_${rowIdx + 1}_${Date.now()}`;
+
       const empCode = row.employee_id
         ? empCodeMap.get(row.employee_id) || row.employee_id
         : `PH-${rowIdx + 1}`;
       const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
 
-      const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
+      const projEntries = Object.entries(row.allocations)
+        .filter(([, pct]) => pct > 0)
+        .sort(([a], [b]) => a.localeCompare(b));
+      const lines: any[] = [];
+
       if (projEntries.length === 0) {
         lines.push({
+          raw_line_id: `${excelRowId}__000001`,
           consultant_id: consultantId,
           employee_id: row.employee_id || null,
           worked_project_id: null,
@@ -585,13 +576,14 @@ export default function DeploymentSchedulePage() {
           rate_year: row.rate_year,
           man_months: row.man_months,
           notes: groupNote,
-          excel_row_id: row.excel_row_id || null,
+          excel_row_id: excelRowId,
         });
       } else {
-        projEntries.forEach(([projId, pct]) => {
+        projEntries.forEach(([projId, pct], lineIdx) => {
           const poItemId = poItemByProject[projId] || null;
           const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
           lines.push({
+            raw_line_id: `${excelRowId}__${String(lineIdx + 1).padStart(6, "0")}`,
             consultant_id: consultantId,
             employee_id: row.employee_id || null,
             worked_project_id: projId,
@@ -603,12 +595,15 @@ export default function DeploymentSchedulePage() {
             rate_year: row.rate_year,
             man_months: row.man_months,
             notes: groupNote,
-            excel_row_id: row.excel_row_id || null,
+            excel_row_id: excelRowId,
           });
         });
       }
+
+      rowSets.push({ excel_row_id: excelRowId, lines });
     });
-    return lines;
+
+    return rowSets;
   };
 
   const saveMutation = useMutation({
@@ -617,59 +612,54 @@ export default function DeploymentSchedulePage() {
 
       const allowEmpty = selectedSubmission.schedule_type === "baseline" || selectedSubmission.schedule_type === "forecast";
 
-      // 1. Fetch the FULL raw dataset from deployment_lines (not from UI)
-      const fullRawLines = await fetchAllRawLines(selectedSubmission.id);
-      console.log('[Save] Full raw lines fetched from DB:', fullRawLines.length);
+      console.log('[Save] === STAGING SAVE START ===');
+      console.log('[Save] payloadSource:', 'backend staging snapshot + current page patch');
+      console.log('[Save] mergeQuery:', 'none (deployment_lines merge fetch removed)');
 
-      // 2. Determine which excel_row_ids are on the current UI page
-      const currentPageExcelRowIds = new Set(rows.map(r => r.excel_row_id).filter(Boolean));
-      console.log('[Save] Current page excel_row_ids:', currentPageExcelRowIds.size);
-
-      // 3. Keep all raw lines NOT on the current page (untouched)
-      const untouchedLines = fullRawLines.filter(
-        line => !line.excel_row_id || !currentPageExcelRowIds.has(line.excel_row_id)
-      );
-      console.log('[Save] Untouched raw lines (not on current page):', untouchedLines.length);
-
-      // 4. Rebuild lines from the current page's UI rows (may have edits)
-      const editedPageLines = buildLinesFromUIRows(rows, allowEmpty);
-      console.log('[Save] Rebuilt lines from current UI page:', editedPageLines.length);
-
-      // 5. Merge: untouched + edited page lines = full dataset
-      const toInsert = [
-        ...untouchedLines.map(l => ({
-          consultant_id: l.consultant_id || consultantId,
-          employee_id: l.employee_id || null,
-          worked_project_id: l.worked_project_id || null,
-          billed_project_id: l.billed_project_id || null,
-          po_id: l.po_id || null,
-          po_item_id: l.po_item_id || null,
-          so_id: l.so_id || null,
-          allocation_pct: l.allocation_pct ?? 0,
-          rate_year: l.rate_year,
-          man_months: l.man_months ?? 0,
-          notes: l.notes || null,
-          excel_row_id: l.excel_row_id || null,
-        })),
-        ...editedPageLines,
-      ];
-
-      console.log('[Save] TOTAL lines to save (untouched + edited):', toInsert.length,
-        '| Source: DB raw lines merged with current page UI edits');
-
-      // 6. Atomic save via RPC
-      const { data: result, error } = await supabase.rpc('save_deployment_lines', {
+      const { data: sessionInfo, error: sessionError } = await supabase.rpc('ensure_deployment_import_session' as any, {
         p_submission_id: selectedSubmission.id,
-        p_lines: toInsert as any,
       });
-      if (error) throw error;
-      console.log('[Save] Result:', result);
-      const saveResult = result as Record<string, unknown> | null;
+      if (sessionError) throw sessionError;
+      console.log('[Save] staging session ready:', sessionInfo);
+
+      const rowSets = buildStagingRowSetsFromUIRows(rows, allowEmpty);
+      const originalExcelRowIds = Array.from(new Set([
+        ...rows.map(r => r.excel_row_id).filter(Boolean),
+        ...deletedExcelRowIds,
+      ]));
+      const finalRawLineCount = rowSets.reduce((sum, rowSet) => sum + rowSet.lines.length, 0);
+
+      console.log('[Save] currentPageEditedRows:', rows.length);
+      console.log('[Save] deletedPageRows:', deletedExcelRowIds.length);
+      console.log('[Save] editGranularity:', 'logical page rows patched into authoritative staging snapshot');
+      console.log('[Save] patchExcelRowIdCount:', originalExcelRowIds.length);
+      console.log('[Save] final raw line count to be persisted from patch:', finalRawLineCount);
+      console.log('[Save] final distinct excel_row_id count in patch:', rowSets.length);
+
+      const { data: replaceResult, error: replaceError } = await supabase.rpc('replace_deployment_staging_page_rows' as any, {
+        p_submission_id: selectedSubmission.id,
+        p_original_excel_row_ids: originalExcelRowIds,
+        p_row_sets: rowSets as any,
+      });
+      if (replaceError) throw replaceError;
+      console.log('[Save] staging page replace result:', replaceResult);
+
+      const { data: persistResult, error: persistError } = await supabase.rpc('persist_deployment_staging_snapshot' as any, {
+        p_submission_id: selectedSubmission.id,
+      });
+      if (persistError) throw persistError;
+
+      console.log('[Save] post-save deployment_lines raw count:', (persistResult as any)?.deployment_lines_count);
+      console.log('[Save] post-save deployment_lines distinct excel_row_id count:', (persistResult as any)?.deployment_lines_distinct_excel_rows);
+      console.log('[Save] post-save cache rows:', (persistResult as any)?.cache_rows);
+
+      const saveResult = persistResult as Record<string, unknown> | null;
       if (saveResult && !saveResult.success) {
-        throw new Error(`Save incomplete: inserted ${saveResult.inserted_count}/${saveResult.input_count}`);
+        throw new Error(`Save incomplete: persisted ${saveResult.inserted_count}/${saveResult.staging_line_count}`);
       }
     },
     onSuccess: () => {
+      setDeletedExcelRowIds([]);
       queryClient.invalidateQueries({ queryKey: ["drc-count"] });
       queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       toast.success("Draft saved");
@@ -829,7 +819,15 @@ export default function DeploymentSchedulePage() {
   };
 
   const removeRow = (idx: number) => {
-    setRows(prev => prev.filter((_, i) => i !== idx));
+    setRows(prev => {
+      const target = prev[idx];
+      if (target?.excel_row_id) {
+        setDeletedExcelRowIds(current => current.includes(target.excel_row_id)
+          ? current
+          : [...current, target.excel_row_id]);
+      }
+      return prev.filter((_, i) => i !== idx);
+    });
   };
 
   const toggleSelect = (id: string) => {
@@ -1035,6 +1033,13 @@ export default function DeploymentSchedulePage() {
     return {
       entityName: "Deployment Lines",
       columns,
+      onParsed: async (parsedRecords) => {
+        const parsedRawLines = parsedRecords.reduce((sum, record, index) => (
+          sum + buildDeploymentLines(record.values, selectedSubmission.id, `parsed_${String(index + 1).padStart(6, "0")}`).length
+        ), 0);
+        console.log('[Import] parsed logical rows:', parsedRecords.length);
+        console.log('[Import] parsed raw lines:', parsedRawLines);
+      },
       businessKeys: ["employee_id", "month"],
       transformValues: (values) => {
         values.month = normalizeMonth(values.month);
@@ -1101,26 +1106,6 @@ export default function DeploymentSchedulePage() {
       },
       executeUpdate: async (existingId, rec) => {
         if (!selectedSubmission) return "No submission selected";
-        const existingRow = rows.find(r => r._key === existingId);
-        if (existingRow) {
-          const emp = employees.find(e => e.id === existingRow.employee_id);
-          const empCode = (emp as any)?.employee_id || "";
-          const notesPattern = `emp:${empCode}|month:${existingRow.month}`;
-          if (empCode && existingRow.month) {
-            const { data: matchingLines } = await supabase
-              .from("deployment_lines")
-              .select("id, notes")
-              .eq("submission_id", selectedSubmission.id);
-            if (matchingLines) {
-              const idsToDelete = matchingLines
-                .filter(l => (l.notes || "").includes(notesPattern))
-                .map(l => l.id);
-              if (idsToDelete.length > 0) {
-                await supabase.from("deployment_lines").delete().in("id", idsToDelete);
-              }
-            }
-          }
-        }
         return insertDeploymentRow(rec);
       },
       beforeImport: async () => {
@@ -1217,10 +1202,11 @@ export default function DeploymentSchedulePage() {
           console.log('[Import] Finalize result:', data);
           const result = data as any;
           console.log(`[Import] === VERIFICATION ===`);
-          console.log(`[Import]   deployment_lines count: ${result?.total_lines}`);
-          console.log(`[Import]   distinct excel_row_id count: ${result?.distinct_excel_rows}`);
-          console.log(`[Import]   cache rows inserted: ${result?.cache_result?.inserted}`);
+          console.log(`[Import]   deployment_lines raw count: ${result?.deployment_lines_count}`);
+          console.log(`[Import]   distinct excel_row_id count: ${result?.deployment_lines_distinct_excel_rows}`);
+          console.log(`[Import]   cache rows inserted: ${result?.cache_rows}`);
         }
+        setDeletedExcelRowIds([]);
         queryClient.invalidateQueries({ queryKey: ["drc-count"] });
         queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       },
@@ -1230,7 +1216,10 @@ export default function DeploymentSchedulePage() {
   const insertDeploymentRow = async (rec: Record<string, string>, excelRowId?: string): Promise<string | null> => {
     if (!selectedSubmission) return "No submission selected";
     const lines = buildDeploymentLines(rec, selectedSubmission.id, excelRowId);
-    const { error } = await supabase.from("deployment_lines").insert(lines);
+    const { error } = await supabase.rpc('append_deployment_lines_chunk' as any, {
+      p_submission_id: selectedSubmission.id,
+      p_lines: lines,
+    });
     return error ? error.message : null;
   };
 
