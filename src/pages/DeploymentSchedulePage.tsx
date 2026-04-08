@@ -581,26 +581,28 @@ export default function DeploymentSchedulePage() {
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (!selectedSubmission) throw new Error("No submission selected");
-      await supabase.from("deployment_lines").delete().eq("submission_id", selectedSubmission.id);
 
       const toInsert: any[] = [];
       const allowEmpty = selectedSubmission.schedule_type === "baseline" || selectedSubmission.schedule_type === "forecast";
+      // Build employee lookup for emp codes
+      const empCodeMap = new Map<string, string>();
+      for (const e of employees) {
+        empCodeMap.set(e.id, (e as any).employee_id || e.id);
+      }
+
       rows.forEach((row, rowIdx) => {
         if (!row.employee_id && !allowEmpty) return;
         const hasAllocations = Object.values(row.allocations).some(v => v > 0);
         if (!hasAllocations && row.man_months <= 0) return;
 
-        // Build notes for grouping (all types need month for proper row grouping)
         const empCode = row.employee_id
-          ? (employees.find(e => e.id === row.employee_id) as any)?.employee_id || row.employee_id
+          ? empCodeMap.get(row.employee_id) || row.employee_id
           : `PH-${rowIdx + 1}`;
         const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
 
-        // Create one deployment_line per project allocation
         const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
         if (projEntries.length === 0) {
           toInsert.push({
-            submission_id: selectedSubmission.id,
             consultant_id: consultantId,
             employee_id: row.employee_id || null,
             worked_project_id: null,
@@ -612,13 +614,13 @@ export default function DeploymentSchedulePage() {
             rate_year: row.rate_year,
             man_months: row.man_months,
             notes: groupNote,
+            excel_row_id: null,
           });
         } else {
           projEntries.forEach(([projId, pct]) => {
             const poItemId = poItemByProject[projId] || null;
             const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
             toInsert.push({
-              submission_id: selectedSubmission.id,
               consultant_id: consultantId,
               employee_id: row.employee_id || null,
               worked_project_id: projId,
@@ -630,15 +632,18 @@ export default function DeploymentSchedulePage() {
               rate_year: row.rate_year,
               man_months: row.man_months,
               notes: groupNote,
+              excel_row_id: null,
             });
           });
         }
       });
 
-      if (toInsert.length > 0) {
-        const { error } = await supabase.from("deployment_lines").insert(toInsert);
-        if (error) throw error;
-      }
+      // Use transactional RPC for atomic delete+insert
+      const { error } = await supabase.rpc('save_deployment_lines', {
+        p_submission_id: selectedSubmission.id,
+        p_lines: JSON.stringify(toInsert),
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
