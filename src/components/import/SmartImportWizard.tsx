@@ -199,6 +199,20 @@ export default function SmartImportWizard({ config }: Props) {
     const prog = { total, done: 0, created: 0, updated: 0, errors: [] as { row: number; message: string }[] };
     setProgress(prog);
 
+    // Call beforeImport once before any writes
+    if (config.beforeImport) {
+      try {
+        await config.beforeImport();
+        console.log("[SmartImport] beforeImport completed");
+      } catch (err) {
+        console.error("[SmartImport] beforeImport failed:", err);
+        prog.errors.push({ row: 0, message: `Pre-import setup failed: ${err instanceof Error ? err.message : String(err)}` });
+        setProgress({ ...prog });
+        setStage("done");
+        return;
+      }
+    }
+
     const CHUNK = 200;
 
     // Batch inserts
