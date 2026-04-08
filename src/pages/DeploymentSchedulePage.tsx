@@ -623,8 +623,9 @@ export default function DeploymentSchedulePage() {
       });
       if (error) throw error;
       console.log('Save result:', result);
-      if (result && !result.success) {
-        throw new Error(`Save incomplete: inserted ${result.inserted_count}/${result.input_count}`);
+      const saveResult = result as Record<string, unknown> | null;
+      if (saveResult && !saveResult.success) {
+        throw new Error(`Save incomplete: inserted ${saveResult.inserted_count}/${saveResult.input_count}`);
       }
     },
     onSuccess: () => {
