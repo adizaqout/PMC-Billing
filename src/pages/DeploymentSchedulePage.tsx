@@ -369,61 +369,83 @@ export default function DeploymentSchedulePage() {
     return map;
   }, [poItems]);
 
-  // Load pre-aggregated rows via server-side RPC (groups by excel_row_id, no limit)
-  const { data: rpcData = [], isLoading: linesLoading, isFetching: linesFetching } = useQuery({
-    queryKey: ["deployment-rows-rpc", selectedSubmission?.id],
+  // ---- Server-side paginated cache reads ----
+  const [cachePageSize, setCachePageSize] = useState(CACHE_PAGE_SIZE);
+  const [cacheCurrentPage, setCacheCurrentPage] = useState(1);
+  const [cacheTotalCount, setCacheTotalCount] = useState(0);
+  const [cacheSearchTerm, setCacheSearchTerm] = useState("");
+
+  // Fetch total count (lightweight)
+  const { data: cacheCount = 0, isLoading: countLoading } = useQuery({
+    queryKey: ["drc-count", selectedSubmission?.id],
+    queryFn: async () => {
+      if (!selectedSubmission) return 0;
+      const { count, error } = await supabase
+        .from("deployment_row_cache" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("submission_id", selectedSubmission.id);
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!selectedSubmission,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  useEffect(() => { setCacheTotalCount(cacheCount); }, [cacheCount]);
+
+  // Fetch current page from cache
+  const { data: cacheRows = [], isLoading: cacheLoading, isFetching: cacheFetching } = useQuery({
+    queryKey: ["drc-page", selectedSubmission?.id, cacheCurrentPage, cachePageSize],
     queryFn: async () => {
       if (!selectedSubmission) return [];
-      console.log("Fetching deployment rows via RPC for submission:", selectedSubmission.id);
-      const { data, error } = await supabase.rpc('get_deployment_rows' as any, {
-        p_submission_id: selectedSubmission.id,
-      });
+      const from = (cacheCurrentPage - 1) * cachePageSize;
+      const to = from + cachePageSize - 1;
+      const { data, error } = await supabase
+        .from("deployment_row_cache" as any)
+        .select("*")
+        .eq("submission_id", selectedSubmission.id)
+        .order("sort_order", { ascending: true })
+        .range(from, to);
       if (error) throw error;
-      const rows = (data as any[]) || [];
-      console.log("Rows returned from RPC:", rows.length);
-      return rows;
+      console.log("Cache page loaded:", (data as any[])?.length, "rows, page", cacheCurrentPage);
+      return (data as any[]) || [];
     },
     enabled: !!selectedSubmission,
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: 'always' as const,
-    refetchOnWindowFocus: true,
   });
 
-  // Map RPC result to UIRow[] (depends on employees for position lookup)
+  // Map cache rows to UIRow[]
   useEffect(() => {
     if (!selectedSubmission) return;
-    if (rpcData.length === 0 && !linesLoading) { setRows([]); return; }
+    if (cacheRows.length === 0 && !cacheLoading) { setRows([]); return; }
 
-    const empPositionMap = new Map<string, string>();
-    for (const e of employees) {
-      if (e.position_id) empPositionMap.set(e.id, e.position_id);
-    }
-
-    const uiRows: UIRow[] = rpcData.map((r: any) => {
-      const notesStr = r.notes || '';
-      const monthFromNotes = notesStr.match(/month:([^|]+)/)?.[1];
-      const posFromNotes = notesStr.match(/posId:([^|]+)/)?.[1];
+    const uiRows: UIRow[] = cacheRows.map((r: any) => {
       const allocs = { ...(r.allocations || {}) };
       delete allocs['__none__'];
-
       return {
-        _key: newRowKey(),
-        excel_row_id: r.excel_row_id || undefined,
-        month: monthFromNotes || selectedSubmission.month,
+        _key: r.excel_row_id || `cache-${r.id}`,
+        excel_row_id: r.excel_row_id,
+        month: r.month || selectedSubmission.month,
         employee_id: r.employee_id || '',
-        position_id: empPositionMap.get(r.employee_id || '') || posFromNotes || '',
+        employee_name: r.employee_name || '',
+        position_id: r.position_id || '',
+        position_name: r.position_name || '',
+        rate: r.rate != null ? Number(r.rate) : null,
         rate_year: Number(r.rate_year) || 1,
         man_months: Number(r.man_months) || 0,
         so_id: r.so_id || '',
         po_id: r.po_id || '',
+        total_pct: Number(r.total_pct) || 0,
+        validation_error: r.validation_error || null,
+        sort_order: r.sort_order || 0,
         allocations: allocs,
       };
     });
-
-    console.log("UI rows built from RPC:", uiRows.length);
     setRows(uiRows);
-  }, [rpcData, selectedSubmission, employees, linesLoading]);
+  }, [cacheRows, selectedSubmission, cacheLoading]);
 
   const isEditable = selectedSubmission && ["draft", "returned"].includes(selectedSubmission.status);
 
