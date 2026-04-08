@@ -50,6 +50,7 @@ const CacheMigration = () => {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <CacheMigration />
     <TooltipProvider>
       <Toaster />
       <Sonner />
