@@ -723,13 +723,20 @@ export default function DeploymentSchedulePage() {
   const addRow = () => {
     setRows(prev => [...prev, {
       _key: newRowKey(),
+      excel_row_id: `new_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       month: defaultMonth,
       employee_id: "",
+      employee_name: "",
       position_id: "",
+      position_name: "",
+      rate: null,
       rate_year: 1,
       man_months: 0,
       so_id: "",
       po_id: "",
+      total_pct: 0,
+      validation_error: null,
+      sort_order: 99999,
       allocations: {},
     }]);
   };
