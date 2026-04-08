@@ -533,81 +533,143 @@ export default function DeploymentSchedulePage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedSubmission) throw new Error("No submission selected");
+  // Helper: fetch ALL raw deployment_lines for a submission (paginated reads)
+  const fetchAllRawLines = async (submissionId: string) => {
+    const allLines: any[] = [];
+    const PAGE = 5000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("deployment_lines")
+        .select(DL_SELECT_COLS)
+        .eq("submission_id", submissionId)
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (!data || data.length === 0) break;
+      allLines.push(...data);
+      if (data.length < PAGE) break;
+      from += PAGE;
+    }
+    return allLines;
+  };
 
-      const toInsert: any[] = [];
-      const allowEmpty = selectedSubmission.schedule_type === "baseline" || selectedSubmission.schedule_type === "forecast";
-      // Build employee lookup for emp codes
-      const empCodeMap = new Map<string, string>();
-      for (const e of employees) {
-        empCodeMap.set(e.id, (e as any).employee_id || e.id);
-      }
+  // Helper: convert UI rows into deployment_line records
+  const buildLinesFromUIRows = (uiRows: UIRow[], allowEmpty: boolean) => {
+    const lines: any[] = [];
+    const empCodeMap = new Map<string, string>();
+    for (const e of employees) {
+      empCodeMap.set(e.id, (e as any).employee_id || e.id);
+    }
 
-      rows.forEach((row, rowIdx) => {
-        if (!row.employee_id && !allowEmpty) return;
-        const hasAllocations = Object.values(row.allocations).some(v => v > 0);
-        if (!hasAllocations && row.man_months <= 0) return;
+    uiRows.forEach((row, rowIdx) => {
+      if (!row.employee_id && !allowEmpty) return;
+      const hasAllocations = Object.values(row.allocations).some(v => v > 0);
+      if (!hasAllocations && row.man_months <= 0) return;
 
-        const empCode = row.employee_id
-          ? empCodeMap.get(row.employee_id) || row.employee_id
-          : `PH-${rowIdx + 1}`;
-        const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
+      const empCode = row.employee_id
+        ? empCodeMap.get(row.employee_id) || row.employee_id
+        : `PH-${rowIdx + 1}`;
+      const groupNote = `emp:${empCode}|month:${row.month}|posId:${row.position_id || ""}`;
 
-        const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
-        if (projEntries.length === 0) {
-          toInsert.push({
+      const projEntries = Object.entries(row.allocations).filter(([, pct]) => pct > 0);
+      if (projEntries.length === 0) {
+        lines.push({
+          consultant_id: consultantId,
+          employee_id: row.employee_id || null,
+          worked_project_id: null,
+          billed_project_id: null,
+          po_id: row.po_id || null,
+          po_item_id: null,
+          so_id: row.so_id || null,
+          allocation_pct: 0,
+          rate_year: row.rate_year,
+          man_months: row.man_months,
+          notes: groupNote,
+          excel_row_id: row.excel_row_id || null,
+        });
+      } else {
+        projEntries.forEach(([projId, pct]) => {
+          const poItemId = poItemByProject[projId] || null;
+          const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
+          lines.push({
             consultant_id: consultantId,
             employee_id: row.employee_id || null,
-            worked_project_id: null,
-            billed_project_id: null,
-            po_id: row.po_id || null,
-            po_item_id: null,
+            worked_project_id: projId,
+            billed_project_id: projId,
+            po_id: poId,
+            po_item_id: poItemId,
             so_id: row.so_id || null,
-            allocation_pct: 0,
+            allocation_pct: pct,
             rate_year: row.rate_year,
             man_months: row.man_months,
             notes: groupNote,
             excel_row_id: row.excel_row_id || null,
           });
-        } else {
-          projEntries.forEach(([projId, pct]) => {
-            const poItemId = poItemByProject[projId] || null;
-            const poId = poItemId ? (poByItem[poItemId] || row.po_id || null) : (row.po_id || null);
-            toInsert.push({
-              consultant_id: consultantId,
-              employee_id: row.employee_id || null,
-              worked_project_id: projId,
-              billed_project_id: projId,
-              po_id: poId,
-              po_item_id: poItemId,
-              so_id: row.so_id || null,
-              allocation_pct: pct,
-              rate_year: row.rate_year,
-              man_months: row.man_months,
-              notes: groupNote,
-              excel_row_id: row.excel_row_id || null,
-            });
-          });
-        }
-      });
+        });
+      }
+    });
+    return lines;
+  };
 
-      // Use transactional RPC for atomic delete+insert
-      console.log('=== SAVING DEPLOYMENT LINES ===', { lineCount: toInsert.length, submissionId: selectedSubmission.id });
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedSubmission) throw new Error("No submission selected");
+
+      const allowEmpty = selectedSubmission.schedule_type === "baseline" || selectedSubmission.schedule_type === "forecast";
+
+      // 1. Fetch the FULL raw dataset from deployment_lines (not from UI)
+      const fullRawLines = await fetchAllRawLines(selectedSubmission.id);
+      console.log('[Save] Full raw lines fetched from DB:', fullRawLines.length);
+
+      // 2. Determine which excel_row_ids are on the current UI page
+      const currentPageExcelRowIds = new Set(rows.map(r => r.excel_row_id).filter(Boolean));
+      console.log('[Save] Current page excel_row_ids:', currentPageExcelRowIds.size);
+
+      // 3. Keep all raw lines NOT on the current page (untouched)
+      const untouchedLines = fullRawLines.filter(
+        line => !line.excel_row_id || !currentPageExcelRowIds.has(line.excel_row_id)
+      );
+      console.log('[Save] Untouched raw lines (not on current page):', untouchedLines.length);
+
+      // 4. Rebuild lines from the current page's UI rows (may have edits)
+      const editedPageLines = buildLinesFromUIRows(rows, allowEmpty);
+      console.log('[Save] Rebuilt lines from current UI page:', editedPageLines.length);
+
+      // 5. Merge: untouched + edited page lines = full dataset
+      const toInsert = [
+        ...untouchedLines.map(l => ({
+          consultant_id: l.consultant_id || consultantId,
+          employee_id: l.employee_id || null,
+          worked_project_id: l.worked_project_id || null,
+          billed_project_id: l.billed_project_id || null,
+          po_id: l.po_id || null,
+          po_item_id: l.po_item_id || null,
+          so_id: l.so_id || null,
+          allocation_pct: l.allocation_pct ?? 0,
+          rate_year: l.rate_year,
+          man_months: l.man_months ?? 0,
+          notes: l.notes || null,
+          excel_row_id: l.excel_row_id || null,
+        })),
+        ...editedPageLines,
+      ];
+
+      console.log('[Save] TOTAL lines to save (untouched + edited):', toInsert.length,
+        '| Source: DB raw lines merged with current page UI edits');
+
+      // 6. Atomic save via RPC
       const { data: result, error } = await supabase.rpc('save_deployment_lines', {
         p_submission_id: selectedSubmission.id,
         p_lines: toInsert as any,
       });
       if (error) throw error;
-      console.log('Save result:', result);
+      console.log('[Save] Result:', result);
       const saveResult = result as Record<string, unknown> | null;
       if (saveResult && !saveResult.success) {
         throw new Error(`Save incomplete: inserted ${saveResult.inserted_count}/${saveResult.input_count}`);
       }
     },
     onSuccess: () => {
-      // Cache is auto-refreshed inside save_deployment_lines — just invalidate queries
       queryClient.invalidateQueries({ queryKey: ["drc-count"] });
       queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       toast.success("Draft saved");
