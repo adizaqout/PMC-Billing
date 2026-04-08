@@ -537,7 +537,7 @@ export default function DeploymentSchedulePage() {
         const PAGE = 1000;
         let from = 0;
         while (true) {
-          const { data } = await supabase.from("deployment_lines").select("*").eq("submission_id", latest.id).range(from, from + PAGE - 1);
+          const { data } = await supabase.from("deployment_lines").select(DL_SELECT_COLS).eq("submission_id", latest.id).range(from, from + PAGE - 1);
           if (!data || data.length === 0) break;
           allOldLines.push(...data);
           if (data.length < PAGE) break;
