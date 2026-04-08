@@ -1367,11 +1367,11 @@ export default function DeploymentSchedulePage() {
                     const realIdx = rowIdx;
                     const emp = employees.find(e => e.id === row.employee_id);
                     const pos = positions.find(p => p.id === row.position_id);
-                    const rate = getRateForRow(row);
-                    const allocSum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
+                    const rate = row.rate;
+                    const allocSum = row.total_pct || Object.values(row.allocations).reduce((a, b) => a + b, 0);
 
                     return (
-                      <tr key={row._key} className="border-b last:border-0 hover:bg-muted/50">
+                      <tr key={row.excel_row_id} className="border-b last:border-0 hover:bg-muted/50">
                         {detailVisibleCols.has("month") && (
                           <td className="px-3 py-1.5">
                             {isEditable ? (
