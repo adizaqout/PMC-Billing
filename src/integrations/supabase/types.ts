@@ -1517,7 +1517,7 @@ export type Database = {
       is_superadmin: { Args: never; Returns: boolean }
       save_deployment_lines: {
         Args: { p_lines: Json; p_submission_id: string }
-        Returns: undefined
+        Returns: Json
       }
     }
     Enums: {
