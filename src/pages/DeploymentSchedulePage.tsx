@@ -616,11 +616,16 @@ export default function DeploymentSchedulePage() {
       });
 
       // Use transactional RPC for atomic delete+insert
-      const { error } = await supabase.rpc('save_deployment_lines', {
+      console.log('=== SAVING DEPLOYMENT LINES ===', { lineCount: toInsert.length, submissionId: selectedSubmission.id });
+      const { data: result, error } = await supabase.rpc('save_deployment_lines', {
         p_submission_id: selectedSubmission.id,
         p_lines: JSON.stringify(toInsert),
       });
       if (error) throw error;
+      console.log('Save result:', result);
+      if (result && !result.success) {
+        throw new Error(`Save incomplete: inserted ${result.inserted_count}/${result.input_count}`);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-lines-v2"] });
