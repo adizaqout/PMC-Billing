@@ -1360,11 +1360,11 @@ export default function DeploymentSchedulePage() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedDetailRows.length === 0 ? (
-                  <tr><td colSpan={detailVisibleCols.size + projectColumns.length + 1 + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">{rows.length === 0 ? 'No rows yet. Click "Add Row" or import from Excel.' : "No rows match the current filters."}</td></tr>
+                {rows.length === 0 ? (
+                  <tr><td colSpan={detailVisibleCols.size + projectColumns.length + 1 + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">{cacheTotalCount === 0 ? 'No rows yet. Click "Add Row" or import from Excel.' : "No rows match the current filters."}</td></tr>
                 ) : (
-                  paginatedDetailRows.map((row) => {
-                    const realIdx = rows.findIndex(r => r._key === row._key);
+                  rows.map((row, rowIdx) => {
+                    const realIdx = rowIdx;
                     const emp = employees.find(e => e.id === row.employee_id);
                     const pos = positions.find(p => p.id === row.position_id);
                     const rate = getRateForRow(row);
