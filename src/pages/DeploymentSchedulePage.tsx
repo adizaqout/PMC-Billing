@@ -355,7 +355,7 @@ export default function DeploymentSchedulePage() {
   // Load lines for selected submission
   // Fetch ALL lines for selected submission (paginate past Supabase 1000-row limit)
   const { data: existingLines = [], isLoading: linesLoading, isFetching: linesFetching } = useQuery({
-    queryKey: ["deployment-lines", selectedSubmission?.id],
+    queryKey: ["deployment-lines-v2", selectedSubmission?.id],
     queryFn: async () => {
       if (!selectedSubmission) return [];
       const allLines: DeploymentLine[] = [];
@@ -383,7 +383,7 @@ export default function DeploymentSchedulePage() {
   // Prefetch submission lines on hover for instant navigation
   const prefetchSubmissionLines = (submissionId: string) => {
     queryClient.prefetchQuery({
-      queryKey: ["deployment-lines", submissionId],
+      queryKey: ["deployment-lines-v2", submissionId],
       queryFn: async () => {
         const allLines: DeploymentLine[] = [];
         const PAGE_SIZE = 5000;
@@ -646,7 +646,7 @@ export default function DeploymentSchedulePage() {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+      queryClient.invalidateQueries({ queryKey: ["deployment-lines-v2"] });
       toast.success("Draft saved");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -664,7 +664,7 @@ export default function DeploymentSchedulePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+      queryClient.invalidateQueries({ queryKey: ["deployment-lines-v2"] });
       toast.success("Submitted for review");
       setView("list");
     },
@@ -1179,7 +1179,7 @@ export default function DeploymentSchedulePage() {
         return errors;
       },
       onComplete: () => {
-        queryClient.invalidateQueries({ queryKey: ["deployment-lines"] });
+        queryClient.invalidateQueries({ queryKey: ["deployment-lines-v2"] });
         if (selectedSubmission) {
           (async () => {
             const allLines: DeploymentLine[] = [];
