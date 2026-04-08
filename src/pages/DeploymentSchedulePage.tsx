@@ -1243,7 +1243,7 @@ export default function DeploymentSchedulePage() {
       return pos[rateKey] as number | null;
     };
 
-    const detailDataLoading = linesLoading || linesFetching;
+    const detailDataLoading = cacheLoading || cacheFetching || countLoading;
 
     return (
       <AppLayout>
