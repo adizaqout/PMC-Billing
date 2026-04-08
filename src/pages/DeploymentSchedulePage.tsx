@@ -629,7 +629,8 @@ export default function DeploymentSchedulePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
+      queryClient.invalidateQueries({ queryKey: ["drc-count"] });
+      queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       toast.success("Submitted for review");
       setView("list");
     },
