@@ -63,17 +63,26 @@ const DL_SELECT_COLS = `id,submission_id,excel_row_id,employee_id,worked_project
 // A UI row: one employee-month combination with allocations across project columns
 interface UIRow {
   _key: string; // UI key
-  excel_row_id?: string; // preserved from import for correct grouping
+  excel_row_id: string; // primary grouping key
   month: string;
   employee_id: string;
+  employee_name: string;
   position_id: string;
+  position_name: string;
+  rate: number | null;
   rate_year: number; // 1-5
   man_months: number; // 0-1.0
   so_id: string;
   po_id: string;
+  total_pct: number;
+  validation_error: string | null;
+  sort_order: number;
   // project_id -> allocation_pct (0-100, sum should be 100)
   allocations: Record<string, number>;
 }
+
+// Default page size for server-side pagination
+const CACHE_PAGE_SIZE = 50;
 
 const projLabel = (p: Project) => p.project_number ? `${p.project_number} - ${p.project_name}` : p.project_name;
 
@@ -360,61 +369,83 @@ export default function DeploymentSchedulePage() {
     return map;
   }, [poItems]);
 
-  // Load pre-aggregated rows via server-side RPC (groups by excel_row_id, no limit)
-  const { data: rpcData = [], isLoading: linesLoading, isFetching: linesFetching } = useQuery({
-    queryKey: ["deployment-rows-rpc", selectedSubmission?.id],
+  // ---- Server-side paginated cache reads ----
+  const [cachePageSize, setCachePageSize] = useState(CACHE_PAGE_SIZE);
+  const [cacheCurrentPage, setCacheCurrentPage] = useState(1);
+  const [cacheTotalCount, setCacheTotalCount] = useState(0);
+  const [cacheSearchTerm, setCacheSearchTerm] = useState("");
+
+  // Fetch total count (lightweight)
+  const { data: cacheCount = 0, isLoading: countLoading } = useQuery({
+    queryKey: ["drc-count", selectedSubmission?.id],
+    queryFn: async () => {
+      if (!selectedSubmission) return 0;
+      const { count, error } = await supabase
+        .from("deployment_row_cache" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("submission_id", selectedSubmission.id);
+      if (error) throw error;
+      return count || 0;
+    },
+    enabled: !!selectedSubmission,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  useEffect(() => { setCacheTotalCount(cacheCount); }, [cacheCount]);
+
+  // Fetch current page from cache
+  const { data: cacheRows = [], isLoading: cacheLoading, isFetching: cacheFetching } = useQuery({
+    queryKey: ["drc-page", selectedSubmission?.id, cacheCurrentPage, cachePageSize],
     queryFn: async () => {
       if (!selectedSubmission) return [];
-      console.log("Fetching deployment rows via RPC for submission:", selectedSubmission.id);
-      const { data, error } = await supabase.rpc('get_deployment_rows' as any, {
-        p_submission_id: selectedSubmission.id,
-      });
+      const from = (cacheCurrentPage - 1) * cachePageSize;
+      const to = from + cachePageSize - 1;
+      const { data, error } = await supabase
+        .from("deployment_row_cache" as any)
+        .select("*")
+        .eq("submission_id", selectedSubmission.id)
+        .order("sort_order", { ascending: true })
+        .range(from, to);
       if (error) throw error;
-      const rows = (data as any[]) || [];
-      console.log("Rows returned from RPC:", rows.length);
-      return rows;
+      console.log("Cache page loaded:", (data as any[])?.length, "rows, page", cacheCurrentPage);
+      return (data as any[]) || [];
     },
     enabled: !!selectedSubmission,
     staleTime: 0,
     gcTime: 0,
     refetchOnMount: 'always' as const,
-    refetchOnWindowFocus: true,
   });
 
-  // Map RPC result to UIRow[] (depends on employees for position lookup)
+  // Map cache rows to UIRow[]
   useEffect(() => {
     if (!selectedSubmission) return;
-    if (rpcData.length === 0 && !linesLoading) { setRows([]); return; }
+    if (cacheRows.length === 0 && !cacheLoading) { setRows([]); return; }
 
-    const empPositionMap = new Map<string, string>();
-    for (const e of employees) {
-      if (e.position_id) empPositionMap.set(e.id, e.position_id);
-    }
-
-    const uiRows: UIRow[] = rpcData.map((r: any) => {
-      const notesStr = r.notes || '';
-      const monthFromNotes = notesStr.match(/month:([^|]+)/)?.[1];
-      const posFromNotes = notesStr.match(/posId:([^|]+)/)?.[1];
+    const uiRows: UIRow[] = cacheRows.map((r: any) => {
       const allocs = { ...(r.allocations || {}) };
       delete allocs['__none__'];
-
       return {
-        _key: newRowKey(),
-        excel_row_id: r.excel_row_id || undefined,
-        month: monthFromNotes || selectedSubmission.month,
+        _key: r.excel_row_id || `cache-${r.id}`,
+        excel_row_id: r.excel_row_id,
+        month: r.month || selectedSubmission.month,
         employee_id: r.employee_id || '',
-        position_id: empPositionMap.get(r.employee_id || '') || posFromNotes || '',
+        employee_name: r.employee_name || '',
+        position_id: r.position_id || '',
+        position_name: r.position_name || '',
+        rate: r.rate != null ? Number(r.rate) : null,
         rate_year: Number(r.rate_year) || 1,
         man_months: Number(r.man_months) || 0,
         so_id: r.so_id || '',
         po_id: r.po_id || '',
+        total_pct: Number(r.total_pct) || 0,
+        validation_error: r.validation_error || null,
+        sort_order: r.sort_order || 0,
         allocations: allocs,
       };
     });
-
-    console.log("UI rows built from RPC:", uiRows.length);
     setRows(uiRows);
-  }, [rpcData, selectedSubmission, employees, linesLoading]);
+  }, [cacheRows, selectedSubmission, cacheLoading]);
 
   const isEditable = selectedSubmission && ["draft", "returned"].includes(selectedSubmission.status);
 
@@ -575,8 +606,12 @@ export default function DeploymentSchedulePage() {
         throw new Error(`Save incomplete: inserted ${saveResult.inserted_count}/${saveResult.input_count}`);
       }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
+    onSuccess: async () => {
+      if (selectedSubmission) {
+        await supabase.rpc('refresh_deployment_row_cache' as any, { p_submission_id: selectedSubmission.id });
+      }
+      queryClient.invalidateQueries({ queryKey: ["drc-count"] });
+      queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       toast.success("Draft saved");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -594,7 +629,8 @@ export default function DeploymentSchedulePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["deployment-submissions-list"] });
-      queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
+      queryClient.invalidateQueries({ queryKey: ["drc-count"] });
+      queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       toast.success("Submitted for review");
       setView("list");
     },
@@ -692,13 +728,20 @@ export default function DeploymentSchedulePage() {
   const addRow = () => {
     setRows(prev => [...prev, {
       _key: newRowKey(),
+      excel_row_id: `new_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       month: defaultMonth,
       employee_id: "",
+      employee_name: "",
       position_id: "",
+      position_name: "",
+      rate: null,
       rate_year: 1,
       man_months: 0,
       so_id: "",
       po_id: "",
+      total_pct: 0,
+      validation_error: null,
+      sort_order: 99999,
       allocations: {},
     }]);
   };
@@ -1108,9 +1151,13 @@ export default function DeploymentSchedulePage() {
         }
         return errors;
       },
-      onComplete: () => {
-        // Invalidate RPC query to trigger a fresh server-side aggregation
-        queryClient.invalidateQueries({ queryKey: ["deployment-rows-rpc"] });
+      onComplete: async () => {
+        // Refresh the cache from deployment_lines
+        if (selectedSubmission) {
+          await supabase.rpc('refresh_deployment_row_cache' as any, { p_submission_id: selectedSubmission.id });
+        }
+        queryClient.invalidateQueries({ queryKey: ["drc-count"] });
+        queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       },
     };
   }, [selectedSubmission, scheduleType, allEmployees, employees, positions, projectColumns, rows, poItemByProject, poByItem]);
@@ -1198,14 +1245,9 @@ export default function DeploymentSchedulePage() {
 
   // ============ DETAIL VIEW ============
   if (view === "detail" && selectedSubmission) {
-    const getRateForRow = (row: UIRow) => {
-      const pos = positions.find(p => p.id === row.position_id);
-      if (!pos) return null;
-      const rateKey = `year_${row.rate_year}_rate` as keyof Position;
-      return pos[rateKey] as number | null;
-    };
+    // Rate is pre-computed in cache
 
-    const detailDataLoading = linesLoading || linesFetching;
+    const detailDataLoading = cacheLoading || cacheFetching || countLoading;
 
     return (
       <AppLayout>
@@ -1281,7 +1323,7 @@ export default function DeploymentSchedulePage() {
           <div className="bg-card rounded-md border">
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search rows..." value={detailSearch} onChange={(e) => setDetailSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
-              <span className="text-xs text-muted-foreground">{filteredDetailRows.length} of {rows.length} rows</span>
+              <span className="text-xs text-muted-foreground">{rows.length} on page · {cacheTotalCount} total rows</span>
             </div>
             <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -1313,18 +1355,18 @@ export default function DeploymentSchedulePage() {
                 </tr>
               </thead>
               <tbody>
-                {paginatedDetailRows.length === 0 ? (
-                  <tr><td colSpan={detailVisibleCols.size + projectColumns.length + 1 + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">{rows.length === 0 ? 'No rows yet. Click "Add Row" or import from Excel.' : "No rows match the current filters."}</td></tr>
+                {rows.length === 0 ? (
+                  <tr><td colSpan={detailVisibleCols.size + projectColumns.length + 1 + (isEditable ? 1 : 0)} className="text-center py-12 text-muted-foreground">{cacheTotalCount === 0 ? 'No rows yet. Click "Add Row" or import from Excel.' : "No rows match the current filters."}</td></tr>
                 ) : (
-                  paginatedDetailRows.map((row) => {
-                    const realIdx = rows.findIndex(r => r._key === row._key);
+                  rows.map((row, rowIdx) => {
+                    const realIdx = rowIdx;
                     const emp = employees.find(e => e.id === row.employee_id);
                     const pos = positions.find(p => p.id === row.position_id);
-                    const rate = getRateForRow(row);
-                    const allocSum = Object.values(row.allocations).reduce((a, b) => a + b, 0);
+                    const rate = row.rate;
+                    const allocSum = row.total_pct || Object.values(row.allocations).reduce((a, b) => a + b, 0);
 
                     return (
-                      <tr key={row._key} className="border-b last:border-0 hover:bg-muted/50">
+                      <tr key={row.excel_row_id} className="border-b last:border-0 hover:bg-muted/50">
                         {detailVisibleCols.has("month") && (
                           <td className="px-3 py-1.5">
                             {isEditable ? (
@@ -1450,11 +1492,11 @@ export default function DeploymentSchedulePage() {
               </tbody>
             </table>
             </div>
-            {filteredDetailRows.length > 0 && <TablePagination totalItems={detailTotalItems} pageSize={detailPageSize} currentPage={detailCurrentPage} onPageChange={setDetailCurrentPage} onPageSizeChange={setDetailPageSize} />}
+            {cacheTotalCount > 0 && <TablePagination totalItems={cacheTotalCount} pageSize={cachePageSize} currentPage={cacheCurrentPage} onPageChange={setCacheCurrentPage} onPageSizeChange={(s) => { setCachePageSize(s); setCacheCurrentPage(1); }} />}
           </div>
 
           <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-            <span>{rows.length} total row(s)</span>
+            <span>{cacheTotalCount} total row(s)</span>
             <span>·</span>
             <span>Revision #{selectedSubmission.revision_no}</span>
             <span>·</span>
