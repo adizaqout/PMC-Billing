@@ -606,10 +606,8 @@ export default function DeploymentSchedulePage() {
         throw new Error(`Save incomplete: inserted ${saveResult.inserted_count}/${saveResult.input_count}`);
       }
     },
-    onSuccess: async () => {
-      if (selectedSubmission) {
-        await supabase.rpc('refresh_deployment_row_cache' as any, { p_submission_id: selectedSubmission.id });
-      }
+    onSuccess: () => {
+      // Cache is auto-refreshed inside save_deployment_lines — just invalidate queries
       queryClient.invalidateQueries({ queryKey: ["drc-count"] });
       queryClient.invalidateQueries({ queryKey: ["drc-page"] });
       toast.success("Draft saved");
