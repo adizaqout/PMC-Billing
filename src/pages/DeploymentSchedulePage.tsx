@@ -57,6 +57,9 @@ type POItem = { id: string; po_id: string; po_item_ref: string | null; project_i
 type ServiceOrder = { id: string; so_number: string; consultant_id: string; framework_id: string | null; so_start_date: string | null; so_end_date: string | null };
 type Position = Tables<"positions">;
 
+// Optimized column selection — only fetch what buildUIRows + save actually need
+const DL_SELECT_COLS = `id,submission_id,excel_row_id,employee_id,worked_project_id,billed_project_id,allocation_pct,man_months,rate_year,notes,po_id,po_item_id,so_id` as const;
+
 // A UI row: one employee-month combination with allocations across project columns
 interface UIRow {
   _key: string; // UI key
@@ -356,12 +359,12 @@ export default function DeploymentSchedulePage() {
     queryFn: async () => {
       if (!selectedSubmission) return [];
       const allLines: DeploymentLine[] = [];
-      const PAGE_SIZE = 1000;
+      const PAGE_SIZE = 5000;
       let from = 0;
       while (true) {
         const { data, error } = await supabase
           .from("deployment_lines")
-          .select("*")
+          .select(DL_SELECT_COLS)
           .eq("submission_id", selectedSubmission.id)
           .range(from, from + PAGE_SIZE - 1);
         if (error) throw error;
@@ -373,8 +376,8 @@ export default function DeploymentSchedulePage() {
       return allLines;
     },
     enabled: !!selectedSubmission,
-    staleTime: 10 * 60 * 1000, // 10 minutes — show cached data instantly
-    gcTime: 30 * 60 * 1000, // 30 minutes — keep in memory
+    staleTime: 10 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 
   // Prefetch submission lines on hover for instant navigation
@@ -383,12 +386,12 @@ export default function DeploymentSchedulePage() {
       queryKey: ["deployment-lines", submissionId],
       queryFn: async () => {
         const allLines: DeploymentLine[] = [];
-        const PAGE_SIZE = 1000;
+        const PAGE_SIZE = 5000;
         let from = 0;
         while (true) {
           const { data, error } = await supabase
             .from("deployment_lines")
-            .select("*")
+            .select(DL_SELECT_COLS)
             .eq("submission_id", submissionId)
             .range(from, from + PAGE_SIZE - 1);
           if (error) throw error;
@@ -407,67 +410,81 @@ export default function DeploymentSchedulePage() {
   const buildUIRows = (lines: DeploymentLine[]): UIRow[] => {
     if (lines.length === 0) return [];
 
-    // Split lines by whether they have excel_row_id (new imports) or not (legacy data)
-    const withExcelRowId = lines.filter(l => (l as any).excel_row_id);
-    const withoutExcelRowId = lines.filter(l => !(l as any).excel_row_id);
+    // Build employee lookup map once for O(1) position lookups
+    const empPositionMap = new Map<string, string>();
+    for (const e of employees) {
+      if (e.position_id) empPositionMap.set(e.id, e.position_id);
+    }
 
-    const buildGroupedRows = (groupedLines: Record<string, DeploymentLine[]>): UIRow[] => {
-      return Object.entries(groupedLines).map(([, grpLines]) => {
-        const first = grpLines[0];
-        const empId = first.employee_id || "";
-        const notesStr = (first as any).notes as string | null;
+    // Single-pass: separate and group simultaneously
+    const newGrouped = new Map<string, DeploymentLine[]>();
+    const legacyGrouped = new Map<string, DeploymentLine[]>();
+    let nullCounter = 0;
+
+    for (const line of lines) {
+      const excelRowId = (line as any).excel_row_id as string | null;
+
+      if (excelRowId) {
+        const existing = newGrouped.get(excelRowId);
+        if (existing) existing.push(line);
+        else newGrouped.set(excelRowId, [line]);
+      } else {
+        const notesStr = (line as any).notes as string | null;
         const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
-        const allocations: Record<string, number> = {};
-        grpLines.forEach(l => {
-          const projId = l.worked_project_id || l.billed_project_id;
-          if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
-        });
-        const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
-        const maxManMonths = grpLines.reduce((max, l) => Math.max(max, Number(l.man_months) || 0), 0);
-        return {
-          _key: newRowKey(),
-          month: monthFromNotes || selectedSubmission?.month || first.submission_id,
-          employee_id: empId,
-          position_id: employees.find(e => e.id === empId)?.position_id || posFromNotes || first.po_item_id || "",
-          rate_year: grpLines.reduce((max, l) => Math.max(max, Number(l.rate_year) || 0), 0) || 1,
-          man_months: maxManMonths,
-          so_id: first.so_id || "",
-          po_id: first.po_id || "",
-          allocations,
-        };
-      });
+        const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
+        let key: string;
+        if (line.employee_id) {
+          key = monthFromNotes ? `${line.employee_id}|${monthFromNotes}` : line.employee_id;
+        } else if (empCodeFromNotes && monthFromNotes) {
+          key = `${empCodeFromNotes}|${monthFromNotes}`;
+        } else {
+          key = `__null_${++nullCounter}`;
+        }
+        const existing = legacyGrouped.get(key);
+        if (existing) existing.push(line);
+        else legacyGrouped.set(key, [line]);
+      }
+    }
+
+    // Convert a group of lines into a UIRow
+    const toUIRow = (grpLines: DeploymentLine[]): UIRow => {
+      const first = grpLines[0];
+      const empId = first.employee_id || "";
+      const notesStr = (first as any).notes as string | null;
+      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
+      const posFromNotes = notesStr?.match(/posId:([^|]+)/)?.[1];
+
+      const allocations: Record<string, number> = {};
+      let maxManMonths = 0;
+      let maxRateYear = 0;
+
+      for (const l of grpLines) {
+        const projId = l.worked_project_id || l.billed_project_id;
+        if (projId) allocations[projId] = Math.round(Number(l.allocation_pct) * 100) / 100;
+        const mm = Number(l.man_months) || 0;
+        if (mm > maxManMonths) maxManMonths = mm;
+        const ry = Number(l.rate_year) || 0;
+        if (ry > maxRateYear) maxRateYear = ry;
+      }
+
+      return {
+        _key: newRowKey(),
+        month: monthFromNotes || selectedSubmission?.month || first.submission_id,
+        employee_id: empId,
+        position_id: empPositionMap.get(empId) || posFromNotes || first.po_item_id || "",
+        rate_year: maxRateYear || 1,
+        man_months: maxManMonths,
+        so_id: first.so_id || "",
+        po_id: first.po_id || "",
+        allocations,
+      };
     };
 
-    // NEW imports: group by excel_row_id (one UI row per Excel row)
-    const newGrouped: Record<string, DeploymentLine[]> = {};
-    withExcelRowId.forEach(l => {
-      const key = (l as any).excel_row_id as string;
-      if (!newGrouped[key]) newGrouped[key] = [];
-      newGrouped[key].push(l);
-    });
-    const newUIRows = buildGroupedRows(newGrouped);
-
-    // LEGACY data: group by employee_id + month (original logic)
-    const legacyGrouped: Record<string, DeploymentLine[]> = {};
-    let nullCounter = 0;
-    withoutExcelRowId.forEach(l => {
-      let key: string;
-      const notesStr = (l as any).notes as string | null;
-      const monthFromNotes = notesStr?.match(/month:([^|]+)/)?.[1];
-      const empCodeFromNotes = notesStr?.match(/emp:([^|]+)/)?.[1];
-      if (l.employee_id) {
-        key = monthFromNotes ? `${l.employee_id}|${monthFromNotes}` : l.employee_id;
-      } else if (empCodeFromNotes && monthFromNotes) {
-        key = `${empCodeFromNotes}|${monthFromNotes}`;
-      } else {
-        key = `__null_${++nullCounter}`;
-      }
-      if (!legacyGrouped[key]) legacyGrouped[key] = [];
-      legacyGrouped[key].push(l);
-    });
-    const legacyUIRows = buildGroupedRows(legacyGrouped);
-
-    return [...newUIRows, ...legacyUIRows];
+    const result: UIRow[] = new Array(newGrouped.size + legacyGrouped.size);
+    let idx = 0;
+    for (const [, grpLines] of newGrouped) result[idx++] = toUIRow(grpLines);
+    for (const [, grpLines] of legacyGrouped) result[idx++] = toUIRow(grpLines);
+    return result;
   };
 
   useEffect(() => {
