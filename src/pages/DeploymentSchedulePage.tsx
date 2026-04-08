@@ -597,7 +597,7 @@ export default function DeploymentSchedulePage() {
       console.log('=== SAVING DEPLOYMENT LINES ===', { lineCount: toInsert.length, submissionId: selectedSubmission.id });
       const { data: result, error } = await supabase.rpc('save_deployment_lines', {
         p_submission_id: selectedSubmission.id,
-        p_lines: JSON.stringify(toInsert),
+        p_lines: toInsert as any,
       });
       if (error) throw error;
       console.log('Save result:', result);
