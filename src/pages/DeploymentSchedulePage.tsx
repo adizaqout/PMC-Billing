@@ -63,17 +63,26 @@ const DL_SELECT_COLS = `id,submission_id,excel_row_id,employee_id,worked_project
 // A UI row: one employee-month combination with allocations across project columns
 interface UIRow {
   _key: string; // UI key
-  excel_row_id?: string; // preserved from import for correct grouping
+  excel_row_id: string; // primary grouping key
   month: string;
   employee_id: string;
+  employee_name: string;
   position_id: string;
+  position_name: string;
+  rate: number | null;
   rate_year: number; // 1-5
   man_months: number; // 0-1.0
   so_id: string;
   po_id: string;
+  total_pct: number;
+  validation_error: string | null;
+  sort_order: number;
   // project_id -> allocation_pct (0-100, sum should be 100)
   allocations: Record<string, number>;
 }
+
+// Default page size for server-side pagination
+const CACHE_PAGE_SIZE = 50;
 
 const projLabel = (p: Project) => p.project_number ? `${p.project_number} - ${p.project_name}` : p.project_name;
 
