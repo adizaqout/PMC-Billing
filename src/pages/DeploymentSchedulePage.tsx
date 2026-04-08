@@ -1245,12 +1245,7 @@ export default function DeploymentSchedulePage() {
 
   // ============ DETAIL VIEW ============
   if (view === "detail" && selectedSubmission) {
-    const getRateForRow = (row: UIRow) => {
-      const pos = positions.find(p => p.id === row.position_id);
-      if (!pos) return null;
-      const rateKey = `year_${row.rate_year}_rate` as keyof Position;
-      return pos[rateKey] as number | null;
-    };
+    // Rate is pre-computed in cache
 
     const detailDataLoading = cacheLoading || cacheFetching || countLoading;
 
