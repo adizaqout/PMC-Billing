@@ -1497,11 +1497,11 @@ export default function DeploymentSchedulePage() {
               </tbody>
             </table>
             </div>
-            {filteredDetailRows.length > 0 && <TablePagination totalItems={detailTotalItems} pageSize={detailPageSize} currentPage={detailCurrentPage} onPageChange={setDetailCurrentPage} onPageSizeChange={setDetailPageSize} />}
+            {cacheTotalCount > 0 && <TablePagination totalItems={cacheTotalCount} pageSize={cachePageSize} currentPage={cacheCurrentPage} onPageChange={setCacheCurrentPage} onPageSizeChange={(s) => { setCachePageSize(s); setCacheCurrentPage(1); }} />}
           </div>
 
           <div className="mt-4 flex items-center gap-4 text-xs text-muted-foreground">
-            <span>{rows.length} total row(s)</span>
+            <span>{cacheTotalCount} total row(s)</span>
             <span>·</span>
             <span>Revision #{selectedSubmission.revision_no}</span>
             <span>·</span>
