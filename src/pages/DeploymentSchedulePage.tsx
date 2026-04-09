@@ -914,7 +914,7 @@ export default function DeploymentSchedulePage() {
     toast.info("Preparing full export…");
 
     // Fetch ALL rows from deployment_row_cache for this submission (paginated loop)
-    const PAGE = 5000;
+    const PAGE = 1000;
     let allCacheRows: any[] = [];
     let offset = 0;
     while (true) {
