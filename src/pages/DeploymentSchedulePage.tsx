@@ -909,27 +909,51 @@ export default function DeploymentSchedulePage() {
     return base;
   };
 
-  const handleExport = () => {
+  const handleExport = async () => {
+    if (!selectedSubmission) return;
+    toast.info("Preparing full export…");
+
+    // Fetch ALL rows from deployment_row_cache for this submission (paginated loop)
+    const PAGE = 5000;
+    let allCacheRows: any[] = [];
+    let offset = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("deployment_row_cache" as any)
+        .select("*")
+        .eq("submission_id", selectedSubmission.id)
+        .order("sort_order", { ascending: true })
+        .range(offset, offset + PAGE - 1);
+      if (error) { toast.error("Export fetch failed: " + error.message); return; }
+      const batch = (data as any[]) || [];
+      allCacheRows = allCacheRows.concat(batch);
+      if (batch.length < PAGE) break;
+      offset += PAGE;
+    }
+    console.log("[Export] Total cache rows fetched:", allCacheRows.length);
+
     const cols = getExcelColumns();
-    const data = rows.map(row => {
-      const emp = employees.find(e => e.id === row.employee_id);
-      const pos = positions.find(p => p.id === row.position_id);
+    const exportData = allCacheRows.map((r: any) => {
+      const allocs = { ...(r.allocations || {}) };
+      delete allocs['__none__'];
+      const emp = employees.find(e => e.id === r.employee_id);
+      const pos = positions.find(p => p.id === r.position_id);
       const rec: Record<string, any> = {
-        month: row.month || defaultMonth,
+        month: r.month || defaultMonth,
         employee_id_code: (emp as any)?.employee_id || "",
-        employee_name: emp?.employee_name || (!row.employee_id && (scheduleType === "baseline" || scheduleType === "forecast") ? "TBD" : ""),
+        employee_name: r.employee_name || emp?.employee_name || (!r.employee_id && (scheduleType === "baseline" || scheduleType === "forecast") ? "TBD" : ""),
         position_id_code: pos?.position_id || "",
-        position_name: pos?.position_name || "",
-        rate_year: row.rate_year,
-        man_months: row.man_months,
+        position_name: r.position_name || pos?.position_name || "",
+        rate_year: Number(r.rate_year) || 1,
+        man_months: Number(r.man_months) || 0,
       };
       projectColumns.forEach(p => {
-        rec[`proj_${p.id}`] = row.allocations[p.id] || "";
+        rec[`proj_${p.id}`] = allocs[p.id] || "";
       });
       return rec;
     });
-    exportToExcel(`deployment-${scheduleType}-${periodMonth}.xlsx`, cols, data);
-    toast.success("Exported to Excel");
+    await exportToExcel(`deployment-${scheduleType}-${periodMonth}.xlsx`, cols, exportData);
+    toast.success(`Exported ${allCacheRows.length} rows to Excel`);
   };
 
   const handleTemplate = () => {
