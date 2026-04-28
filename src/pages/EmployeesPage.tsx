@@ -86,7 +86,7 @@ export default function EmployeesPage() {
   const empTableCols: ColumnDef[] = [
      { key: "emp_id", label: "Emp ID" }, { key: "name", label: "Name" }, { key: "consultant", label: "Consultant" },
     { key: "pos_id", label: "Position ID" }, { key: "pos_name", label: "Position Name" }, { key: "exp", label: "Exp (Yrs)" },
-    { key: "start", label: "Start Date" }, { key: "end", label: "End Date" }, { key: "active_flag", label: "Active" }, { key: "status", label: "Status" },
+    { key: "start", label: "Start Date" }, { key: "end", label: "End Date" }, { key: "deployment", label: "Deployment" }, { key: "active_flag", label: "Active" }, { key: "status", label: "Status" },
   ];
   const { visibleColumns, setVisibleColumns } = useColumnVisibility(empTableCols);
   const queryClient = useQueryClient();
@@ -241,6 +241,7 @@ export default function EmployeesPage() {
                 {visibleColumns.has("exp") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Exp (Yrs)" sortKey="experience_years" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("start") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start Date" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("end") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End Date" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("deployment") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Deployment" sortKey="deployment" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.deployment || ""} onChange={(v) => setColFilter("deployment", v)} label="Deployment" /></SortableHeader></th>}
                 {visibleColumns.has("active_flag") && <th className="data-table-header text-center px-4 py-2.5">Active</th>}
                 {visibleColumns.has("status") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>}
                 <th className="data-table-header w-10"></th>
@@ -255,6 +256,7 @@ export default function EmployeesPage() {
                   {visibleColumns.has("exp") && <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>}
                   {visibleColumns.has("start") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.start_date)}</td>}
                   {visibleColumns.has("end") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.end_date)}</td>}
+                  {visibleColumns.has("deployment") && <td className="px-4 py-2.5 text-center">{(emp as any).deployment || "Projects"}</td>}
                   {visibleColumns.has("active_flag") && <td className="px-4 py-2.5 text-center"><Switch checked={emp.active} onCheckedChange={async (checked) => { await supabase.from("employees").update({ active: checked }).eq("id", emp.id); queryClient.invalidateQueries({ queryKey: ["employees"] }); }} /></td>}
                   {visibleColumns.has("status") && <td className="px-4 py-2.5 text-center"><StatusBadge status={emp.status} /></td>}
                   <td className="px-4 py-2.5 text-center">
