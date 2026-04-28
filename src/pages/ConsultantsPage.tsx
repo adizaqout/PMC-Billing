@@ -167,6 +167,7 @@ export default function ConsultantsPage() {
       if (key === "email" && !(c.contact_email || "").toLowerCase().includes(lv)) return false;
       if (key === "phone" && !(c.contact_phone || "").toLowerCase().includes(lv)) return false;
       if (key === "status" && !c.status.toLowerCase().includes(lv)) return false;
+      if (key === "consultantType" && !((c as any).consultant_type || "PMC").toLowerCase().includes(lv)) return false;
     }
     return true;
   });
