@@ -103,7 +103,7 @@ export default function EmployeesPage() {
 
   const upsertMutation = useMutation({
     mutationFn: async (values: EmployeeForm & { id?: string }) => {
-      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any, active: values.active };
+      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any, active: values.active, deployment: normalizeDeployment(values.deployment) };
       if (values.id) { const { error } = await supabase.from("employees").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("employees").insert({ ...payload } as any); if (error) throw error; }
     },
@@ -113,7 +113,7 @@ export default function EmployeesPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["employees"] }); toast.success("Employee deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status, active: emp.active }); setDialogOpen(true); };
+  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status, active: emp.active, deployment: ((emp as any).deployment || "Projects") }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
 
   const handleSubmit = (e: React.FormEvent) => {
