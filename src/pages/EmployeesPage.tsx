@@ -28,8 +28,14 @@ type Employee = Tables<"employees"> & { consultants?: { short_name: string } | n
 type Consultant = { id: string; short_name: string };
 type Position = { id: string; position_id: string; position_name: string; consultant_id: string };
 
-interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; active: boolean; }
-const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", position_id: "", experience_years: null, start_date: null, end_date: null, status: "active", active: true };
+interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; active: boolean; deployment: string; }
+const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", position_id: "", experience_years: null, start_date: null, end_date: null, status: "active", active: true, deployment: "Projects" };
+
+function normalizeDeployment(v: any): "Projects" | "Office" {
+  const s = String(v || "").trim().toLowerCase();
+  if (s === "office") return "Office";
+  return "Projects";
+}
 
 function parseImportDate(val: any): string | null {
   if (val == null || String(val).trim() === "") return null;
@@ -54,6 +60,7 @@ const excelCols = [
   { header: "Exp (Years)", key: "experience_years", width: 12 },
   { header: "Start Date", key: "start_date", width: 14 },
   { header: "End Date", key: "end_date", width: 14 },
+  { header: "Deployment", key: "deployment", width: 14 },
   { header: "Status", key: "status", width: 12 },
 ];
 
@@ -66,6 +73,7 @@ const importColumns: ImportColumnDef[] = [
   { header: "Exp (Years)", key: "experience_years", type: "number" },
   { header: "Start Date", key: "start_date", type: "date" },
   { header: "End Date", key: "end_date", type: "date" },
+  { header: "Deployment", key: "deployment" },
   { header: "Status", key: "status" },
 ];
 
