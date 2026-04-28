@@ -260,6 +260,7 @@ export default function ConsultantsPage() {
                   <tr className="border-b">
                     {v("shortName") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Short Name" sortKey="short_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.shortName || ""} onChange={(lv) => setColFilter("shortName", lv)} label="Short Name" /></SortableHeader></th>}
                     {v("name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(lv) => setColFilter("name", lv)} label="Name" /></SortableHeader></th>}
+                    {v("consultantType") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant Type" sortKey="consultant_type" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultantType || ""} onChange={(lv) => setColFilter("consultantType", lv)} label="Consultant Type" /></SortableHeader></th>}
                     {v("cr") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="CR No." sortKey="commercial_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.cr || ""} onChange={(lv) => setColFilter("cr", lv)} label="CR No." /></SortableHeader></th>}
                     {v("tax") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Tax No." sortKey="tax_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.tax || ""} onChange={(lv) => setColFilter("tax", lv)} label="Tax No." /></SortableHeader></th>}
                     {v("email") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Email" sortKey="contact_email" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.email || ""} onChange={(lv) => setColFilter("email", lv)} label="Email" /></SortableHeader></th>}
@@ -273,6 +274,7 @@ export default function ConsultantsPage() {
                     <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                       {v("shortName") && <td className="px-4 py-2.5 font-medium">{c.short_name || "—"}</td>}
                       {v("name") && <td className="px-4 py-2.5">{c.name}</td>}
+                      {v("consultantType") && <td className="px-4 py-2.5">{(c as any).consultant_type || "PMC"}</td>}
                       {v("cr") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.commercial_registration_no || "—"}</td>}
                       {v("tax") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.tax_registration_no || "—"}</td>}
                       {v("email") && <td className="px-4 py-2.5 text-muted-foreground">{c.contact_email || "—"}</td>}
