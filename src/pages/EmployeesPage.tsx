@@ -146,7 +146,7 @@ export default function EmployeesPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.filter(e => (e.employee_name || "").trim().toUpperCase() !== "TBA").map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.filter(e => (e.employee_name || "").trim().toUpperCase() !== "TBA").map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "", deployment: (e as any).deployment || "Projects" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.short_name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
 
   const smartImportConfig: SmartImportConfig = useMemo(() => ({
@@ -167,6 +167,7 @@ export default function EmployeesPage() {
         start_date: e.start_date || "",
         end_date: e.end_date || "",
         status: e.status || "",
+        deployment: e.deployment || "Projects",
       }));
     },
     executeInsert: async (rec) => {
@@ -186,6 +187,7 @@ export default function EmployeesPage() {
         start_date: isTba ? null : parseImportDate(rec.start_date),
         end_date: isTba ? null : parseImportDate(rec.end_date),
         status: isTba ? "pending" : (rec.status?.trim()?.toLowerCase() || "active"),
+        deployment: normalizeDeployment(rec.deployment),
       } as any);
       return error?.message || null;
     },
@@ -205,6 +207,7 @@ export default function EmployeesPage() {
         start_date: isTbaUpd ? null : parseImportDate(rec.start_date),
         end_date: isTbaUpd ? null : parseImportDate(rec.end_date),
         status: isTbaUpd ? "pending" : (rec.status?.trim()?.toLowerCase() || "active"),
+        deployment: normalizeDeployment(rec.deployment),
       }).eq("id", id);
       return error?.message || null;
     },
@@ -276,6 +279,7 @@ export default function EmployeesPage() {
               <div className="col-span-2 space-y-1.5"><Label>Position</Label><Select value={form.position_id} onValueChange={(v) => setForm({ ...form, position_id: v })}><SelectTrigger><SelectValue placeholder="Select position" /></SelectTrigger><SelectContent>{allPositions.filter(p => p.consultant_id === form.consultant_id).map((p) => <SelectItem key={p.id} value={p.id}>{p.position_id} — {p.position_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Experience (Years)</Label><Input type="number" value={form.experience_years ?? ""} onChange={(e) => setForm({ ...form, experience_years: e.target.value ? parseInt(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statuses.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Deployment</Label><Select value={form.deployment || "Projects"} onValueChange={(v) => setForm({ ...form, deployment: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Projects">Projects</SelectItem><SelectItem value="Office">Office</SelectItem></SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.start_date || ""} onChange={(e) => setForm({ ...form, start_date: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} min={form.start_date || undefined} /></div>
               <div className="flex items-center gap-2 col-span-2"><Switch checked={form.active} onCheckedChange={(checked) => setForm({ ...form, active: checked })} /><Label>Active</Label></div>
