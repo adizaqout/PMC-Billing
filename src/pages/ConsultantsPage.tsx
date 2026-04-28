@@ -193,6 +193,7 @@ export default function ConsultantsPage() {
         contact_phone: c.contact_phone || "",
         address: c.address || "",
         status: c.status || "",
+        consultant_type: (c as any).consultant_type || "PMC",
       }));
     },
     executeInsert: async (rec) => {
