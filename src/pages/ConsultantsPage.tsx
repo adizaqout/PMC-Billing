@@ -28,12 +28,13 @@ type Consultant = Tables<"consultants">;
 type ConsultantInsert = TablesInsert<"consultants">;
 
 const emptyForm: Partial<ConsultantInsert> = {
-  short_name: "", name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active",
+  short_name: "", name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active", consultant_type: "PMC" as any,
 };
 
 const columns = [
   { header: "Short Name", key: "short_name", width: 20 },
   { header: "Name", key: "name", width: 30 },
+  { header: "Consultant Type", key: "consultant_type", width: 18 },
   { header: "CR No.", key: "commercial_registration_no", width: 20 },
   { header: "Tax No.", key: "tax_registration_no", width: 20 },
   { header: "Email", key: "contact_email", width: 25 },
@@ -45,6 +46,7 @@ const columns = [
 const tableCols: ColumnDef[] = [
   { key: "shortName", label: "Short Name" },
   { key: "name", label: "Name" },
+  { key: "consultantType", label: "Consultant Type" },
   { key: "cr", label: "CR No." },
   { key: "tax", label: "Tax No." },
   { key: "email", label: "Email" },
@@ -55,6 +57,7 @@ const tableCols: ColumnDef[] = [
 const importColumns: ImportColumnDef[] = [
   { header: "Short Name", key: "short_name", required: true },
   { header: "Name", key: "name", required: true, aliases: ["Long Name", "Name (Long)"] },
+  { header: "Consultant Type", key: "consultant_type", aliases: ["Type"] },
   { header: "CR No.", key: "commercial_registration_no", aliases: ["Commercial Registration No."] },
   { header: "Tax No.", key: "tax_registration_no", aliases: ["Tax Registration No."] },
   { header: "Email", key: "contact_email", aliases: ["Contact Email"] },
@@ -62,6 +65,12 @@ const importColumns: ImportColumnDef[] = [
   { header: "Address", key: "address" },
   { header: "Status", key: "status" },
 ];
+
+function normalizeConsultantType(v: any): "PMC" | "Supervision" {
+  const s = String(v || "").trim().toLowerCase();
+  if (s === "supervision") return "Supervision";
+  return "PMC";
+}
 
 export default function ConsultantsPage() {
   const [search, setSearch] = useState("");
@@ -131,7 +140,7 @@ export default function ConsultantsPage() {
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (c: Consultant) => {
     setEditing(c);
-    setForm({ short_name: c.short_name, name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status });
+    setForm({ short_name: c.short_name, name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status, consultant_type: ((c as any).consultant_type || "PMC") as any });
     setDialogOpen(true);
   };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
@@ -195,7 +204,8 @@ export default function ConsultantsPage() {
         contact_phone: rec.contact_phone?.trim() || null,
         address: rec.address?.trim() || null,
         status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-      });
+        consultant_type: normalizeConsultantType(rec.consultant_type),
+      } as any);
       return error?.message || null;
     },
     executeUpdate: async (id, rec) => {
@@ -208,7 +218,8 @@ export default function ConsultantsPage() {
         contact_phone: rec.contact_phone?.trim() || null,
         address: rec.address?.trim() || null,
         status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-      }).eq("id", id);
+        consultant_type: normalizeConsultantType(rec.consultant_type),
+      } as any).eq("id", id);
       return error?.message || null;
     },
     onComplete: () => { queryClient.invalidateQueries({ queryKey: ["consultants"] }); },
