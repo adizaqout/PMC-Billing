@@ -122,6 +122,7 @@ export type Database = {
         Row: {
           address: string | null
           commercial_registration_no: string | null
+          consultant_type: string
           contact_email: string | null
           contact_phone: string | null
           created_at: string
@@ -137,6 +138,7 @@ export type Database = {
         Insert: {
           address?: string | null
           commercial_registration_no?: string | null
+          consultant_type?: string
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -152,6 +154,7 @@ export type Database = {
         Update: {
           address?: string | null
           commercial_registration_no?: string | null
+          consultant_type?: string
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
@@ -544,6 +547,7 @@ export type Database = {
           consultant_id: string
           created_at: string
           created_by: string | null
+          deployment: string
           employee_id: string | null
           employee_name: string
           end_date: string | null
@@ -560,6 +564,7 @@ export type Database = {
           consultant_id: string
           created_at?: string
           created_by?: string | null
+          deployment?: string
           employee_id?: string | null
           employee_name: string
           end_date?: string | null
@@ -576,6 +581,7 @@ export type Database = {
           consultant_id?: string
           created_at?: string
           created_by?: string | null
+          deployment?: string
           employee_id?: string | null
           employee_name?: string
           end_date?: string | null
