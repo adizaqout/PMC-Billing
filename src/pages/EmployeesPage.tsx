@@ -28,8 +28,14 @@ type Employee = Tables<"employees"> & { consultants?: { short_name: string } | n
 type Consultant = { id: string; short_name: string };
 type Position = { id: string; position_id: string; position_name: string; consultant_id: string };
 
-interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; active: boolean; }
-const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", position_id: "", experience_years: null, start_date: null, end_date: null, status: "active", active: true };
+interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; active: boolean; deployment: string; }
+const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", position_id: "", experience_years: null, start_date: null, end_date: null, status: "active", active: true, deployment: "Projects" };
+
+function normalizeDeployment(v: any): "Projects" | "Office" {
+  const s = String(v || "").trim().toLowerCase();
+  if (s === "office") return "Office";
+  return "Projects";
+}
 
 function parseImportDate(val: any): string | null {
   if (val == null || String(val).trim() === "") return null;
@@ -54,6 +60,7 @@ const excelCols = [
   { header: "Exp (Years)", key: "experience_years", width: 12 },
   { header: "Start Date", key: "start_date", width: 14 },
   { header: "End Date", key: "end_date", width: 14 },
+  { header: "Deployment", key: "deployment", width: 14 },
   { header: "Status", key: "status", width: 12 },
 ];
 
@@ -66,6 +73,7 @@ const importColumns: ImportColumnDef[] = [
   { header: "Exp (Years)", key: "experience_years", type: "number" },
   { header: "Start Date", key: "start_date", type: "date" },
   { header: "End Date", key: "end_date", type: "date" },
+  { header: "Deployment", key: "deployment" },
   { header: "Status", key: "status" },
 ];
 
@@ -78,7 +86,7 @@ export default function EmployeesPage() {
   const empTableCols: ColumnDef[] = [
      { key: "emp_id", label: "Emp ID" }, { key: "name", label: "Name" }, { key: "consultant", label: "Consultant" },
     { key: "pos_id", label: "Position ID" }, { key: "pos_name", label: "Position Name" }, { key: "exp", label: "Exp (Yrs)" },
-    { key: "start", label: "Start Date" }, { key: "end", label: "End Date" }, { key: "active_flag", label: "Active" }, { key: "status", label: "Status" },
+    { key: "start", label: "Start Date" }, { key: "end", label: "End Date" }, { key: "deployment", label: "Deployment" }, { key: "active_flag", label: "Active" }, { key: "status", label: "Status" },
   ];
   const { visibleColumns, setVisibleColumns } = useColumnVisibility(empTableCols);
   const queryClient = useQueryClient();
@@ -95,7 +103,7 @@ export default function EmployeesPage() {
 
   const upsertMutation = useMutation({
     mutationFn: async (values: EmployeeForm & { id?: string }) => {
-      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any, active: values.active };
+      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any, active: values.active, deployment: normalizeDeployment(values.deployment) };
       if (values.id) { const { error } = await supabase.from("employees").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("employees").insert({ ...payload } as any); if (error) throw error; }
     },
@@ -105,7 +113,7 @@ export default function EmployeesPage() {
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["employees"] }); toast.success("Employee deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status, active: emp.active }); setDialogOpen(true); };
+  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status, active: emp.active, deployment: ((emp as any).deployment || "Projects") }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -131,6 +139,7 @@ export default function EmployeesPage() {
       if (key === "consultant" && !(e.consultants?.short_name || "").toLowerCase().includes(v)) return false;
       if (key === "position" && !(e.positions?.position_name || "").toLowerCase().includes(v)) return false;
       if (key === "status" && !e.status.toLowerCase().includes(v)) return false;
+      if (key === "deployment" && !((e as any).deployment || "Projects").toLowerCase().includes(v)) return false;
     }
     return true;
   });
@@ -138,8 +147,8 @@ export default function EmployeesPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.filter(e => (e.employee_name || "").trim().toUpperCase() !== "TBA").map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "" }))); toast.success("Exported"); };
-  const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.short_name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label) }); toast.success("Template downloaded"); };
+  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.filter(e => (e.employee_name || "").trim().toUpperCase() !== "TBA").map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "", deployment: (e as any).deployment || "Projects" }))); toast.success("Exported"); };
+  const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.short_name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label), Deployments: ["Projects", "Office"] }); toast.success("Template downloaded"); };
 
   const smartImportConfig: SmartImportConfig = useMemo(() => ({
     entityName: "Employees",
@@ -159,6 +168,7 @@ export default function EmployeesPage() {
         start_date: e.start_date || "",
         end_date: e.end_date || "",
         status: e.status || "",
+        deployment: e.deployment || "Projects",
       }));
     },
     executeInsert: async (rec) => {
@@ -178,6 +188,7 @@ export default function EmployeesPage() {
         start_date: isTba ? null : parseImportDate(rec.start_date),
         end_date: isTba ? null : parseImportDate(rec.end_date),
         status: isTba ? "pending" : (rec.status?.trim()?.toLowerCase() || "active"),
+        deployment: normalizeDeployment(rec.deployment),
       } as any);
       return error?.message || null;
     },
@@ -197,6 +208,7 @@ export default function EmployeesPage() {
         start_date: isTbaUpd ? null : parseImportDate(rec.start_date),
         end_date: isTbaUpd ? null : parseImportDate(rec.end_date),
         status: isTbaUpd ? "pending" : (rec.status?.trim()?.toLowerCase() || "active"),
+        deployment: normalizeDeployment(rec.deployment),
       }).eq("id", id);
       return error?.message || null;
     },
@@ -230,6 +242,7 @@ export default function EmployeesPage() {
                 {visibleColumns.has("exp") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Exp (Yrs)" sortKey="experience_years" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("start") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Start Date" sortKey="start_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("end") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="End Date" sortKey="end_date" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
+                {visibleColumns.has("deployment") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Deployment" sortKey="deployment" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.deployment || ""} onChange={(v) => setColFilter("deployment", v)} label="Deployment" /></SortableHeader></th>}
                 {visibleColumns.has("active_flag") && <th className="data-table-header text-center px-4 py-2.5">Active</th>}
                 {visibleColumns.has("status") && <th className="data-table-header text-center px-4 py-2.5"><SortableHeader label="Status" sortKey="status" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.status || ""} onChange={(v) => setColFilter("status", v)} label="Status" /></SortableHeader></th>}
                 <th className="data-table-header w-10"></th>
@@ -244,6 +257,7 @@ export default function EmployeesPage() {
                   {visibleColumns.has("exp") && <td className="px-4 py-2.5 text-center font-mono">{emp.experience_years ?? "—"}</td>}
                   {visibleColumns.has("start") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.start_date)}</td>}
                   {visibleColumns.has("end") && <td className="px-4 py-2.5 text-center text-xs">{fmtDate(emp.end_date)}</td>}
+                  {visibleColumns.has("deployment") && <td className="px-4 py-2.5 text-center">{(emp as any).deployment || "Projects"}</td>}
                   {visibleColumns.has("active_flag") && <td className="px-4 py-2.5 text-center"><Switch checked={emp.active} onCheckedChange={async (checked) => { await supabase.from("employees").update({ active: checked }).eq("id", emp.id); queryClient.invalidateQueries({ queryKey: ["employees"] }); }} /></td>}
                   {visibleColumns.has("status") && <td className="px-4 py-2.5 text-center"><StatusBadge status={emp.status} /></td>}
                   <td className="px-4 py-2.5 text-center">
@@ -268,6 +282,7 @@ export default function EmployeesPage() {
               <div className="col-span-2 space-y-1.5"><Label>Position</Label><Select value={form.position_id} onValueChange={(v) => setForm({ ...form, position_id: v })}><SelectTrigger><SelectValue placeholder="Select position" /></SelectTrigger><SelectContent>{allPositions.filter(p => p.consultant_id === form.consultant_id).map((p) => <SelectItem key={p.id} value={p.id}>{p.position_id} — {p.position_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Experience (Years)</Label><Input type="number" value={form.experience_years ?? ""} onChange={(e) => setForm({ ...form, experience_years: e.target.value ? parseInt(e.target.value) : null })} /></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{statuses.map((s) => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-1.5"><Label>Deployment</Label><Select value={form.deployment || "Projects"} onValueChange={(v) => setForm({ ...form, deployment: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="Projects">Projects</SelectItem><SelectItem value="Office">Office</SelectItem></SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Start Date</Label><Input type="date" value={form.start_date || ""} onChange={(e) => setForm({ ...form, start_date: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>End Date</Label><Input type="date" value={form.end_date || ""} onChange={(e) => setForm({ ...form, end_date: e.target.value || null })} min={form.start_date || undefined} /></div>
               <div className="flex items-center gap-2 col-span-2"><Switch checked={form.active} onCheckedChange={(checked) => setForm({ ...form, active: checked })} /><Label>Active</Label></div>

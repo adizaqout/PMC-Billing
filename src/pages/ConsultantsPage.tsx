@@ -28,12 +28,13 @@ type Consultant = Tables<"consultants">;
 type ConsultantInsert = TablesInsert<"consultants">;
 
 const emptyForm: Partial<ConsultantInsert> = {
-  short_name: "", name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active",
+  short_name: "", name: "", commercial_registration_no: "", tax_registration_no: "", contact_email: "", contact_phone: "", address: "", status: "active", consultant_type: "PMC" as any,
 };
 
 const columns = [
   { header: "Short Name", key: "short_name", width: 20 },
   { header: "Name", key: "name", width: 30 },
+  { header: "Consultant Type", key: "consultant_type", width: 18 },
   { header: "CR No.", key: "commercial_registration_no", width: 20 },
   { header: "Tax No.", key: "tax_registration_no", width: 20 },
   { header: "Email", key: "contact_email", width: 25 },
@@ -45,6 +46,7 @@ const columns = [
 const tableCols: ColumnDef[] = [
   { key: "shortName", label: "Short Name" },
   { key: "name", label: "Name" },
+  { key: "consultantType", label: "Consultant Type" },
   { key: "cr", label: "CR No." },
   { key: "tax", label: "Tax No." },
   { key: "email", label: "Email" },
@@ -55,6 +57,7 @@ const tableCols: ColumnDef[] = [
 const importColumns: ImportColumnDef[] = [
   { header: "Short Name", key: "short_name", required: true },
   { header: "Name", key: "name", required: true, aliases: ["Long Name", "Name (Long)"] },
+  { header: "Consultant Type", key: "consultant_type", aliases: ["Type"] },
   { header: "CR No.", key: "commercial_registration_no", aliases: ["Commercial Registration No."] },
   { header: "Tax No.", key: "tax_registration_no", aliases: ["Tax Registration No."] },
   { header: "Email", key: "contact_email", aliases: ["Contact Email"] },
@@ -62,6 +65,12 @@ const importColumns: ImportColumnDef[] = [
   { header: "Address", key: "address" },
   { header: "Status", key: "status" },
 ];
+
+function normalizeConsultantType(v: any): "PMC" | "Supervision" {
+  const s = String(v || "").trim().toLowerCase();
+  if (s === "supervision") return "Supervision";
+  return "PMC";
+}
 
 export default function ConsultantsPage() {
   const [search, setSearch] = useState("");
@@ -131,7 +140,7 @@ export default function ConsultantsPage() {
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
   const openEdit = (c: Consultant) => {
     setEditing(c);
-    setForm({ short_name: c.short_name, name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status });
+    setForm({ short_name: c.short_name, name: c.name, commercial_registration_no: c.commercial_registration_no, tax_registration_no: c.tax_registration_no, contact_email: c.contact_email, contact_phone: c.contact_phone, address: c.address, status: c.status, consultant_type: ((c as any).consultant_type || "PMC") as any });
     setDialogOpen(true);
   };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
@@ -158,6 +167,7 @@ export default function ConsultantsPage() {
       if (key === "email" && !(c.contact_email || "").toLowerCase().includes(lv)) return false;
       if (key === "phone" && !(c.contact_phone || "").toLowerCase().includes(lv)) return false;
       if (key === "status" && !c.status.toLowerCase().includes(lv)) return false;
+      if (key === "consultantType" && !((c as any).consultant_type || "PMC").toLowerCase().includes(lv)) return false;
     }
     return true;
   });
@@ -165,7 +175,7 @@ export default function ConsultantsPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
-  const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns); toast.success("Template downloaded"); };
+  const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns, { "Consultant Types": ["PMC", "Supervision"], Statuses: ["active", "inactive"] }); toast.success("Template downloaded"); };
 
   const smartImportConfig: SmartImportConfig = useMemo(() => ({
     entityName: "Consultants",
@@ -184,6 +194,7 @@ export default function ConsultantsPage() {
         contact_phone: c.contact_phone || "",
         address: c.address || "",
         status: c.status || "",
+        consultant_type: (c as any).consultant_type || "PMC",
       }));
     },
     executeInsert: async (rec) => {
@@ -195,7 +206,8 @@ export default function ConsultantsPage() {
         contact_phone: rec.contact_phone?.trim() || null,
         address: rec.address?.trim() || null,
         status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-      });
+        consultant_type: normalizeConsultantType(rec.consultant_type),
+      } as any);
       return error?.message || null;
     },
     executeUpdate: async (id, rec) => {
@@ -208,7 +220,8 @@ export default function ConsultantsPage() {
         contact_phone: rec.contact_phone?.trim() || null,
         address: rec.address?.trim() || null,
         status: (rec.status?.trim()?.toLowerCase() === "inactive" ? "inactive" : "active") as any,
-      }).eq("id", id);
+        consultant_type: normalizeConsultantType(rec.consultant_type),
+      } as any).eq("id", id);
       return error?.message || null;
     },
     onComplete: () => { queryClient.invalidateQueries({ queryKey: ["consultants"] }); },
@@ -248,6 +261,7 @@ export default function ConsultantsPage() {
                   <tr className="border-b">
                     {v("shortName") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Short Name" sortKey="short_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.shortName || ""} onChange={(lv) => setColFilter("shortName", lv)} label="Short Name" /></SortableHeader></th>}
                     {v("name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(lv) => setColFilter("name", lv)} label="Name" /></SortableHeader></th>}
+                    {v("consultantType") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant Type" sortKey="consultant_type" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultantType || ""} onChange={(lv) => setColFilter("consultantType", lv)} label="Consultant Type" /></SortableHeader></th>}
                     {v("cr") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="CR No." sortKey="commercial_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.cr || ""} onChange={(lv) => setColFilter("cr", lv)} label="CR No." /></SortableHeader></th>}
                     {v("tax") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Tax No." sortKey="tax_registration_no" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.tax || ""} onChange={(lv) => setColFilter("tax", lv)} label="Tax No." /></SortableHeader></th>}
                     {v("email") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Email" sortKey="contact_email" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.email || ""} onChange={(lv) => setColFilter("email", lv)} label="Email" /></SortableHeader></th>}
@@ -261,6 +275,7 @@ export default function ConsultantsPage() {
                     <tr key={c.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                       {v("shortName") && <td className="px-4 py-2.5 font-medium">{c.short_name || "—"}</td>}
                       {v("name") && <td className="px-4 py-2.5">{c.name}</td>}
+                      {v("consultantType") && <td className="px-4 py-2.5">{(c as any).consultant_type || "PMC"}</td>}
                       {v("cr") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.commercial_registration_no || "—"}</td>}
                       {v("tax") && <td className="px-4 py-2.5 font-mono text-xs text-muted-foreground">{c.tax_registration_no || "—"}</td>}
                       {v("email") && <td className="px-4 py-2.5 text-muted-foreground">{c.contact_email || "—"}</td>}
@@ -302,6 +317,13 @@ export default function ConsultantsPage() {
                 <Select value={form.status || "active"} onValueChange={(lv) => setForm({ ...form, status: lv as "active" | "inactive" })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Consultant Type</Label>
+                <Select value={(form as any).consultant_type || "PMC"} onValueChange={(lv) => setForm({ ...form, consultant_type: lv as any })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="PMC">PMC</SelectItem><SelectItem value="Supervision">Supervision</SelectItem></SelectContent>
                 </Select>
               </div>
             </div>
