@@ -319,6 +319,13 @@ export default function ConsultantsPage() {
                   <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent>
                 </Select>
               </div>
+              <div className="space-y-1.5">
+                <Label>Consultant Type</Label>
+                <Select value={(form as any).consultant_type || "PMC"} onValueChange={(lv) => setForm({ ...form, consultant_type: lv as any })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent><SelectItem value="PMC">PMC</SelectItem><SelectItem value="Supervision">Supervision</SelectItem></SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter>
               <Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button>
