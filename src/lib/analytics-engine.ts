@@ -334,7 +334,7 @@ export function buildAnalyticsModel(
   const remainingBudget = totalBudget - totalActualBilled;
   const forecastRemaining = totalBudget - totalForecastCost;
   const varianceToBaseline = totalForecastCost - totalBaselineCost;
-  const activeEmployees = data.employees.filter((employee) => employee.active === true).length;
+  const activeEmployees = data.employees.filter((employee) => employee.active === true && (employee.employee_name || "").trim().toUpperCase() !== "TBA").length;
   // Task KPIs use ALL latest-revision submissions (not month-filtered) so users see their full task backlog
   const allLatestSubmissions = data.submissions.filter((s) => latestSubmissionIds.has(s.id));
   const taskEligibleSubmissions = allLatestSubmissions.filter((submission) => {
