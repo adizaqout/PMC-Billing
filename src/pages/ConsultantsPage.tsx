@@ -175,7 +175,7 @@ export default function ConsultantsPage() {
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
 
   const handleExport = () => { exportToExcel("consultants.xlsx", columns, filtered); toast.success("Exported"); };
-  const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns); toast.success("Template downloaded"); };
+  const handleTemplate = () => { downloadTemplate("consultants-template.xlsx", columns, { "Consultant Types": ["PMC", "Supervision"], Statuses: ["active", "inactive"] }); toast.success("Template downloaded"); };
 
   const smartImportConfig: SmartImportConfig = useMemo(() => ({
     entityName: "Consultants",
