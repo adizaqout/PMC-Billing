@@ -13,6 +13,7 @@ import SortableHeader from "@/components/SortableHeader";
 import { usePagination } from "@/hooks/usePagination";
 import { useSort } from "@/hooks/useSort";
 import { exportToExcel, downloadTemplate } from "@/lib/excel-utils";
+import { fetchAllRows } from "@/lib/fetchAllRows";
 import type { SmartImportConfig, ImportColumnDef } from "@/components/import/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,10 +98,10 @@ export default function EmployeesPage() {
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ["employees"],
-    queryFn: async () => { const { data, error } = await supabase.from("employees").select("*, consultants(short_name, consultant_type), positions(position_id, position_name)").order("employee_name"); if (error) throw error; return data as Employee[]; },
+    queryFn: async () => { return await fetchAllRows<Employee>(supabase.from("employees").select("*, consultants(short_name, consultant_type), positions(position_id, position_name)").order("employee_name")); },
   });
-  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as Consultant[]; } });
-  const { data: allPositions = [] } = useQuery({ queryKey: ["positions-list"], queryFn: async () => { const { data, error } = await supabase.from("positions").select("id, position_id, position_name, consultant_id").order("position_name"); if (error) throw error; return data as Position[]; } });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { return await fetchAllRows<Consultant>(supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name")); } });
+  const { data: allPositions = [] } = useQuery({ queryKey: ["positions-list"], queryFn: async () => { return await fetchAllRows<Position>(supabase.from("positions").select("id, position_id, position_name, consultant_id").order("position_name")); } });
 
   const upsertMutation = useMutation({
     mutationFn: async (values: EmployeeForm & { id?: string }) => {
@@ -158,8 +159,7 @@ export default function EmployeesPage() {
     columns: importColumns,
     businessKeys: ["employee_id", "consultant_name"],
     fetchExisting: async () => {
-      const { data, error } = await supabase.from("employees").select("*, consultants(short_name), positions(position_id, position_name)").order("employee_name");
-      if (error) throw error;
+      const data = await fetchAllRows<any>(supabase.from("employees").select("*, consultants(short_name), positions(position_id, position_name)").order("employee_name"));
       return (data || []).map((e: any) => ({
         _id: e.id,
         employee_id: e.employee_id || "",
