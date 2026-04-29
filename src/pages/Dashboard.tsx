@@ -224,7 +224,7 @@ export default function Dashboard() {
     );
   }
 
-  if (!analytics) {
+  if (!overview) {
     return (
       <AppLayout>
         <div className="flex min-h-[60vh] items-center justify-center text-sm text-destructive">Overview data is unavailable right now.</div>
@@ -233,7 +233,7 @@ export default function Dashboard() {
   }
 
   const canReview = roles.includes("pmc_reviewer") || roles.includes("admin") || roles.includes("superadmin");
-  const displayName = profileFullName || user?.email?.split("@")[0] || analytics.consultants[0]?.name || "User";
+  const displayName = profileFullName || user?.email?.split("@")[0] || overview.profile?.full_name || "User";
 
   const renderGadget = (gadgetKey: string, gadgetId?: string) => {
     if (gadgetKey === "project_risk") {
