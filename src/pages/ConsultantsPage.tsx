@@ -251,16 +251,19 @@ export default function ConsultantsPage() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Search consultants..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
             </div>
-            <div className="inline-flex rounded-md border overflow-hidden">
-              {(["all","PMC","Supervision"] as const).map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => setTypeFilter(opt)}
-                  className={`px-3 h-8 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                >
-                  {opt === "all" ? "All Types" : opt}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-1">
+              <span className="px-2 text-xs font-semibold uppercase text-muted-foreground">Consultant Type</span>
+              <div className="inline-flex overflow-hidden rounded-sm border bg-background" aria-label="Consultant Type filter">
+                {(["all","PMC","Supervision"] as const).map(opt => (
+                  <button
+                    key={opt}
+                    onClick={() => setTypeFilter(opt)}
+                    className={`h-8 min-w-24 px-3 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                  >
+                    {opt === "all" ? "All Types" : opt}
+                  </button>
+                ))}
+              </div>
             </div>
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
