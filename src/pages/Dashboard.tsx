@@ -462,53 +462,64 @@ export default function Dashboard() {
           </TabsContent>
 
           <TabsContent value="dashboard" className="space-y-6">
-            <GlobalFiltersBar
-              filters={filters}
-              onChange={setFilters}
-              monthOptions={analytics.filterOptions.monthOptions}
-              consultantOptions={analytics.filterOptions.consultantOptions}
-              projectOptions={analytics.filterOptions.projectOptions}
-              soOptions={analytics.filterOptions.soOptions}
-              poOptions={analytics.filterOptions.poOptions}
-              positionOptions={analytics.filterOptions.positionOptions}
-              visibleFilters={["month", "consultant"]}
-              consultantLabel="PMC"
-              title="Dashboard Filters"
-              description="Only month and PMC stay global on the gadget dashboard."
-            />
+            {!analytics ? (
+              <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  Loading dashboard workspace…
+                </div>
+              </div>
+            ) : (
+              <>
+                <GlobalFiltersBar
+                  filters={filters}
+                  onChange={setFilters}
+                  monthOptions={analytics.filterOptions.monthOptions}
+                  consultantOptions={analytics.filterOptions.consultantOptions}
+                  projectOptions={analytics.filterOptions.projectOptions}
+                  soOptions={analytics.filterOptions.soOptions}
+                  poOptions={analytics.filterOptions.poOptions}
+                  positionOptions={analytics.filterOptions.positionOptions}
+                  visibleFilters={["month", "consultant"]}
+                  consultantLabel="PMC"
+                  title="Dashboard Filters"
+                  description="Only month and PMC stay global on the gadget dashboard."
+                />
 
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">Add gadgets</CardTitle>
-                <CardDescription>Each user can enable the gadgets allowed by the admin panel for their own dashboard.</CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-wrap gap-3">
-                {addableGadgets.map((gadget, index) => (
-                  <Button
-                    key={gadget.id}
-                    variant="outline"
-                    onClick={() => saveGadgetMutation.mutate({ gadgetId: gadget.id, enabled: true, positionY: enabledGadgets.length + index })}
-                  >
-                    <Plus size={14} className="mr-1.5" />{gadget.title}
-                  </Button>
-                ))}
-                {addableGadgets.length === 0 ? <p className="text-sm text-muted-foreground">All available gadgets are already on your dashboard.</p> : null}
-              </CardContent>
-            </Card>
-
-            <div className="grid grid-cols-1 gap-6">
-              {enabledGadgets.map((gadget) => (
-                <div key={gadget.id}>{renderGadget(gadget.gadget_key, gadget.id)}</div>
-              ))}
-              {enabledGadgets.length === 0 ? (
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-sm">No gadgets added yet</CardTitle>
-                    <CardDescription>Use the add buttons above to build your dashboard.</CardDescription>
+                    <CardTitle className="text-sm">Add gadgets</CardTitle>
+                    <CardDescription>Each user can enable the gadgets allowed by the admin panel for their own dashboard.</CardDescription>
                   </CardHeader>
+                  <CardContent className="flex flex-wrap gap-3">
+                    {addableGadgets.map((gadget, index) => (
+                      <Button
+                        key={gadget.id}
+                        variant="outline"
+                        onClick={() => saveGadgetMutation.mutate({ gadgetId: gadget.id, enabled: true, positionY: enabledGadgets.length + index })}
+                      >
+                        <Plus size={14} className="mr-1.5" />{gadget.title}
+                      </Button>
+                    ))}
+                    {addableGadgets.length === 0 ? <p className="text-sm text-muted-foreground">All available gadgets are already on your dashboard.</p> : null}
+                  </CardContent>
                 </Card>
-              ) : null}
-            </div>
+
+                <div className="grid grid-cols-1 gap-6">
+                  {enabledGadgets.map((gadget) => (
+                    <div key={gadget.id}>{renderGadget(gadget.gadget_key, gadget.id)}</div>
+                  ))}
+                  {enabledGadgets.length === 0 ? (
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-sm">No gadgets added yet</CardTitle>
+                        <CardDescription>Use the add buttons above to build your dashboard.</CardDescription>
+                      </CardHeader>
+                    </Card>
+                  ) : null}
+                </div>
+              </>
+            )}
           </TabsContent>
         </Tabs>
       </div>
