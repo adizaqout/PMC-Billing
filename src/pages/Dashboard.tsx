@@ -100,6 +100,14 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { user, roles } = useAuth();
+  const { data: profileFullName } = useQuery({
+    queryKey: ["profile-full-name", user?.id],
+    enabled: !!user?.id,
+    queryFn: async () => {
+      const { data } = await supabase.from("profiles").select("full_name").eq("user_id", user!.id).maybeSingle();
+      return data?.full_name || null;
+    },
+  });
   const [tab, setTab] = useState("overview");
   const [filters, setFilters] = useState<AnalyticsFilters>(defaultAnalyticsFilters);
   const { analytics, isLoading } = useAnalyticsModel(filters, false);
