@@ -334,7 +334,13 @@ export function buildAnalyticsModel(
   const remainingBudget = totalBudget - totalActualBilled;
   const forecastRemaining = totalBudget - totalForecastCost;
   const varianceToBaseline = totalForecastCost - totalBaselineCost;
-  const activeEmployees = data.employees.filter((employee) => employee.active === true && (employee.employee_name || "").trim().toUpperCase() !== "TBA").length;
+  const consultantTypeById = new Map(data.consultants.map((c) => [c.id, (c as any).consultant_type || "PMC"] as const));
+  const activeEmployeesList = data.employees.filter((e) => e.active === true);
+  const activeEmployees = activeEmployeesList.length;
+  const activePmc = activeEmployeesList.filter((e) => consultantTypeById.get(e.consultant_id) === "PMC").length;
+  const activeSupervision = activeEmployeesList.filter((e) => consultantTypeById.get(e.consultant_id) === "Supervision").length;
+  const deployedProjects = activeEmployeesList.filter((e) => ((e as any).deployment || "Projects") === "Projects").length;
+  const deployedOffice = activeEmployeesList.filter((e) => ((e as any).deployment || "") === "Office").length;
   // Task KPIs use ALL latest-revision submissions (not month-filtered) so users see their full task backlog
   const allLatestSubmissions = data.submissions.filter((s) => latestSubmissionIds.has(s.id));
   const taskEligibleSubmissions = allLatestSubmissions.filter((submission) => {
