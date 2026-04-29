@@ -111,9 +111,9 @@ export default function PositionsPage() {
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["positions"], queryFn: async () => { return await fetchAllRows<Position>(supabase.from("positions").select("*, consultants(short_name, consultant_type), service_orders(so_number)").order("position_name")); } });
-  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { return await fetchAllRows<{ id: string; short_name: string }>(supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name")); } });
-  const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => { return await fetchAllRows<{ id: string; so_number: string; consultant_id: string }>(supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number")); } });
+  const { data: items = [], isLoading } = useQuery({ queryKey: ["positions"], queryFn: async () => fetchAllRows<Position>(() => supabase.from("positions").select("*, consultants(short_name, consultant_type), service_orders(so_number)").order("position_name")) });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => fetchAllRows<{ id: string; short_name: string }>(() => supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name")) });
+  const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => fetchAllRows<{ id: string; so_number: string; consultant_id: string }>(() => supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number")) });
   const filteredSOs = form.consultant_id ? allServiceOrders.filter(s => s.consultant_id === form.consultant_id) : [];
   const { data: functionLookups = [] } = useLookupValues("Position Function");
 
@@ -174,7 +174,7 @@ export default function PositionsPage() {
     columns: posImportColumns,
     businessKeys: ["position_name", "consultant_name"],
     fetchExisting: async () => {
-      const data = await fetchAllRows<any>(supabase.from("positions").select("*, consultants(short_name), service_orders(so_number)").order("position_name"));
+      const data = await fetchAllRows<any>(() => supabase.from("positions").select("*, consultants(short_name), service_orders(so_number)").order("position_name"));
       return (data || []).map((i: any) => ({
         _id: i.id, position_id: i.position_id || "", position_name: i.position_name || "",
         function: i.function || "", consultant_name: i.consultants?.short_name || "",
