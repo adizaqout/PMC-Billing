@@ -3,8 +3,8 @@ import { useAnalyticsData } from "@/hooks/useAnalyticsData";
 import { buildAnalyticsModel } from "@/lib/analytics-engine";
 import type { AnalyticsFilters } from "@/lib/analytics";
 
-export function useAnalyticsModel(filters: AnalyticsFilters, includePreviousRevisions = false) {
-  const query = useAnalyticsData();
+export function useAnalyticsModel(filters: AnalyticsFilters, includePreviousRevisions = false, enabled = true) {
+  const query = useAnalyticsData(enabled);
 
   const analytics = useMemo(() => {
     if (!query.data) return null;
