@@ -384,7 +384,39 @@ export default function Dashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1fr]">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Workforce by Consultant Type</CardTitle>
+                  <CardDescription>Active employees breakdown by consultant type</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      <tr className="border-b"><td className="py-2 font-medium">Active PMC</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.activePmc)}</td></tr>
+                      <tr className="border-b"><td className="py-2 font-medium">Active Supervision</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.activeSupervision)}</td></tr>
+                      <tr><td className="py-2 font-semibold">Total Active</td><td className="py-2 text-right font-semibold tabular-nums">{compactNumber(analytics.kpis.activeEmployees)}</td></tr>
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Workforce by Deployment</CardTitle>
+                  <CardDescription>Where active employees are deployed</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      <tr className="border-b"><td className="py-2 font-medium">Deployed to Projects</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.deployedProjects)}</td></tr>
+                      <tr className="border-b"><td className="py-2 font-medium">Deployed in Office</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.deployedOffice)}</td></tr>
+                      <tr><td className="py-2 font-semibold">Total Active</td><td className="py-2 text-right font-semibold tabular-nums">{compactNumber(analytics.kpis.activeEmployees)}</td></tr>
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            </div>
               <div className="rounded-md border bg-card p-4">
                 <h2 className="mb-4 text-sm font-semibold">Submission Status Overview</h2>
                 <ResponsiveContainer width="100%" height={320}>
