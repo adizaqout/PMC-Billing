@@ -83,7 +83,7 @@ export function useAnalyticsData() {
       if (profileRes.error) throw profileRes.error;
       if (consultantsRes.error) throw consultantsRes.error;
       if (projectsRes.error) throw projectsRes.error;
-      if (employeesRes.error) throw employeesRes.error;
+      
       if (positionsRes.error) throw positionsRes.error;
       if (serviceOrdersRes.error) throw serviceOrdersRes.error;
       if (purchaseOrdersRes.error) throw purchaseOrdersRes.error;
