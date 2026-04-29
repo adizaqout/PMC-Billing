@@ -74,6 +74,7 @@ function normalizeConsultantType(v: any): "PMC" | "Supervision" {
 
 export default function ConsultantsPage() {
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Consultant | null>(null);
   const [form, setForm] = useState<Partial<ConsultantInsert>>(emptyForm);
@@ -156,6 +157,8 @@ export default function ConsultantsPage() {
 
   const filtered = consultants.filter((c) => {
     const s = search.toLowerCase();
+    const ct = ((c as any).consultant_type || "PMC");
+    if (typeFilter !== "all" && ct !== typeFilter) return false;
     if (s && !(c.short_name || "").toLowerCase().includes(s) && !c.name.toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
@@ -243,10 +246,21 @@ export default function ConsultantsPage() {
         </div>
 
         <div className="bg-card rounded-md border">
-          <div className="px-4 py-3 border-b flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm">
+          <div className="px-4 py-3 border-b flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 max-w-sm min-w-[200px]">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Search consultants..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
+            </div>
+            <div className="inline-flex rounded-md border overflow-hidden">
+              {(["all","PMC","Supervision"] as const).map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => setTypeFilter(opt)}
+                  className={`px-3 h-8 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                >
+                  {opt === "all" ? "All Types" : opt}
+                </button>
+              ))}
             </div>
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
