@@ -4,12 +4,13 @@ import type { AnalyticsSourceData, DeploymentLineRow, SubmissionRow } from "@/li
 
 const PAGE_SIZE = 5000;
 
-async function fetchAllRows<T>(queryBuilder: any): Promise<T[]> {
+async function fetchAllRows<T>(builderOrFactory: any): Promise<T[]> {
   const rows: T[] = [];
   let from = 0;
 
   while (true) {
-    const { data, error } = await queryBuilder.range(from, from + PAGE_SIZE - 1);
+    const builder = typeof builderOrFactory === "function" ? builderOrFactory() : builderOrFactory;
+    const { data, error } = await builder.range(from, from + PAGE_SIZE - 1);
     if (error) throw error;
     if (!data || data.length === 0) break;
 
