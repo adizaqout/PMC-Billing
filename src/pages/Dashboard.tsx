@@ -417,6 +417,8 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
             </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1fr]">
               <div className="rounded-md border bg-card p-4">
                 <h2 className="mb-4 text-sm font-semibold">Submission Status Overview</h2>
                 <ResponsiveContainer width="100%" height={320}>
