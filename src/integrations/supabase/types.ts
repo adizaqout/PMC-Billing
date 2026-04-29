@@ -1664,6 +1664,7 @@ export type Database = {
         Args: { target_consultant_id: string }
         Returns: boolean
       }
+      dashboard_overview: { Args: never; Returns: Json }
       ensure_deployment_import_session: {
         Args: { p_submission_id: string }
         Returns: Json
