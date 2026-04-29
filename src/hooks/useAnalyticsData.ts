@@ -61,9 +61,9 @@ export function useAnalyticsData() {
         supabase.from("period_control").select("month, status").eq("status", "open").maybeSingle(),
         supabase.from("app_settings").select("setting_key, setting_value"),
         supabase.from("profiles").select("full_name, consultant_id").eq("user_id", userId).maybeSingle(),
-        supabase.from("consultants").select("id, name, short_name, status"),
+        supabase.from("consultants").select("id, name, short_name, status, consultant_type"),
         supabase.from("projects").select("id, project_name, latest_budget, latest_pmc_budget, previous_pmc_budget, previous_pmc_actual, actual_pmc_to_date, portfolio, status"),
-        supabase.from("employees").select("id, employee_name, consultant_id, position_id, status, active"),
+        fetchAllRows(() => supabase.from("employees").select("id, employee_name, consultant_id, position_id, status, active, deployment")),
         supabase.from("positions").select("id, position_name, consultant_id, so_id, year_1_rate, year_2_rate, year_3_rate, year_4_rate, year_5_rate, function"),
         supabase.from("service_orders").select("id, so_number, consultant_id, so_value"),
         supabase.from("purchase_orders").select("id, po_number, consultant_id, so_id, project_id, po_value, amount, revision_number"),
@@ -83,7 +83,7 @@ export function useAnalyticsData() {
       if (profileRes.error) throw profileRes.error;
       if (consultantsRes.error) throw consultantsRes.error;
       if (projectsRes.error) throw projectsRes.error;
-      if (employeesRes.error) throw employeesRes.error;
+      
       if (positionsRes.error) throw positionsRes.error;
       if (serviceOrdersRes.error) throw serviceOrdersRes.error;
       if (purchaseOrdersRes.error) throw purchaseOrdersRes.error;
@@ -104,7 +104,7 @@ export function useAnalyticsData() {
         profile: profileRes.data,
         consultants: consultantsRes.data || [],
         projects: projectsRes.data || [],
-        employees: employeesRes.data || [],
+        employees: (employeesRes as any[]) || [],
         positions: positionsRes.data || [],
         serviceOrders: serviceOrdersRes.data || [],
         purchaseOrders: purchaseOrdersRes.data || [],

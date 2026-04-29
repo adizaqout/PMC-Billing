@@ -377,11 +377,45 @@ export default function Dashboard() {
 
               <div className="grid grid-cols-1 gap-4">
                 <KpiCard title="Variance to Baseline" value={currency(analytics.kpis.varianceToBaseline)} hint="Forecast against baseline" icon={GitCompareArrows} />
-                <KpiCard title="Active Employees" value={compactNumber(analytics.kpis.activeEmployees)} hint="Employees marked as active" icon={Users} />
+                <KpiCard title="Active Employees" value={compactNumber(analytics.kpis.activeEmployees)} hint={`PMC ${analytics.kpis.activePmc} · Supervision ${analytics.kpis.activeSupervision}`} icon={Users} />
                 <KpiCard title="My Open Tasks" value={compactNumber(analytics.kpis.myOpenTasks)} hint="Drafts, returns, and reviews" icon={Briefcase} />
                 <KpiCard title="Pending Reviews" value={compactNumber(analytics.kpis.pendingReviews)} hint="Reviewer queue from latest revisions" icon={Clock3} />
                 <KpiCard title="Projects at Risk" value={compactNumber(analytics.kpis.projectsAtRisk)} hint={`Shared thresholds · amber ${analytics.amberThreshold}%`} icon={AlertTriangle} />
               </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Workforce by Consultant Type</CardTitle>
+                  <CardDescription>Active employees breakdown by consultant type</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      <tr className="border-b"><td className="py-2 font-medium">Active PMC</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.activePmc)}</td></tr>
+                      <tr className="border-b"><td className="py-2 font-medium">Active Supervision</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.activeSupervision)}</td></tr>
+                      <tr><td className="py-2 font-semibold">Total Active</td><td className="py-2 text-right font-semibold tabular-nums">{compactNumber(analytics.kpis.activeEmployees)}</td></tr>
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Workforce by Deployment</CardTitle>
+                  <CardDescription>Where active employees are deployed</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      <tr className="border-b"><td className="py-2 font-medium">Deployed to Projects</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.deployedProjects)}</td></tr>
+                      <tr className="border-b"><td className="py-2 font-medium">Deployed in Office</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.deployedOffice)}</td></tr>
+                      <tr><td className="py-2 font-semibold">Total Active</td><td className="py-2 text-right font-semibold tabular-nums">{compactNumber(analytics.kpis.activeEmployees)}</td></tr>
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
             </div>
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_1fr]">
