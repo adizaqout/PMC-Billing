@@ -24,7 +24,7 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
 
-type Employee = Tables<"employees"> & { consultants?: { short_name: string } | null; positions?: { position_name: string; position_id: string } | null };
+type Employee = Tables<"employees"> & { consultants?: { short_name: string; consultant_type?: string } | null; positions?: { position_name: string; position_id: string } | null };
 type Consultant = { id: string; short_name: string };
 type Position = { id: string; position_id: string; position_name: string; consultant_id: string };
 
@@ -79,6 +79,7 @@ const importColumns: ImportColumnDef[] = [
 
 export default function EmployeesPage() {
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
@@ -96,7 +97,7 @@ export default function EmployeesPage() {
 
   const { data: employees = [], isLoading } = useQuery({
     queryKey: ["employees"],
-    queryFn: async () => { const { data, error } = await supabase.from("employees").select("*, consultants(short_name), positions(position_id, position_name)").order("employee_name"); if (error) throw error; return data as Employee[]; },
+    queryFn: async () => { const { data, error } = await supabase.from("employees").select("*, consultants(short_name, consultant_type), positions(position_id, position_name)").order("employee_name"); if (error) throw error; return data as Employee[]; },
   });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as Consultant[]; } });
   const { data: allPositions = [] } = useQuery({ queryKey: ["positions-list"], queryFn: async () => { const { data, error } = await supabase.from("positions").select("id, position_id, position_name, consultant_id").order("position_name"); if (error) throw error; return data as Position[]; } });
@@ -130,6 +131,8 @@ export default function EmployeesPage() {
 
   const filtered = employees.filter((e) => {
     const s = search.toLowerCase();
+    const ct = (e.consultants?.consultant_type || "PMC");
+    if (typeFilter !== "all" && ct !== typeFilter) return false;
     if (s && !e.employee_name.toLowerCase().includes(s) && !(e.consultants?.short_name || "").toLowerCase().includes(s) && !((e as any).employee_id || "").toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
@@ -227,8 +230,15 @@ export default function EmployeesPage() {
           </div>
         </div>
         <div className="bg-card rounded-md border">
-          <div className="px-4 py-3 border-b flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search employees..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
+          <div className="px-4 py-3 border-b flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 max-w-sm min-w-[200px]"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search employees..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
+            <div className="inline-flex rounded-md border overflow-hidden">
+              {(["all","PMC","Supervision"] as const).map(opt => (
+                <button key={opt} onClick={() => setTypeFilter(opt)} className={`px-3 h-8 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                  {opt === "all" ? "All Types" : opt}
+                </button>
+              ))}
+            </div>
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
           <div className="overflow-x-auto">
