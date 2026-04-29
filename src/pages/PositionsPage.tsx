@@ -23,7 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type Position = Tables<"positions"> & { consultants?: { short_name: string } | null; service_orders?: { so_number: string } | null };
+type Position = Tables<"positions"> & { consultants?: { short_name: string; consultant_type?: string } | null; service_orders?: { so_number: string } | null };
 interface PosForm { position_id: string; position_name: string; consultant_id: string; so_id: string | null; total_years_of_exp: number | null; year_1_rate: number | null; year_2_rate: number | null; year_3_rate: number | null; year_4_rate: number | null; year_5_rate: number | null; effective_from: string | null; effective_to: string | null; notes: string | null; function: string | null; }
 const emptyForm: PosForm = { position_id: "", position_name: "", consultant_id: "", so_id: null, total_years_of_exp: null, year_1_rate: null, year_2_rate: null, year_3_rate: null, year_4_rate: null, year_5_rate: null, effective_from: null, effective_to: null, notes: null, function: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
@@ -92,6 +92,7 @@ const importCols = [
 
 export default function PositionsPage() {
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
   const [form, setForm] = useState<PosForm>(emptyForm);
@@ -109,7 +110,7 @@ export default function PositionsPage() {
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["positions"], queryFn: async () => { const { data, error } = await supabase.from("positions").select("*, consultants(short_name), service_orders(so_number)").order("position_name"); if (error) throw error; return data as Position[]; } });
+  const { data: items = [], isLoading } = useQuery({ queryKey: ["positions"], queryFn: async () => { const { data, error } = await supabase.from("positions").select("*, consultants(short_name, consultant_type), service_orders(so_number)").order("position_name"); if (error) throw error; return data as Position[]; } });
   const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
   const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number"); if (error) throw error; return data as { id: string; so_number: string; consultant_id: string }[]; } });
   const filteredSOs = form.consultant_id ? allServiceOrders.filter(s => s.consultant_id === form.consultant_id) : [];
@@ -145,6 +146,8 @@ export default function PositionsPage() {
 
   const filtered = items.filter((i) => {
     const s = search.toLowerCase();
+    const ct = (i.consultants?.consultant_type || "PMC");
+    if (typeFilter !== "all" && ct !== typeFilter) return false;
     const matchSearch = !s || i.position_name.toLowerCase().includes(s) || (i.consultants?.short_name || "").toLowerCase().includes(s) || (i.position_id || "").toLowerCase().includes(s);
     if (!matchSearch) return false;
     for (const [key, val] of Object.entries(colFilters)) {
@@ -236,8 +239,15 @@ export default function PositionsPage() {
           </div>
         </div>
         <div className="bg-card rounded-md border">
-          <div className="px-4 py-3 border-b flex items-center gap-3">
-            <div className="relative flex-1 max-w-sm"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
+          <div className="px-4 py-3 border-b flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 max-w-sm min-w-[200px]"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
+            <div className="inline-flex rounded-md border overflow-hidden">
+              {(["all","PMC","Supervision"] as const).map(opt => (
+                <button key={opt} onClick={() => setTypeFilter(opt)} className={`px-3 h-8 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                  {opt === "all" ? "All Types" : opt}
+                </button>
+              ))}
+            </div>
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
           <div className="overflow-x-auto">
