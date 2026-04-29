@@ -111,7 +111,9 @@ export default function Dashboard() {
   });
   const [tab, setTab] = useState("overview");
   const [filters, setFilters] = useState<AnalyticsFilters>(defaultAnalyticsFilters);
-  const { analytics, isLoading } = useAnalyticsModel(filters, false);
+  const { data: overview, isLoading: overviewLoading } = useDashboardOverview();
+  // Heavy analytics model only loads when the Dashboard (gadgets) tab is active.
+  const { analytics } = useAnalyticsModel(filters, false, tab === "dashboard");
 
   const saveGadgetMutation = useMutation({
     mutationFn: async ({ gadgetId, enabled, positionY }: { gadgetId: string; enabled: boolean; positionY: number }) => {
