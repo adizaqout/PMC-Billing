@@ -74,6 +74,7 @@ function normalizeConsultantType(v: any): "PMC" | "Supervision" {
 
 export default function ConsultantsPage() {
   const [search, setSearch] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">("all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Consultant | null>(null);
   const [form, setForm] = useState<Partial<ConsultantInsert>>(emptyForm);
@@ -156,6 +157,8 @@ export default function ConsultantsPage() {
 
   const filtered = consultants.filter((c) => {
     const s = search.toLowerCase();
+    const ct = ((c as any).consultant_type || "PMC");
+    if (typeFilter !== "all" && ct !== typeFilter) return false;
     if (s && !(c.short_name || "").toLowerCase().includes(s) && !c.name.toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
       if (!val) continue;
