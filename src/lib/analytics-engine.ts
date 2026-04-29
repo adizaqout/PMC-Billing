@@ -10,9 +10,9 @@ import {
 
 export type AppSettingRow = Pick<Tables<"app_settings">, "setting_key" | "setting_value">;
 export type ProfileSummary = Pick<Tables<"profiles">, "full_name" | "consultant_id"> | null;
-export type ConsultantRow = Pick<Tables<"consultants">, "id" | "name" | "short_name" | "status">;
+export type ConsultantRow = Pick<Tables<"consultants">, "id" | "name" | "short_name" | "status" | "consultant_type">;
 export type ProjectRow = Pick<Tables<"projects">, "id" | "project_name" | "latest_budget" | "latest_pmc_budget" | "previous_pmc_budget" | "previous_pmc_actual" | "actual_pmc_to_date" | "portfolio" | "status">;
-export type EmployeeRow = Pick<Tables<"employees">, "id" | "employee_name" | "consultant_id" | "position_id" | "status" | "active">;
+export type EmployeeRow = Pick<Tables<"employees">, "id" | "employee_name" | "consultant_id" | "position_id" | "status" | "active" | "deployment">;
 export type PositionRow = Pick<Tables<"positions">, "id" | "position_name" | "consultant_id" | "so_id" | "year_1_rate" | "year_2_rate" | "year_3_rate" | "year_4_rate" | "year_5_rate"> & { function?: string | null };
 export type ServiceOrderRow = Pick<Tables<"service_orders">, "id" | "so_number" | "consultant_id" | "so_value">;
 export type PurchaseOrderRow = Pick<Tables<"purchase_orders">, "id" | "po_number" | "consultant_id" | "so_id" | "project_id" | "po_value" | "amount"> & { revision_number?: number | null };
