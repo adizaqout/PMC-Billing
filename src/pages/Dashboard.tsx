@@ -37,6 +37,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAnalyticsModel } from "@/hooks/useAnalyticsModel";
+import { useDashboardOverview } from "@/hooks/useDashboardOverview";
 import { supabase } from "@/integrations/supabase/client";
 import {
   compactNumber,
