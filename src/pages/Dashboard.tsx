@@ -336,11 +336,11 @@ export default function Dashboard() {
 
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
-              <KpiCard title="Total PMC Budget" value={currency(analytics.kpis.totalBudget)} hint="Current visible portfolio budget" icon={DollarSign} />
-              <KpiCard title="Actual Deployment Cost" value={currency(analytics.kpis.totalActualBilled)} hint="Derived from actual deployment submissions" icon={CheckCircle2} />
-              <KpiCard title="Forecast Cost" value={currency(analytics.kpis.totalForecastCost)} hint="Future months beyond the open period" icon={Clock3} />
-              <KpiCard title="Remaining Budget" value={currency(analytics.kpis.remainingBudget)} hint="Budget minus actual deployment cost" icon={FolderKanban} />
-              <KpiCard title="Forecast Remaining" value={currency(analytics.kpis.forecastRemaining)} hint="Budget minus forecast cost" icon={ShieldAlert} />
+              <KpiCard title="Total PMC Budget" value={currency(overview.kpis.totalBudget)} hint="Current visible portfolio budget" icon={DollarSign} />
+              <KpiCard title="Actual Deployment Cost" value={currency(overview.kpis.totalActualBilled)} hint="Derived from actual deployment submissions" icon={CheckCircle2} />
+              <KpiCard title="Forecast Cost" value={currency(overview.kpis.totalForecastCost)} hint="Future months beyond the open period" icon={Clock3} />
+              <KpiCard title="Remaining Budget" value={currency(overview.kpis.remainingBudget)} hint="Budget minus actual deployment cost" icon={FolderKanban} />
+              <KpiCard title="Forecast Remaining" value={currency(overview.kpis.forecastRemaining)} hint="Budget minus forecast cost" icon={ShieldAlert} />
             </div>
 
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -362,7 +362,7 @@ export default function Dashboard() {
                       </tr>
                     </thead>
                     <tbody>
-                      {analytics.taskRows.map((task) => (
+                      {overview.taskRows.map((task) => (
                         <tr key={task.id} className="border-b last:border-0 hover:bg-muted/50">
                           <td className="px-4 py-2.5 capitalize">{task.type}</td>
                           <td className="px-4 py-2.5">{formatMonthLabel(task.month)}</td>
@@ -372,18 +372,18 @@ export default function Dashboard() {
                           <td className="px-4 py-2.5 text-right"><Button size="sm" variant="outline" onClick={() => navigate("/deployments")}>Open</Button></td>
                         </tr>
                       ))}
-                      {analytics.taskRows.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No open tasks for the applied filters.</td></tr>}
+                      {overview.taskRows.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No open tasks for the applied filters.</td></tr>}
                     </tbody>
                   </table>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 gap-4">
-                <KpiCard title="Variance to Baseline" value={currency(analytics.kpis.varianceToBaseline)} hint="Forecast against baseline" icon={GitCompareArrows} />
-                <KpiCard title="Active Employees" value={compactNumber(analytics.kpis.activeEmployees)} hint={`PMC ${analytics.kpis.activePmc} · Supervision ${analytics.kpis.activeSupervision}`} icon={Users} />
-                <KpiCard title="My Open Tasks" value={compactNumber(analytics.kpis.myOpenTasks)} hint="Drafts, returns, and reviews" icon={Briefcase} />
-                <KpiCard title="Pending Reviews" value={compactNumber(analytics.kpis.pendingReviews)} hint="Reviewer queue from latest revisions" icon={Clock3} />
-                <KpiCard title="Projects at Risk" value={compactNumber(analytics.kpis.projectsAtRisk)} hint={`Shared thresholds · amber ${analytics.amberThreshold}%`} icon={AlertTriangle} />
+                <KpiCard title="Variance to Baseline" value={currency(overview.kpis.varianceToBaseline)} hint="Forecast against baseline" icon={GitCompareArrows} />
+                <KpiCard title="Active Employees" value={compactNumber(overview.kpis.activeEmployees)} hint={`PMC ${overview.kpis.activePmc} · Supervision ${overview.kpis.activeSupervision}`} icon={Users} />
+                <KpiCard title="My Open Tasks" value={compactNumber(overview.kpis.myOpenTasks)} hint="Drafts, returns, and reviews" icon={Briefcase} />
+                <KpiCard title="Pending Reviews" value={compactNumber(overview.kpis.pendingReviews)} hint="Reviewer queue from latest revisions" icon={Clock3} />
+                <KpiCard title="Projects at Risk" value={compactNumber(overview.kpis.projectsAtRisk)} hint={`Shared thresholds · amber ${overview.amberThreshold}%`} icon={AlertTriangle} />
               </div>
             </div>
 
@@ -396,9 +396,9 @@ export default function Dashboard() {
                 <CardContent>
                   <table className="w-full text-sm">
                     <tbody>
-                      <tr className="border-b"><td className="py-2 font-medium">Active PMC</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.activePmc)}</td></tr>
-                      <tr className="border-b"><td className="py-2 font-medium">Active Supervision</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.activeSupervision)}</td></tr>
-                      <tr><td className="py-2 font-semibold">Total Active</td><td className="py-2 text-right font-semibold tabular-nums">{compactNumber(analytics.kpis.activeEmployees)}</td></tr>
+                      <tr className="border-b"><td className="py-2 font-medium">Active PMC</td><td className="py-2 text-right tabular-nums">{compactNumber(overview.kpis.activePmc)}</td></tr>
+                      <tr className="border-b"><td className="py-2 font-medium">Active Supervision</td><td className="py-2 text-right tabular-nums">{compactNumber(overview.kpis.activeSupervision)}</td></tr>
+                      <tr><td className="py-2 font-semibold">Total Active</td><td className="py-2 text-right font-semibold tabular-nums">{compactNumber(overview.kpis.activeEmployees)}</td></tr>
                     </tbody>
                   </table>
                 </CardContent>
@@ -412,9 +412,9 @@ export default function Dashboard() {
                 <CardContent>
                   <table className="w-full text-sm">
                     <tbody>
-                      <tr className="border-b"><td className="py-2 font-medium">Deployed to Projects</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.deployedProjects)}</td></tr>
-                      <tr className="border-b"><td className="py-2 font-medium">Deployed in Office</td><td className="py-2 text-right tabular-nums">{compactNumber(analytics.kpis.deployedOffice)}</td></tr>
-                      <tr><td className="py-2 font-semibold">Total Active</td><td className="py-2 text-right font-semibold tabular-nums">{compactNumber(analytics.kpis.activeEmployees)}</td></tr>
+                      <tr className="border-b"><td className="py-2 font-medium">Deployed to Projects</td><td className="py-2 text-right tabular-nums">{compactNumber(overview.kpis.deployedProjects)}</td></tr>
+                      <tr className="border-b"><td className="py-2 font-medium">Deployed in Office</td><td className="py-2 text-right tabular-nums">{compactNumber(overview.kpis.deployedOffice)}</td></tr>
+                      <tr><td className="py-2 font-semibold">Total Active</td><td className="py-2 text-right font-semibold tabular-nums">{compactNumber(overview.kpis.activeEmployees)}</td></tr>
                     </tbody>
                   </table>
                 </CardContent>
@@ -426,8 +426,8 @@ export default function Dashboard() {
                 <h2 className="mb-4 text-sm font-semibold">Submission Status Overview</h2>
                 <ResponsiveContainer width="100%" height={320}>
                   <PieChart>
-                    <Pie data={analytics.statusCounts} dataKey="value" nameKey="name" innerRadius={70} outerRadius={110} paddingAngle={3}>
-                      {analytics.statusCounts.map((entry, index) => (
+                    <Pie data={overview.statusCounts} dataKey="value" nameKey="name" innerRadius={70} outerRadius={110} paddingAngle={3}>
+                      {overview.statusCounts.map((entry, index) => (
                         <Cell key={entry.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                       ))}
                     </Pie>
@@ -443,7 +443,7 @@ export default function Dashboard() {
                   <span className="text-xs text-muted-foreground">PMC reviewer only</span>
                 </div>
                 <div className="divide-y">
-                  {canReview ? analytics.reviewQueue.map((item) => (
+                  {canReview ? overview.reviewQueue.map((item) => (
                     <div key={item.id} className="flex items-center justify-between gap-3 px-4 py-3">
                       <div>
                         <div className="text-sm font-medium">{item.company}</div>
@@ -455,7 +455,7 @@ export default function Dashboard() {
                       </div>
                     </div>
                   )) : <div className="px-4 py-8 text-sm text-muted-foreground">You do not have reviewer access.</div>}
-                  {canReview && analytics.reviewQueue.length === 0 && <div className="px-4 py-8 text-sm text-muted-foreground">Nothing pending review.</div>}
+                  {canReview && overview.reviewQueue.length === 0 && <div className="px-4 py-8 text-sm text-muted-foreground">Nothing pending review.</div>}
                 </div>
               </div>
             </div>
