@@ -184,7 +184,7 @@ export default function Dashboard() {
     [analytics?.dashboardGadgets],
   );
 
-  if (isLoading) {
+  if (overviewLoading) {
     return (
       <AppLayout>
         <div className="animate-fade-in space-y-6">
