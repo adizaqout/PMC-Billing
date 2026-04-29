@@ -104,7 +104,7 @@ export function useAnalyticsData() {
         profile: profileRes.data,
         consultants: consultantsRes.data || [],
         projects: projectsRes.data || [],
-        employees: employeesRes.data || [],
+        employees: (employeesRes as any[]) || [],
         positions: positionsRes.data || [],
         serviceOrders: serviceOrdersRes.data || [],
         purchaseOrders: purchaseOrdersRes.data || [],
