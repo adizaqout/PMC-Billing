@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -222,7 +222,7 @@ export default function Dashboard() {
   }
 
   const canReview = roles.includes("pmc_reviewer") || roles.includes("admin") || roles.includes("superadmin");
-  const displayName = user?.email?.split("@")[0] || analytics.consultants[0]?.name || "User";
+  const displayName = profileFullName || user?.email?.split("@")[0] || analytics.consultants[0]?.name || "User";
 
   const renderGadget = (gadgetKey: string, gadgetId?: string) => {
     if (gadgetKey === "project_risk") {
