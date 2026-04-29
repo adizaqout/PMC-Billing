@@ -105,6 +105,10 @@ export interface AnalyticsModel {
     forecastRemaining: number;
     varianceToBaseline: number;
     activeEmployees: number;
+    activePmc: number;
+    activeSupervision: number;
+    deployedProjects: number;
+    deployedOffice: number;
     myOpenTasks: number;
     pendingReviews: number;
     projectsAtRisk: number;
