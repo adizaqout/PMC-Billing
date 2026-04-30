@@ -47,14 +47,29 @@ const navSections: NavSection[] = [
   {
     title: "Master Data",
     items: [
+      { label: "Projects", icon: FolderKanban, path: "/projects", module: "projects" },
+    ],
+  },
+  {
+    title: "PMC",
+    visibility: "pmc",
+    items: [
       { label: "Consultants", icon: Building2, path: "/consultants", module: "consultants" },
       { label: "Framework Agreements", icon: FileText, path: "/framework-agreements", module: "framework_agreements" },
       { label: "Service Orders", icon: ShoppingCart, path: "/service-orders", module: "service_orders" },
       { label: "Purchase Orders", icon: Receipt, path: "/purchase-orders", module: "purchase_orders" },
-      { label: "Projects", icon: FolderKanban, path: "/projects", module: "projects" },
       { label: "Invoices", icon: FileText, path: "/invoices", module: "invoices" },
       { label: "Positions", icon: Briefcase, path: "/positions", module: "positions" },
       { label: "Employees", icon: Users, path: "/employees", module: "employees" },
+    ],
+  },
+  {
+    title: "Supervision",
+    visibility: "supervision",
+    items: [
+      { label: "Consultants", icon: Building2, path: "/supervision/consultants", module: "consultants" },
+      { label: "Positions", icon: Briefcase, path: "/supervision/positions", module: "positions" },
+      { label: "Employees", icon: Users, path: "/supervision/employees", module: "employees" },
     ],
   },
   {
@@ -64,6 +79,20 @@ const navSections: NavSection[] = [
       { label: "Period Control", icon: Lock, path: "/period-control", module: "period_control" },
     ],
   },
+  {
+    title: "Analytics",
+    items: [
+      { label: "Reports", icon: BarChart3, path: "/reports", module: "reports" },
+      { label: "AI Assistant", icon: Bot, path: "/ai-assistant", module: "ai_assistant" },
+    ],
+  },
+  {
+    title: "Administration",
+    items: [
+      { label: "Admin Panel", icon: Settings, path: "/admin", adminOnly: true },
+    ],
+  },
+];
   {
     title: "Analytics",
     items: [
