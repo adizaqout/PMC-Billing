@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Lock, Mail } from "lucide-react";
+import aldarLogo from "@/assets/aldar-logo.webp";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -55,8 +56,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-lg bg-primary flex items-center justify-center mb-4">
-            <span className="text-primary-foreground text-lg font-bold">PMC</span>
+          <div className="w-16 h-16 flex items-center justify-center mb-4">
+            <img src={aldarLogo} alt="Aldar" className="w-16 h-16 object-contain" />
           </div>
           <h1 className="text-xl font-semibold tracking-tight">PMC Billing & Deployment</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to your account</p>
