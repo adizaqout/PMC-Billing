@@ -138,9 +138,6 @@
     font-family: var(--font-primary);
     font-weight: 500;
   }
-    font-family: var(--font-primary);
-    font-weight: 500;
-  }
 
   .font-mono {
     font-family: 'JetBrains Mono', monospace;
