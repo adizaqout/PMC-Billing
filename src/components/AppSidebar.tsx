@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { LogOut } from "lucide-react";
+import aldarLogo from "@/assets/aldar-logo.webp";
 import {
   LayoutDashboard,
   Building2,
@@ -128,8 +129,8 @@ export default function AppSidebar() {
       >
         {/* Logo + collapse toggle */}
         <div className="flex items-center gap-2 px-3 h-14 border-b border-sidebar-border shrink-0">
-          <div className="w-7 h-7 rounded bg-sidebar-primary flex items-center justify-center shrink-0">
-            <span className="text-sidebar-primary-foreground text-xs font-bold">P</span>
+          <div className="w-8 h-8 flex items-center justify-center shrink-0">
+            <img src={aldarLogo} alt="Aldar" className="w-8 h-8 object-contain" />
           </div>
           {!mini && (
             <div className="flex flex-col flex-1 min-w-0">
