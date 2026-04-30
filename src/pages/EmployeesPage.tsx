@@ -29,8 +29,8 @@ type Employee = Tables<"employees"> & { consultants?: { short_name: string; cons
 type Consultant = { id: string; short_name: string };
 type Position = { id: string; position_id: string; position_name: string; consultant_id: string };
 
-interface EmployeeForm { employee_id: string; employee_name: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; active: boolean; deployment: string; }
-const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", consultant_id: "", position_id: "", experience_years: null, start_date: null, end_date: null, status: "active", active: true, deployment: "Projects" };
+interface EmployeeForm { employee_id: string; employee_name: string; email: string; consultant_id: string; position_id: string; experience_years: number | null; start_date: string | null; end_date: string | null; status: string; active: boolean; deployment: string; }
+const emptyForm: EmployeeForm = { employee_id: "", employee_name: "", email: "", consultant_id: "", position_id: "", experience_years: null, start_date: null, end_date: null, status: "active", active: true, deployment: "Projects" };
 
 function normalizeDeployment(v: any): "Projects" | "Office" {
   const s = String(v || "").trim().toLowerCase();
@@ -55,6 +55,7 @@ function parseImportDate(val: any): string | null {
 const excelCols = [
   { header: "Employee ID", key: "employee_id", width: 18 },
   { header: "Employee Name", key: "employee_name", width: 25 },
+  { header: "Email", key: "email", width: 28 },
   { header: "Consultant", key: "consultant_name", width: 25 },
   { header: "Position ID", key: "position_id_code", width: 16 },
   { header: "Position Name", key: "position_name", width: 20 },
@@ -68,6 +69,7 @@ const excelCols = [
 const importColumns: ImportColumnDef[] = [
   { header: "Employee ID", key: "employee_id", required: true },
   { header: "Employee Name", key: "employee_name" },
+  { header: "Email", key: "email" },
   { header: "Consultant", key: "consultant_name", required: true },
   { header: "Position ID", key: "position_id_code" },
   { header: "Position Name", key: "position_name" },
@@ -87,7 +89,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
   const empTableCols: ColumnDef[] = [
-     { key: "emp_id", label: "Emp ID" }, { key: "name", label: "Name" }, { key: "consultant", label: "Consultant" },
+     { key: "emp_id", label: "Emp ID" }, { key: "name", label: "Name" }, { key: "email", label: "Email" }, { key: "consultant", label: "Consultant" },
     { key: "pos_id", label: "Position ID" }, { key: "pos_name", label: "Position Name" }, { key: "exp", label: "Exp (Yrs)" },
     { key: "start", label: "Start Date" }, { key: "end", label: "End Date" }, { key: "deployment", label: "Deployment" }, { key: "active_flag", label: "Active" }, { key: "status", label: "Status" },
   ];
