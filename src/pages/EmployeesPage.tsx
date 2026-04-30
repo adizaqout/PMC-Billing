@@ -108,7 +108,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
 
   const upsertMutation = useMutation({
     mutationFn: async (values: EmployeeForm & { id?: string }) => {
-      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any, active: values.active, deployment: normalizeDeployment(values.deployment) };
+      const payload = { employee_id: values.employee_id || null, employee_name: values.employee_name, email: values.email?.trim() || null, consultant_id: values.consultant_id, position_id: values.position_id || null, experience_years: values.experience_years, start_date: values.start_date || null, end_date: values.end_date || null, status: values.status as any, active: values.active, deployment: normalizeDeployment(values.deployment) };
       if (values.id) { const { error } = await supabase.from("employees").update(payload).eq("id", values.id); if (error) throw error; }
       else { const { error } = await supabase.from("employees").insert({ ...payload } as any); if (error) throw error; }
     },
@@ -118,7 +118,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
   const deleteMutation = useMutation({ mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; }, onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["employees"] }); toast.success("Employee deleted"); }, onError: (e: Error) => toast.error(e.message) });
 
   const openCreate = () => { setEditing(null); setForm({ ...emptyForm }); setDialogOpen(true); };
-  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status, active: emp.active, deployment: ((emp as any).deployment || "Projects") }); setDialogOpen(true); };
+  const openEdit = (emp: Employee) => { setEditing(emp); setForm({ employee_id: (emp as any).employee_id || "", employee_name: emp.employee_name, email: (emp as any).email || "", consultant_id: emp.consultant_id, position_id: emp.position_id || "", experience_years: emp.experience_years, start_date: emp.start_date, end_date: emp.end_date, status: emp.status, active: emp.active, deployment: ((emp as any).deployment || "Projects") }); setDialogOpen(true); };
   const closeDialog = () => { setDialogOpen(false); setEditing(null); setForm({ ...emptyForm }); };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -155,7 +155,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "", deployment: (e as any).deployment || "Projects" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", email: (e as any).email || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "", deployment: (e as any).deployment || "Projects" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.short_name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label), Deployments: ["Projects", "Office"] }); toast.success("Template downloaded"); };
 
   const smartImportConfig: SmartImportConfig = useMemo(() => ({
@@ -168,6 +168,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
         _id: e.id,
         employee_id: e.employee_id || "",
         employee_name: e.employee_name || "",
+        email: e.email || "",
         consultant_name: e.consultants?.short_name || "",
         position_id_code: e.positions?.position_id || "",
         position_name: e.positions?.position_name || "",
@@ -189,6 +190,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
       const { error } = await supabase.from("employees").insert({
         employee_id: rec.employee_id?.trim() || null,
         employee_name: isTba ? "TBA" : nameTrimmed,
+        email: rec.email?.trim() || null,
         consultant_id: consultant.id,
         position_id: pos?.id || null,
         experience_years: rec.experience_years ? parseInt(rec.experience_years) : null,
@@ -209,6 +211,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
       const { error } = await supabase.from("employees").update({
         employee_id: rec.employee_id?.trim() || null,
         employee_name: isTbaUpd ? "TBA" : nameUpd,
+        email: rec.email?.trim() || null,
         consultant_id: consultant.id,
         position_id: pos?.id || null,
         experience_years: rec.experience_years ? parseInt(rec.experience_years) : null,
@@ -255,6 +258,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
               <table className="w-full text-sm"><thead><tr className="border-b">
                 {visibleColumns.has("emp_id") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Emp ID" sortKey="employee_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.employee_id || ""} onChange={(v) => setColFilter("employee_id", v)} label="Emp ID" /></SortableHeader></th>}
                 {visibleColumns.has("name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Name" sortKey="employee_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.name || ""} onChange={(v) => setColFilter("name", v)} label="Name" /></SortableHeader></th>}
+                {visibleColumns.has("email") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Email" sortKey="email" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.email || ""} onChange={(v) => setColFilter("email", v)} label="Email" /></SortableHeader></th>}
                 {visibleColumns.has("consultant") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Consultant" sortKey="consultants.short_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.consultant || ""} onChange={(v) => setColFilter("consultant", v)} label="Consultant" /></SortableHeader></th>}
                 {visibleColumns.has("pos_id") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position ID" sortKey="positions.position_id" currentKey={sort.key} direction={sort.direction} onSort={toggleSort} /></th>}
                 {visibleColumns.has("pos_name") && <th className="data-table-header text-left px-4 py-2.5"><SortableHeader label="Position Name" sortKey="positions.position_name" currentKey={sort.key} direction={sort.direction} onSort={toggleSort}><ColumnFilter value={colFilters.position || ""} onChange={(v) => setColFilter("position", v)} label="Position" /></SortableHeader></th>}
@@ -270,6 +274,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
                 <tr key={emp.id} className="border-b last:border-0 hover:bg-muted/50 transition-colors">
                   {visibleColumns.has("emp_id") && <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{(emp as any).employee_id || "—"}</td>}
                   {visibleColumns.has("name") && <td className="px-4 py-2.5 font-medium">{emp.employee_name}</td>}
+                  {visibleColumns.has("email") && <td className="px-4 py-2.5 text-muted-foreground text-xs">{(emp as any).email || "—"}</td>}
                   {visibleColumns.has("consultant") && <td className="px-4 py-2.5">{emp.consultants?.short_name || "—"}</td>}
                   {visibleColumns.has("pos_id") && <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{emp.positions?.position_id || "—"}</td>}
                   {visibleColumns.has("pos_name") && <td className="px-4 py-2.5 text-muted-foreground">{emp.positions?.position_name || "—"}</td>}
@@ -297,6 +302,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5"><Label>Employee ID</Label><Input value={form.employee_id} onChange={(e) => setForm({ ...form, employee_id: e.target.value })} placeholder="e.g. EMP-001" /></div>
               <div className="space-y-1.5"><Label>Employee Name *</Label><Input value={form.employee_name} onChange={(e) => setForm({ ...form, employee_name: e.target.value })} /></div>
+              <div className="col-span-2 space-y-1.5"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@example.com" /></div>
               <div className="col-span-2 space-y-1.5"><Label>Consultant *</Label><Select value={form.consultant_id} onValueChange={(v) => setForm({ ...form, consultant_id: v, position_id: "" })}><SelectTrigger><SelectValue placeholder="Select consultant" /></SelectTrigger><SelectContent>{consultants.map((c) => <SelectItem key={c.id} value={c.id}>{c.short_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="col-span-2 space-y-1.5"><Label>Position</Label><Select value={form.position_id} onValueChange={(v) => setForm({ ...form, position_id: v })}><SelectTrigger><SelectValue placeholder="Select position" /></SelectTrigger><SelectContent>{allPositions.filter(p => p.consultant_id === form.consultant_id).map((p) => <SelectItem key={p.id} value={p.id}>{p.position_id} — {p.position_name}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Experience (Years)</Label><Input type="number" value={form.experience_years ?? ""} onChange={(e) => setForm({ ...form, experience_years: e.target.value ? parseInt(e.target.value) : null })} /></div>
