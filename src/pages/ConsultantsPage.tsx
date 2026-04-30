@@ -72,9 +72,10 @@ function normalizeConsultantType(v: any): "PMC" | "Supervision" {
   return "PMC";
 }
 
-export default function ConsultantsPage() {
+interface ConsultantsPageProps { lockedType?: "PMC" | "Supervision"; titleOverride?: string; subtitleOverride?: string }
+export default function ConsultantsPage({ lockedType, titleOverride, subtitleOverride }: ConsultantsPageProps = {}) {
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">(lockedType ?? "all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Consultant | null>(null);
   const [form, setForm] = useState<Partial<ConsultantInsert>>(emptyForm);
@@ -158,6 +159,7 @@ export default function ConsultantsPage() {
   const filtered = consultants.filter((c) => {
     const s = search.toLowerCase();
     const ct = ((c as any).consultant_type || "PMC");
+    if (lockedType && ct !== lockedType) return false;
     if (typeFilter !== "all" && ct !== typeFilter) return false;
     if (s && !(c.short_name || "").toLowerCase().includes(s) && !c.name.toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
@@ -235,8 +237,8 @@ export default function ConsultantsPage() {
       <div className="animate-fade-in">
         <div className="page-header">
           <div>
-            <h1 className="page-title">Consultants</h1>
-            <p className="page-subtitle">Manage PMC consultant companies</p>
+            <h1 className="page-title">{titleOverride ?? "Consultants"}</h1>
+            <p className="page-subtitle">{subtitleOverride ?? "Manage PMC consultant companies"}</p>
           </div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
@@ -251,20 +253,22 @@ export default function ConsultantsPage() {
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input placeholder="Search consultants..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" />
             </div>
-            <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-1">
-              <span className="px-2 text-xs font-semibold uppercase text-muted-foreground">Consultant Type</span>
-              <div className="inline-flex overflow-hidden rounded-sm border bg-background" aria-label="Consultant Type filter">
-                {(["all","PMC","Supervision"] as const).map(opt => (
-                  <button
-                    key={opt}
-                    onClick={() => setTypeFilter(opt)}
-                    className={`h-8 min-w-24 px-3 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
-                  >
-                    {opt === "all" ? "All Types" : opt}
-                  </button>
-                ))}
+            {!lockedType && (
+              <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-1">
+                <span className="px-2 text-xs font-semibold uppercase text-muted-foreground">Consultant Type</span>
+                <div className="inline-flex overflow-hidden rounded-sm border bg-background" aria-label="Consultant Type filter">
+                  {(["all","PMC","Supervision"] as const).map(opt => (
+                    <button
+                      key={opt}
+                      onClick={() => setTypeFilter(opt)}
+                      className={`h-8 min-w-24 px-3 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}
+                    >
+                      {opt === "all" ? "All Types" : opt}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
           <div className="overflow-x-auto">

@@ -78,9 +78,10 @@ const importColumns: ImportColumnDef[] = [
   { header: "Status", key: "status" },
 ];
 
-export default function EmployeesPage() {
+interface EmployeesPageProps { lockedType?: "PMC" | "Supervision"; titleOverride?: string; subtitleOverride?: string }
+export default function EmployeesPage({ lockedType, titleOverride, subtitleOverride }: EmployeesPageProps = {}) {
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">(lockedType ?? "all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Employee | null>(null);
   const [form, setForm] = useState<EmployeeForm>(emptyForm);
@@ -133,6 +134,7 @@ export default function EmployeesPage() {
   const filtered = employees.filter((e) => {
     const s = search.toLowerCase();
     const ct = (e.consultants?.consultant_type || "PMC");
+    if (lockedType && ct !== lockedType) return false;
     if (typeFilter !== "all" && ct !== typeFilter) return false;
     if (s && !e.employee_name.toLowerCase().includes(s) && !(e.consultants?.short_name || "").toLowerCase().includes(s) && !((e as any).employee_id || "").toLowerCase().includes(s)) return false;
     for (const [key, val] of Object.entries(colFilters)) {
@@ -222,7 +224,7 @@ export default function EmployeesPage() {
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
-          <div><h1 className="page-title">Employees</h1><p className="page-subtitle">Manage PMC consultant employees</p></div>
+          <div><h1 className="page-title">{titleOverride ?? "Employees"}</h1><p className="page-subtitle">{subtitleOverride ?? "Manage PMC consultant employees"}</p></div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={empTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
@@ -232,16 +234,18 @@ export default function EmployeesPage() {
         <div className="bg-card rounded-md border">
           <div className="px-4 py-3 border-b flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 max-w-sm min-w-[200px]"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search employees..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
-            <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-1">
-              <span className="px-2 text-xs font-semibold uppercase text-muted-foreground">Consultant Type</span>
-              <div className="inline-flex overflow-hidden rounded-sm border bg-background" aria-label="Consultant Type filter">
-                {(["all","PMC","Supervision"] as const).map(opt => (
-                  <button key={opt} onClick={() => setTypeFilter(opt)} className={`h-8 min-w-24 px-3 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
-                    {opt === "all" ? "All Types" : opt}
-                  </button>
-                ))}
+            {!lockedType && (
+              <div className="flex items-center gap-2 rounded-md border bg-muted/20 p-1">
+                <span className="px-2 text-xs font-semibold uppercase text-muted-foreground">Consultant Type</span>
+                <div className="inline-flex overflow-hidden rounded-sm border bg-background" aria-label="Consultant Type filter">
+                  {(["all","PMC","Supervision"] as const).map(opt => (
+                    <button key={opt} onClick={() => setTypeFilter(opt)} className={`h-8 min-w-24 px-3 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                      {opt === "all" ? "All Types" : opt}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
           <div className="overflow-x-auto">
