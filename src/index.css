@@ -130,7 +130,7 @@
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-primary);
-    font-weight: 900;
+    font-weight: 700;
     letter-spacing: -0.01em;
   }
 
@@ -172,17 +172,18 @@
   }
 
   .kpi-value {
-    @apply font-mono tracking-tight;
+    @apply tracking-tight;
     font-family: var(--font-primary);
-    font-weight: 900;
-    font-size: 2.25rem;
-    line-height: 1.05;
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 1.15;
     color: hsl(var(--foreground));
+    font-variant-numeric: tabular-nums;
   }
 
   .kpi-label {
     @apply text-xs uppercase tracking-wide;
-    font-weight: 300;
+    font-weight: 400;
     color: hsl(var(--muted-foreground));
   }
 
@@ -237,11 +238,11 @@
 
   .page-title {
     @apply text-xl tracking-tight;
-    font-weight: 900;
+    font-weight: 700;
   }
 
   .page-subtitle {
     @apply text-sm text-muted-foreground;
-    font-weight: 300;
+    font-weight: 400;
   }
 }
