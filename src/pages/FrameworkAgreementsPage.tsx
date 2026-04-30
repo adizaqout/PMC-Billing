@@ -22,7 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type FA = Tables<"framework_agreements"> & { consultants?: { short_name: string } | null };
+type FA = Tables<"framework_agreements"> & { consultants?: { short_name: string; consultant_type?: string | null } | null };
 type FAInsert = TablesInsert<"framework_agreements">;
 
 interface FAForm { framework_agreement_no: string; consultant_id: string; start_date: string | null; end_date: string | null; status: "active" | "inactive"; }
@@ -75,9 +75,9 @@ export default function FrameworkAgreementsPage() {
 
   const { data: items = [], isLoading } = useQuery({
     queryKey: ["framework_agreements"],
-    queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("*, consultants(short_name)").order("framework_agreement_no"); if (error) throw error; return data as FA[]; },
+    queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("*, consultants(short_name, consultant_type)").order("framework_agreement_no"); if (error) throw error; return data as FA[]; },
   });
-  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list-pmc"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").eq("consultant_type", "PMC").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
 
   const upsertMutation = useMutation({
     mutationFn: async (values: FAForm & { id?: string }) => {
