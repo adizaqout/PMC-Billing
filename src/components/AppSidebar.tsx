@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserConsultantType } from "@/hooks/useUserConsultantType";
 import { LogOut } from "lucide-react";
 import aldarLogo from "@/assets/aldar-logo.webp";
 import {
@@ -28,13 +29,14 @@ interface NavItem {
   label: string;
   icon: any;
   path: string;
-  module?: string; // maps to group_permissions module_name
+  module?: string;
   adminOnly?: boolean;
 }
 
 interface NavSection {
   title: string;
   items: NavItem[];
+  visibility?: "pmc" | "supervision";
 }
 
 const navSections: NavSection[] = [
@@ -79,20 +81,6 @@ const navSections: NavSection[] = [
       { label: "Period Control", icon: Lock, path: "/period-control", module: "period_control" },
     ],
   },
-  {
-    title: "Analytics",
-    items: [
-      { label: "Reports", icon: BarChart3, path: "/reports", module: "reports" },
-      { label: "AI Assistant", icon: Bot, path: "/ai-assistant", module: "ai_assistant" },
-    ],
-  },
-  {
-    title: "Administration",
-    items: [
-      { label: "Admin Panel", icon: Settings, path: "/admin", adminOnly: true },
-    ],
-  },
-];
   {
     title: "Analytics",
     items: [
