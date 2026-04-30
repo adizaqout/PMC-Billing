@@ -107,6 +107,7 @@ export default function FrameworkAgreementsPage() {
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
   
   const filtered = items.filter((i) => {
+    if ((i.consultants?.consultant_type || "PMC") !== "PMC") return false;
     if (search && !i.framework_agreement_no.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.agreement_no && !i.framework_agreement_no.toLowerCase().includes(colFilters.agreement_no.toLowerCase())) return false;
     if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;

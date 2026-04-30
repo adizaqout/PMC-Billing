@@ -25,7 +25,7 @@ import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-re
 import { toast } from "sonner";
 
 type Invoice = Tables<"invoices"> & {
-  consultants?: { short_name: string } | null;
+  consultants?: { short_name: string; consultant_type?: string | null } | null;
   purchase_orders?: { po_number: string; revision_number: number | null; po_reference: string | null; po_value: number | null; project_id: string | null } | null;
 };
 type PORecord = { id: string; po_number: string; consultant_id: string; revision_number: number | null; po_reference: string | null; po_value: number | null; project_id: string | null };
@@ -90,7 +90,7 @@ export default function InvoicesPage() {
     queryKey: ["invoices"],
     queryFn: async () => {
       const { data, error } = await supabase.from("invoices")
-        .select("*, consultants(short_name), purchase_orders(po_number, revision_number, po_reference, po_value, project_id)")
+        .select("*, consultants(short_name, consultant_type), purchase_orders(po_number, revision_number, po_reference, po_value, project_id)")
         .order("invoice_month", { ascending: false });
       if (error) throw error;
       return data as Invoice[];
@@ -98,9 +98,9 @@ export default function InvoicesPage() {
   });
 
   const { data: consultants = [] } = useQuery({
-    queryKey: ["consultants-list"],
+    queryKey: ["consultants-list-pmc"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name");
+      const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").eq("consultant_type", "PMC").order("short_name");
       if (error) throw error;
       return data as { id: string; short_name: string }[];
     }
@@ -261,6 +261,7 @@ export default function InvoicesPage() {
   };
 
   const filtered = items.filter((i) => {
+    if ((i.consultants?.consultant_type || "PMC") !== "PMC") return false;
     if (search && !i.invoice_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase()) && !i.invoice_month.toLowerCase().includes(search.toLowerCase()) && !(i.purchase_orders?.po_number || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.invoice_number && !i.invoice_number.toLowerCase().includes(colFilters.invoice_number.toLowerCase())) return false;
     if (colFilters.month && !i.invoice_month.toLowerCase().includes(colFilters.month.toLowerCase())) return false;
