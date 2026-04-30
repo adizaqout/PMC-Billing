@@ -548,6 +548,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           deployment: string
+          email: string | null
           employee_id: string | null
           employee_name: string
           end_date: string | null
@@ -565,6 +566,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deployment?: string
+          email?: string | null
           employee_id?: string | null
           employee_name: string
           end_date?: string | null
@@ -582,6 +584,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           deployment?: string
+          email?: string | null
           employee_id?: string | null
           employee_name?: string
           end_date?: string | null
