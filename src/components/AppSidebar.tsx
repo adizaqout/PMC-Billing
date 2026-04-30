@@ -112,6 +112,11 @@ export default function AppSidebar() {
     setExpandedSections((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
+  const { consultantType } = useUserConsultantType();
+  // Visibility rule: PMC user -> hide Supervision; Supervision user -> hide PMC; admin/all -> both
+  const showPmc = isAdminRole || consultantType === "all" || consultantType === "PMC";
+  const showSupervision = isAdminRole || consultantType === "all" || consultantType === "Supervision";
+
   const filteredSections = navSections
     .map(section => ({
       ...section,
@@ -122,7 +127,11 @@ export default function AppSidebar() {
         return hasModuleAccess(item.module);
       }),
     }))
-    .filter(section => section.items.length > 0);
+    .filter(section => {
+      if (section.visibility === "pmc" && !showPmc) return false;
+      if (section.visibility === "supervision" && !showSupervision) return false;
+      return section.items.length > 0;
+    });
 
   return (
     <>
