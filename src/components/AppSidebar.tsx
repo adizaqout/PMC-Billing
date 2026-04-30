@@ -134,8 +134,8 @@ export default function AppSidebar() {
           </div>
           {!mini && (
             <div className="flex flex-col flex-1 min-w-0">
-              <span className="text-sm font-semibold text-sidebar-accent-foreground leading-tight">PMC Billing</span>
-              <span className="text-[10px] text-sidebar-muted leading-tight">Deployment Control</span>
+              <span className="text-sm font-semibold text-sidebar-accent-foreground leading-tight">Consultants Deployment</span>
+              <span className="text-[10px] text-sidebar-muted leading-tight">Management System</span>
             </div>
           )}
           <button

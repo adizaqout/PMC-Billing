@@ -59,7 +59,7 @@ export default function LoginPage() {
           <div className="w-16 h-16 flex items-center justify-center mb-4">
             <img src={aldarLogo} alt="Aldar" className="w-16 h-16 object-contain" />
           </div>
-          <h1 className="text-xl font-semibold tracking-tight">PMC Billing & Deployment</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Consultants Management System</h1>
           <p className="text-sm text-muted-foreground mt-1">Sign in to your account</p>
         </div>
 
