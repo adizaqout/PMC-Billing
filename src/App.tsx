@@ -25,6 +25,9 @@ import AIAssistantPage from "./pages/AIAssistantPage";
 import SupervisionConsultantsPage from "./pages/supervision/SupervisionConsultantsPage";
 import SupervisionPositionsPage from "./pages/supervision/SupervisionPositionsPage";
 import SupervisionEmployeesPage from "./pages/supervision/SupervisionEmployeesPage";
+import PmcConsultantsPage from "./pages/pmc/PmcConsultantsPage";
+import PmcPositionsPage from "./pages/pmc/PmcPositionsPage";
+import PmcEmployeesPage from "./pages/pmc/PmcEmployeesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -68,6 +71,9 @@ const App = () => (
             <Route path="/supervision/consultants" element={<ProtectedRoute module="consultants"><SupervisionConsultantsPage /></ProtectedRoute>} />
             <Route path="/supervision/positions" element={<ProtectedRoute module="positions"><SupervisionPositionsPage /></ProtectedRoute>} />
             <Route path="/supervision/employees" element={<ProtectedRoute module="employees"><SupervisionEmployeesPage /></ProtectedRoute>} />
+            <Route path="/pmc/consultants" element={<ProtectedRoute module="consultants"><PmcConsultantsPage /></ProtectedRoute>} />
+            <Route path="/pmc/positions" element={<ProtectedRoute module="positions"><PmcPositionsPage /></ProtectedRoute>} />
+            <Route path="/pmc/employees" element={<ProtectedRoute module="employees"><PmcEmployeesPage /></ProtectedRoute>} />
             <Route path="/framework-agreements" element={<ProtectedRoute module="framework_agreements"><FrameworkAgreementsPage /></ProtectedRoute>} />
             <Route path="/service-orders" element={<ProtectedRoute module="service_orders"><ServiceOrdersPage /></ProtectedRoute>} />
             <Route path="/purchase-orders" element={<ProtectedRoute module="purchase_orders"><PurchaseOrdersPage /></ProtectedRoute>} />

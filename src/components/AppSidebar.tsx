@@ -56,13 +56,13 @@ const navSections: NavSection[] = [
     title: "PMC",
     visibility: "pmc",
     items: [
-      { label: "Consultants", icon: Building2, path: "/consultants", module: "consultants" },
+      { label: "Consultants", icon: Building2, path: "/pmc/consultants", module: "consultants" },
       { label: "Framework Agreements", icon: FileText, path: "/framework-agreements", module: "framework_agreements" },
       { label: "Service Orders", icon: ShoppingCart, path: "/service-orders", module: "service_orders" },
       { label: "Purchase Orders", icon: Receipt, path: "/purchase-orders", module: "purchase_orders" },
       { label: "Invoices", icon: FileText, path: "/invoices", module: "invoices" },
-      { label: "Positions", icon: Briefcase, path: "/positions", module: "positions" },
-      { label: "Employees", icon: Users, path: "/employees", module: "employees" },
+      { label: "Positions", icon: Briefcase, path: "/pmc/positions", module: "positions" },
+      { label: "Employees", icon: Users, path: "/pmc/employees", module: "employees" },
     ],
   },
   {

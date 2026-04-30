@@ -25,7 +25,7 @@ import { useLookupValues } from "@/hooks/useLookupValues";
 import ColumnFilter from "@/components/ColumnFilter";
 import SortableHeader from "@/components/SortableHeader";
 
-type PO = Tables<"purchase_orders"> & { consultants?: { short_name: string } | null; service_orders?: { so_number: string } | null; projects?: { project_name: string; project_number: string | null } | null };
+type PO = Tables<"purchase_orders"> & { consultants?: { short_name: string; consultant_type?: string | null } | null; service_orders?: { so_number: string } | null; projects?: { project_name: string; project_number: string | null } | null };
 interface POForm { po_number: string; consultant_id: string; so_id: string | null; po_reference: string | null; po_start_date: string | null; po_end_date: string | null; po_value: number | null; amount: number | null; portfolio: string | null; type: string | null; status: "active" | "inactive"; comments: string | null; revision_number: number | null; project_id: string | null; }
 const emptyForm: POForm = { po_number: "", consultant_id: "", so_id: null, po_reference: null, po_start_date: null, po_end_date: null, po_value: null, amount: null, portfolio: null, type: null, status: "active", comments: null, revision_number: 0, project_id: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
@@ -90,8 +90,8 @@ export default function PurchaseOrdersPage() {
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["purchase_orders"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("*, consultants(short_name), service_orders(so_number), projects(project_name, project_number)").order("po_number"); if (error) throw error; return data as PO[]; } });
-  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
+  const { data: items = [], isLoading } = useQuery({ queryKey: ["purchase_orders"], queryFn: async () => { const { data, error } = await supabase.from("purchase_orders").select("*, consultants(short_name, consultant_type), service_orders(so_number), projects(project_name, project_number)").order("po_number"); if (error) throw error; return data as PO[]; } });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list-pmc"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").eq("consultant_type", "PMC").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
   const { data: allServiceOrders = [] } = useQuery({ queryKey: ["so-all"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("id, so_number, consultant_id").order("so_number"); if (error) throw error; return data as { id: string; so_number: string; consultant_id: string }[]; } });
   const { data: allProjects = [] } = useQuery({ queryKey: ["projects-list"], queryFn: async () => { const { data, error } = await supabase.from("projects").select("id, project_name, project_number").eq("status", "active").order("project_name"); if (error) throw error; return data as { id: string; project_name: string; project_number: string | null }[]; } });
   const filteredSOs = form.consultant_id ? allServiceOrders.filter(s => s.consultant_id === form.consultant_id) : [];
@@ -137,6 +137,7 @@ export default function PurchaseOrdersPage() {
   };
 
   const filtered = items.filter((i) => {
+    if ((i.consultants?.consultant_type || "PMC") !== "PMC") return false;
     if (search && !i.po_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase()) && !(i.service_orders?.so_number || "").toLowerCase().includes(search.toLowerCase()) && !(i.projects?.project_name || "").toLowerCase().includes(search.toLowerCase()) && !(i.po_reference || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.po_number && !i.po_number.toLowerCase().includes(colFilters.po_number.toLowerCase())) return false;
     if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;

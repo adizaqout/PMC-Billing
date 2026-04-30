@@ -23,7 +23,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, Search, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-type SO = Tables<"service_orders"> & { consultants?: { short_name: string } | null; framework_agreements?: { framework_agreement_no: string } | null };
+type SO = Tables<"service_orders"> & { consultants?: { short_name: string; consultant_type?: string | null } | null; framework_agreements?: { framework_agreement_no: string } | null };
 interface SOForm { so_number: string; consultant_id: string; framework_id: string | null; so_start_date: string | null; so_end_date: string | null; so_value: number | null; comments: string | null; }
 const emptyForm: SOForm = { so_number: "", consultant_id: "", framework_id: null, so_start_date: null, so_end_date: null, so_value: null, comments: null };
 const fmt = (v: number | null) => v != null ? new Intl.NumberFormat("en").format(v) : "—";
@@ -79,8 +79,8 @@ export default function ServiceOrdersPage() {
 
   const setColFilter = (key: string, value: string) => setColFilters(prev => ({ ...prev, [key]: value }));
 
-  const { data: items = [], isLoading } = useQuery({ queryKey: ["service_orders"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("*, consultants(short_name), framework_agreements(framework_agreement_no)").order("so_number"); if (error) throw error; return data as SO[]; } });
-  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
+  const { data: items = [], isLoading } = useQuery({ queryKey: ["service_orders"], queryFn: async () => { const { data, error } = await supabase.from("service_orders").select("*, consultants(short_name, consultant_type), framework_agreements(framework_agreement_no)").order("so_number"); if (error) throw error; return data as SO[]; } });
+  const { data: consultants = [] } = useQuery({ queryKey: ["consultants-list-pmc"], queryFn: async () => { const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").eq("consultant_type", "PMC").order("short_name"); if (error) throw error; return data as { id: string; short_name: string }[]; } });
   const { data: frameworks = [] } = useQuery({ queryKey: ["frameworks-all"], queryFn: async () => { const { data, error } = await supabase.from("framework_agreements").select("id, framework_agreement_no, consultant_id").eq("status", "active").order("framework_agreement_no"); if (error) throw error; return data as { id: string; framework_agreement_no: string; consultant_id: string }[]; } });
   const filteredFrameworks = form.consultant_id ? frameworks.filter(f => f.consultant_id === form.consultant_id) : [];
 
@@ -111,6 +111,7 @@ export default function ServiceOrdersPage() {
   };
 
   const filtered = items.filter((i) => {
+    if ((i.consultants?.consultant_type || "PMC") !== "PMC") return false;
     if (search && !i.so_number.toLowerCase().includes(search.toLowerCase()) && !(i.consultants?.short_name || "").toLowerCase().includes(search.toLowerCase()) && !(i.framework_agreements?.framework_agreement_no || "").toLowerCase().includes(search.toLowerCase())) return false;
     if (colFilters.so_number && !i.so_number.toLowerCase().includes(colFilters.so_number.toLowerCase())) return false;
     if (colFilters.consultant && !(i.consultants?.short_name || "").toLowerCase().includes(colFilters.consultant.toLowerCase())) return false;
