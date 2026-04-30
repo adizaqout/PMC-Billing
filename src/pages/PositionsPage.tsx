@@ -91,9 +91,10 @@ const importCols = [
   { header: "Notes", key: "notes", width: 25 },
 ];
 
-export default function PositionsPage() {
+interface PositionsPageProps { lockedType?: "PMC" | "Supervision"; titleOverride?: string; subtitleOverride?: string }
+export default function PositionsPage({ lockedType, titleOverride, subtitleOverride }: PositionsPageProps = {}) {
   const [search, setSearch] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">("all");
+  const [typeFilter, setTypeFilter] = useState<"all" | "PMC" | "Supervision">(lockedType ?? "all");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Position | null>(null);
   const [form, setForm] = useState<PosForm>(emptyForm);
@@ -148,6 +149,7 @@ export default function PositionsPage() {
   const filtered = items.filter((i) => {
     const s = search.toLowerCase();
     const ct = (i.consultants?.consultant_type || "PMC");
+    if (lockedType && ct !== lockedType) return false;
     if (typeFilter !== "all" && ct !== typeFilter) return false;
     const matchSearch = !s || i.position_name.toLowerCase().includes(s) || (i.consultants?.short_name || "").toLowerCase().includes(s) || (i.position_id || "").toLowerCase().includes(s);
     if (!matchSearch) return false;
@@ -231,7 +233,7 @@ export default function PositionsPage() {
     <AppLayout>
       <div className="animate-fade-in">
         <div className="page-header">
-          <div><h1 className="page-title">Positions</h1><p className="page-subtitle">Rate card with yearly rates linked to SOs</p></div>
+          <div><h1 className="page-title">{titleOverride ?? "Positions"}</h1><p className="page-subtitle">{subtitleOverride ?? "Rate card with yearly rates linked to SOs"}</p></div>
           <div className="flex items-center gap-2">
             <ExcelToolbar onExport={handleExport} onTemplate={handleTemplate} smartImportConfig={smartImportConfig} />
             <ColumnVisibilityToggle columns={posTableCols} visibleColumns={visibleColumns} onChange={setVisibleColumns} />
@@ -241,13 +243,15 @@ export default function PositionsPage() {
         <div className="bg-card rounded-md border">
           <div className="px-4 py-3 border-b flex items-center gap-3 flex-wrap">
             <div className="relative flex-1 max-w-sm min-w-[200px]"><Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9 h-8 text-sm" /></div>
-            <div className="inline-flex rounded-md border overflow-hidden">
-              {(["all","PMC","Supervision"] as const).map(opt => (
-                <button key={opt} onClick={() => setTypeFilter(opt)} className={`px-3 h-8 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
-                  {opt === "all" ? "All Types" : opt}
-                </button>
-              ))}
-            </div>
+            {!lockedType && (
+              <div className="inline-flex rounded-md border overflow-hidden">
+                {(["all","PMC","Supervision"] as const).map(opt => (
+                  <button key={opt} onClick={() => setTypeFilter(opt)} className={`px-3 h-8 text-xs font-medium transition-colors ${typeFilter === opt ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted"}`}>
+                    {opt === "all" ? "All Types" : opt}
+                  </button>
+                ))}
+              </div>
+            )}
             <span className="text-xs text-muted-foreground">{filtered.length} records</span>
           </div>
           <div className="overflow-x-auto">

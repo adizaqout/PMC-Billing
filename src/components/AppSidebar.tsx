@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserConsultantType } from "@/hooks/useUserConsultantType";
 import { LogOut } from "lucide-react";
 import aldarLogo from "@/assets/aldar-logo.webp";
 import {
@@ -28,13 +29,14 @@ interface NavItem {
   label: string;
   icon: any;
   path: string;
-  module?: string; // maps to group_permissions module_name
+  module?: string;
   adminOnly?: boolean;
 }
 
 interface NavSection {
   title: string;
   items: NavItem[];
+  visibility?: "pmc" | "supervision";
 }
 
 const navSections: NavSection[] = [
@@ -47,14 +49,29 @@ const navSections: NavSection[] = [
   {
     title: "Master Data",
     items: [
+      { label: "Projects", icon: FolderKanban, path: "/projects", module: "projects" },
+    ],
+  },
+  {
+    title: "PMC",
+    visibility: "pmc",
+    items: [
       { label: "Consultants", icon: Building2, path: "/consultants", module: "consultants" },
       { label: "Framework Agreements", icon: FileText, path: "/framework-agreements", module: "framework_agreements" },
       { label: "Service Orders", icon: ShoppingCart, path: "/service-orders", module: "service_orders" },
       { label: "Purchase Orders", icon: Receipt, path: "/purchase-orders", module: "purchase_orders" },
-      { label: "Projects", icon: FolderKanban, path: "/projects", module: "projects" },
       { label: "Invoices", icon: FileText, path: "/invoices", module: "invoices" },
       { label: "Positions", icon: Briefcase, path: "/positions", module: "positions" },
       { label: "Employees", icon: Users, path: "/employees", module: "employees" },
+    ],
+  },
+  {
+    title: "Supervision",
+    visibility: "supervision",
+    items: [
+      { label: "Consultants", icon: Building2, path: "/supervision/consultants", module: "consultants" },
+      { label: "Positions", icon: Briefcase, path: "/supervision/positions", module: "positions" },
+      { label: "Employees", icon: Users, path: "/supervision/employees", module: "employees" },
     ],
   },
   {
@@ -95,6 +112,11 @@ export default function AppSidebar() {
     setExpandedSections((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
+  const { consultantType } = useUserConsultantType();
+  // Visibility rule: PMC user -> hide Supervision; Supervision user -> hide PMC; admin/all -> both
+  const showPmc = isAdminRole || consultantType === "all" || consultantType === "PMC";
+  const showSupervision = isAdminRole || consultantType === "all" || consultantType === "Supervision";
+
   const filteredSections = navSections
     .map(section => ({
       ...section,
@@ -105,7 +127,11 @@ export default function AppSidebar() {
         return hasModuleAccess(item.module);
       }),
     }))
-    .filter(section => section.items.length > 0);
+    .filter(section => {
+      if (section.visibility === "pmc" && !showPmc) return false;
+      if (section.visibility === "supervision" && !showSupervision) return false;
+      return section.items.length > 0;
+    });
 
   return (
     <>

@@ -22,6 +22,9 @@ import PeriodControlPage from "./pages/PeriodControlPage";
 import AdminPage from "./pages/AdminPage";
 import ReportsPage from "./pages/ReportsPage";
 import AIAssistantPage from "./pages/AIAssistantPage";
+import SupervisionConsultantsPage from "./pages/supervision/SupervisionConsultantsPage";
+import SupervisionPositionsPage from "./pages/supervision/SupervisionPositionsPage";
+import SupervisionEmployeesPage from "./pages/supervision/SupervisionEmployeesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -62,6 +65,9 @@ const App = () => (
             <Route path="/consultants" element={<ProtectedRoute module="consultants"><ConsultantsPage /></ProtectedRoute>} />
             <Route path="/projects" element={<ProtectedRoute module="projects"><ProjectsPage /></ProtectedRoute>} />
             <Route path="/employees" element={<ProtectedRoute module="employees"><EmployeesPage /></ProtectedRoute>} />
+            <Route path="/supervision/consultants" element={<ProtectedRoute module="consultants"><SupervisionConsultantsPage /></ProtectedRoute>} />
+            <Route path="/supervision/positions" element={<ProtectedRoute module="positions"><SupervisionPositionsPage /></ProtectedRoute>} />
+            <Route path="/supervision/employees" element={<ProtectedRoute module="employees"><SupervisionEmployeesPage /></ProtectedRoute>} />
             <Route path="/framework-agreements" element={<ProtectedRoute module="framework_agreements"><FrameworkAgreementsPage /></ProtectedRoute>} />
             <Route path="/service-orders" element={<ProtectedRoute module="service_orders"><ServiceOrdersPage /></ProtectedRoute>} />
             <Route path="/purchase-orders" element={<ProtectedRoute module="purchase_orders"><PurchaseOrdersPage /></ProtectedRoute>} />
