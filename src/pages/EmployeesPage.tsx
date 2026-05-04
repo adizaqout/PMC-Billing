@@ -63,6 +63,7 @@ const excelCols = [
   { header: "Start Date", key: "start_date", width: 14 },
   { header: "End Date", key: "end_date", width: 14 },
   { header: "Deployment", key: "deployment", width: 14 },
+  { header: "Active", key: "active", width: 10 },
   { header: "Status", key: "status", width: 12 },
 ];
 
