@@ -63,6 +63,7 @@ const excelCols = [
   { header: "Start Date", key: "start_date", width: 14 },
   { header: "End Date", key: "end_date", width: 14 },
   { header: "Deployment", key: "deployment", width: 14 },
+  { header: "Active", key: "active", width: 10 },
   { header: "Status", key: "status", width: 12 },
 ];
 
@@ -155,7 +156,7 @@ export default function EmployeesPage({ lockedType, titleOverride, subtitleOverr
   const { paginatedItems, pageSize, setPageSize, currentPage, setCurrentPage, totalItems } = usePagination(sorted);
   const fmtDate = (d: string | null) => d ? new Date(d).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
-  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", email: (e as any).email || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "", deployment: (e as any).deployment || "Projects" }))); toast.success("Exported"); };
+  const handleExport = () => { exportToExcel("employees.xlsx", excelCols, filtered.map(e => ({ ...e, employee_id: (e as any).employee_id || "", email: (e as any).email || "", consultant_name: e.consultants?.short_name || "", position_id_code: e.positions?.position_id || "", position_name: e.positions?.position_name || "", deployment: (e as any).deployment || "Projects", active: e.active ? "Yes" : "No" }))); toast.success("Exported"); };
   const handleTemplate = () => { downloadTemplate("employees-template.xlsx", excelCols, { Consultants: consultants.map(c => c.short_name), "Position IDs": allPositions.map(p => `${p.position_id} — ${p.position_name}`), Statuses: statuses.map(s => s.label), Deployments: ["Projects", "Office"] }); toast.success("Template downloaded"); };
 
   const smartImportConfig: SmartImportConfig = useMemo(() => ({
