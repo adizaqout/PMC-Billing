@@ -284,7 +284,40 @@ export default function PurchaseOrdersPage() {
               <div className="space-y-1.5"><Label>Portfolio</Label><Input value={form.portfolio || ""} onChange={(e) => setForm({ ...form, portfolio: e.target.value || null })} /></div>
               <div className="space-y-1.5"><Label>Type</Label><Select value={form.type || "none"} onValueChange={(v) => setForm({ ...form, type: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{poTypes.map((t) => <SelectItem key={t.id} value={t.value}>{t.label}</SelectItem>)}</SelectContent></Select></div>
               <div className="space-y-1.5"><Label>Status</Label><Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as any })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
-              <div className="col-span-2 space-y-1.5"><Label>Project</Label><Select value={form.project_id || "none"} onValueChange={(v) => setForm({ ...form, project_id: v === "none" ? null : v })}><SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger><SelectContent><SelectItem value="none">None</SelectItem>{allProjects.map((p) => <SelectItem key={p.id} value={p.id}>{p.project_number ? `${p.project_number} - ${p.project_name}` : p.project_name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="col-span-2 space-y-1.5">
+                <Label>Project</Label>
+                <Popover open={projectPickerOpen} onOpenChange={setProjectPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button type="button" variant="outline" role="combobox" className="w-full justify-between font-normal">
+                      {form.project_id ? (() => { const p = allProjects.find(p => p.id === form.project_id); return p ? (p.project_number ? `${p.project_number} - ${p.project_name}` : p.project_name) : "Select project"; })() : "Select project"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command filter={(value, search) => value.toLowerCase().includes(search.toLowerCase()) ? 1 : 0}>
+                      <CommandInput placeholder="Search project name or number..." />
+                      <CommandList>
+                        <CommandEmpty>No project found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem value="none" onSelect={() => { setForm({ ...form, project_id: null }); setProjectPickerOpen(false); }}>
+                            <Check className={cn("mr-2 h-4 w-4", !form.project_id ? "opacity-100" : "opacity-0")} />
+                            None
+                          </CommandItem>
+                          {allProjects.map((p) => {
+                            const label = p.project_number ? `${p.project_number} - ${p.project_name}` : p.project_name;
+                            return (
+                              <CommandItem key={p.id} value={label} onSelect={() => { setForm({ ...form, project_id: p.id }); setProjectPickerOpen(false); }}>
+                                <Check className={cn("mr-2 h-4 w-4", form.project_id === p.id ? "opacity-100" : "opacity-0")} />
+                                {label}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="col-span-2 space-y-1.5"><Label>Comments</Label><Textarea value={form.comments || ""} onChange={(e) => setForm({ ...form, comments: e.target.value || null })} rows={2} /></div>
             </div>
             <DialogFooter><Button type="button" variant="outline" onClick={closeDialog}>Cancel</Button><Button type="submit" disabled={upsertMutation.isPending}>{upsertMutation.isPending ? <Loader2 size={14} className="animate-spin mr-1.5" /> : null}{editing ? "Update" : "Create"}</Button></DialogFooter>
