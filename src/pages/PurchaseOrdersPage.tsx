@@ -82,6 +82,7 @@ export default function PurchaseOrdersPage() {
   const [editing, setEditing] = useState<PO | null>(null);
   const [form, setForm] = useState<POForm>(emptyForm);
   const [colFilters, setColFilters] = useState<Record<string, string>>({});
+  const [projectPickerOpen, setProjectPickerOpen] = useState(false);
   const poTableCols: ColumnDef[] = [
     { key: "po_number", label: "PO Number" }, { key: "rev", label: "Rev" }, { key: "line", label: "PO Line Item" },
     { key: "consultant", label: "Consultant" }, { key: "so", label: "SO" }, { key: "proj_no", label: "Project No." },
