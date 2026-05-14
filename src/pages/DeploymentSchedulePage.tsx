@@ -154,7 +154,7 @@ export default function DeploymentSchedulePage() {
   const { data: consultants = [] } = useQuery({
     queryKey: ["consultants-list"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").order("short_name");
+      const { data, error } = await supabase.from("consultants").select("id, short_name").eq("status", "active").eq("consultant_type", "PMC").order("short_name");
       if (error) throw error;
       return data;
     },
